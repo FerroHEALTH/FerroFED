@@ -11,9 +11,11 @@
 #                      <dir>/<crate>/tests/it/e2e/, the paths whose tests
 #                      nextest names e2e::…, and the e2e job must set the gate
 #                      and select test(/^e2e::/) across the workspace. It
-#                      must also run on every change that has a workspace,
-#                      with no path filter on the triggers and no condition
-#                      beyond the detect job's, and conclusion must need it,
+#                      must also run on every pull request and push that has
+#                      a workspace, with no path filter on the triggers and
+#                      no condition beyond the detect job's and the merge
+#                      group's skip (the light merge queue, owner
+#                      2026-11-25), and conclusion must need it,
 #                      so a change to the auth, credentials or config code,
 #                      an e2e fixture or the configuration reference always
 #                      runs the container tests (#1187).
@@ -38,7 +40,7 @@ cd "$(dirname "$0")/../.."
 
 readonly WORKFLOW=.github/workflows/ci.yml
 readonly E2E_PATTERN='e2e_enabled[[:space:]]*\(|FERROFED_E2E|E2E_GATE'
-readonly E2E_IF="needs.detect.outputs.cargo == 'true'"
+readonly E2E_IF="github.event_name != 'merge_group' && needs.detect.outputs.cargo == 'true'"
 readonly JOURNEYS_PATTERN='journeys_enabled[[:space:]]*\(|FERROFED_JOURNEYS|JOURNEYS_GATE'
 
 # is_gated FILE PATTERN: whether FILE matches PATTERN on a line that is not a
@@ -257,6 +259,8 @@ self_test() {
   expect_workflow 1 "with an e2e job behind a changed-paths condition"
   workflow "$e2e_on" "$e2e_ok" "$journeys_on" "$journeys_ok" "if: ${E2E_IF} && !contains(github.event.pull_request.labels.*.name, 'docs')"
   expect_workflow 1 "with an e2e job behind a second condition"
+  workflow "$e2e_on" "$e2e_ok" "$journeys_on" "$journeys_ok" "if: needs.detect.outputs.cargo == 'true'"
+  expect_workflow 1 "with an e2e job that also runs in the merge queue"
   workflow "$e2e_on" "$e2e_ok" "$journeys_on" "$journeys_ok" "" "e2e-placement"
   expect_workflow 1 "with a conclusion that does not need the e2e job"
   workflow "$e2e_on" "$e2e_ok" "$journeys_on" "$journeys_ok" "" "" '  pull_request:\n    branches: [main]\n    paths:\n      - "app/**"'

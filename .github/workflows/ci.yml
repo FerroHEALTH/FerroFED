@@ -17,6 +17,10 @@
 #      workspace is empty before checkout, so a real detection job is the
 #      correct primitive.
 #
+# A merge group runs the light set: tier 1, rustfmt, fuzz-lockfile,
+# cargo-deny, and every test target compiled with the unit tests run. The
+# pull request ran the full suite on the same change, so every other lane is skipped there.
+#
 # The `conclusion` job is the single required status check on main; it is what
 # makes a pipeline of gated jobs enforceable.
 name: CI
@@ -780,8 +784,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          # The first parent of a pull request's merge commit and of a merge
-          # group's commit is its base, which the perf probe diffs against.
+          # The first parent of a pull request's merge commit is its base,
+          # which the perf probe diffs against.
           fetch-depth: 2
       - id: check
         run: |
@@ -794,15 +798,15 @@ jobs:
             echo "No root Cargo.toml: the Rust lanes are skipped."
           fi
       # The performance gate runs on a push to main, on a dispatch, and on a
-      # pull request or merge group that changes what the gateway is built
-      # from or what the gate reads (#1687).
+      # pull request that changes what the gateway is built from or what the
+      # gate reads (#1687).
       - id: perf
         env:
           EVENT: ${{ github.event_name }}
         run: |
           set -euo pipefail
           perf=true
-          if [ "$EVENT" = "pull_request" ] || [ "$EVENT" = "merge_group" ]; then
+          if [ "$EVENT" = "pull_request" ]; then
             changed="$(git diff --name-only HEAD^1 HEAD)"
             if ! grep -qE '^(app/ferrofed-(server|engine|registry|identity|eehrxf|operator-api)/|crates/|perf/|scripts/perf/|scripts/quickstart/|docker/quickstart/|compose\.yaml$|Cargo\.toml$|Cargo\.lock$|rust-toolchain\.toml$|docs/VERSIONS\.md$|\.github/workflows/(ci|perf)\.yml$|\.github/actions/(setup-rust|perf-attempt)/)' <<< "$changed"; then
               perf=false
@@ -870,7 +874,7 @@ jobs:
   clippy:
     name: clippy
     needs: detect
-    if: needs.detect.outputs.cargo == 'true'
+    if: github.event_name != 'merge_group' && needs.detect.outputs.cargo == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -905,10 +909,20 @@ jobs:
       # aql rewrite of openehr-federation) still runs its tests. The tests
       # that hold a patient summary document to the vendored profiles also
       # write it under FERROFED_EMIT_DIR, for the fhir-validator job.
-      - run: cargo nextest run --profile ci --workspace --locked --all-features --no-tests=pass
+      - if: github.event_name != 'merge_group'
+        run: cargo nextest run --profile ci --workspace --locked --all-features --no-tests=pass
         env:
           FERROFED_EMIT_DIR: ${{ runner.temp }}/eehrxf-documents
+      # The merge group's smoke set: the pull request ran every suite, so the
+      # queue compiles every test target with every feature and runs only the
+      # unit tests.
+      - if: github.event_name == 'merge_group'
+        run: |
+          set -euo pipefail
+          cargo nextest run --profile ci --workspace --all-features --no-run --locked
+          cargo nextest run --profile ci --workspace --lib --bins --all-features --locked --no-tests=pass
       - name: Upload the emitted exchange-format documents
+        if: github.event_name != 'merge_group'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: eehrxf-documents
@@ -917,7 +931,7 @@ jobs:
           retention-days: 7
       # The JUnit report of the offline run, for the conformance report.
       - name: Upload the offline JUnit report
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event_name != 'merge_group' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: junit-offline
@@ -925,7 +939,8 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       # nextest does not run doctests, so they get their own compile.
-      - run: cargo test --doc --workspace --locked --all-features
+      - if: github.event_name != 'merge_group'
+        run: cargo test --doc --workspace --locked --all-features
 
   # The server's tests in a build without its default features and in each
   # regional binding alone (#881; no specification governs it: our own
@@ -935,7 +950,7 @@ jobs:
   binding-tests:
     name: test (ferrofed-server, ${{ matrix.build }})
     needs: detect
-    if: needs.detect.outputs.cargo == 'true'
+    if: github.event_name != 'merge_group' && needs.detect.outputs.cargo == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -984,7 +999,7 @@ jobs:
   e2e:
     name: e2e (containers)
     needs: detect
-    if: needs.detect.outputs.cargo == 'true'
+    if: github.event_name != 'merge_group' && needs.detect.outputs.cargo == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -1056,18 +1071,16 @@ jobs:
   # release build judged against the build of its base on the same runner,
   # in perf.yml, which the release lane calls on the release commit too. The
   # base is the pull request's base or the commit before a push; a dispatch
-  # takes the previous release. A merge group builds nothing for it and its
-  # verdict passes with a summary saying why (#1788).
+  # takes the previous release.
   perf:
     name: perf
     needs: detect
-    if: needs.detect.outputs.cargo == 'true' && needs.detect.outputs.perf == 'true'
+    if: github.event_name != 'merge_group' && needs.detect.outputs.cargo == 'true' && needs.detect.outputs.perf == 'true'
     permissions:
       contents: read
     uses: ./.github/workflows/perf.yml
     with:
-      base: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
-      skip: ${{ github.event_name == 'merge_group' }}
+      base: ${{ github.event.pull_request.base.sha || github.event.before }}
 
   # The conformance report of section 16.4 (#92; no specification governs its
   # form: our own design): every section 16.3 track and section 17 point as
@@ -1081,7 +1094,7 @@ jobs:
   conformance-report:
     name: conformance report
     needs: [detect, test, e2e]
-    if: ${{ !cancelled() && needs.detect.outputs.cargo == 'true' }}
+    if: ${{ !cancelled() && github.event_name != 'merge_group' && needs.detect.outputs.cargo == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -1137,7 +1150,7 @@ jobs:
   fhir-validator:
     name: fhir-validator (EEHRxF documents)
     needs: [detect, test]
-    if: needs.detect.outputs.cargo == 'true'
+    if: github.event_name != 'merge_group' && needs.detect.outputs.cargo == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -1209,7 +1222,7 @@ jobs:
   release-compose:
     name: release compose
     needs: detect
-    if: needs.detect.outputs.cargo == 'true'
+    if: github.event_name != 'merge_group' && needs.detect.outputs.cargo == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -1263,7 +1276,7 @@ jobs:
   doc:
     name: rustdoc
     needs: detect
-    if: needs.detect.outputs.cargo == 'true'
+    if: github.event_name != 'merge_group' && needs.detect.outputs.cargo == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -1311,7 +1324,7 @@ jobs:
   msrv:
     name: msrv (cargo-hack)
     needs: detect
-    if: needs.detect.outputs.cargo == 'true'
+    if: github.event_name != 'merge_group' && needs.detect.outputs.cargo == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -1339,7 +1352,7 @@ jobs:
   features:
     name: features (cargo-hack)
     needs: detect
-    if: needs.detect.outputs.cargo == 'true'
+    if: github.event_name != 'merge_group' && needs.detect.outputs.cargo == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -1369,7 +1382,7 @@ jobs:
   console:
     name: console (server-drawn)
     needs: detect
-    if: needs.detect.outputs.cargo == 'true'
+    if: github.event_name != 'merge_group' && needs.detect.outputs.cargo == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -1406,7 +1419,7 @@ jobs:
   journeys:
     name: journeys (browser)
     needs: detect
-    if: needs.detect.outputs.cargo == 'true'
+    if: github.event_name != 'merge_group' && needs.detect.outputs.cargo == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -1447,7 +1460,7 @@ jobs:
   publish-dry-run:
     name: publish dry run (cargo package)
     needs: detect
-    if: needs.detect.outputs.cargo == 'true'
+    if: github.event_name != 'merge_group' && needs.detect.outputs.cargo == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:

@@ -72,6 +72,7 @@ as a broken command, is fixed in the same change.
 | v0.0.18 | 2026-11-10 | see below | 82 to 91, below | the version bump of v0.0.17, tagged and never released, re-cut as v0.0.18 |
 | v0.0.19 | 2026-11-11 | see below | 92 to 95, below | the v0.0.19 version bump |
 | v0.0.20 | 2026-11-12 | see below | 96 to 100, below | the v0.0.20 version bump |
+| v0.0.21 | 2026-11-25 | see below | 101 to 104, below | the v0.0.21 version bump |
 
 ### Findings of 2026-10-06
 
@@ -677,6 +678,45 @@ Against Art 28(b), a limitation left out:
      needs, or that the keys 0.0.19 refused by name are now refused as
      unknown keys. Their maintenance table now does, with the Upgrading
      page's notes for v0.0.20.
+
+No text suggested a use outside the intended purpose, (c).
+
+### Findings of 2026-11-25
+
+The review at the v0.0.21 cut. Read in full: `README.md`, `CITATION.cff`,
+the information sheet, the claims page, the instructions for use, the
+Upgrading page, the client authentication, Behind FerroSMART, patient
+grants, onward credentials, receiving documents and store pages, and the
+assembled release notes. Every other page of the book and `README.md` was
+searched for "persons", "patients", "machines", "preset",
+`first_party_clients`, `delegates`, `act_represents_patient`, "PostgreSQL
+18", "v0.0.20" and "v0.0.21", next to a statement that the work is still to
+come.
+
+Stale or wrong statements, which read as claims about the release a user
+runs:
+
+101. The client authentication, Behind FerroSMART, patient grants, onward
+     credentials, production and consent pages, the configuration examples
+     and compose described the issuer kinds, presets and client lists the
+     one-registry `ferrohealth-smart` 0.34 removed. They now describe an
+     issuer table naming only its `issuer`, with `kind = "federation"` for
+     another party's issuer
+     ([#1946](https://github.com/FerroHEALTH/FerroFED/issues/1946)).
+102. The pending upgrade notes and the Upgrading page told an operator to
+     rename `profile` to `preset` and move the client lists into the profile
+     table, steps the same release then removed. They now say to delete
+     them ([#1946](https://github.com/FerroHEALTH/FerroFED/issues/1946)).
+103. The store page and `docs/VERSIONS.md` named PostgreSQL 18 for
+     FerroFED's own store. Both now name PostgreSQL 19, which its tests run
+     ([#1941](https://github.com/FerroHEALTH/FerroFED/issues/1941)).
+104. The claims page had no section for the release. It now has one for
+     v0.0.21.
+
+Against Art 28(b), no limitation was left out: the instructions for use
+name the keys 0.0.21 removes, the audit spool to drain before the upgrade
+and PostgreSQL 19 for the store in their maintenance table, with the
+Upgrading page's notes for v0.0.21.
 
 No text suggested a use outside the intended purpose, (c).
 

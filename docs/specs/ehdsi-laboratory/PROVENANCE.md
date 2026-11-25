@@ -8,27 +8,27 @@ URL and the sha256 of its bytes. Never edit a file here: change the pins in
 the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
-  the pins): `95a9a0bc8c4a7979588cbf1198fd052057473c651d94422801cea45c6c3f2494`
-- Fetched: 2026-10-24, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+  the pins): `751fe398e5b9fd3f6668745d4e731f77ba9fe01d40e572e62ec81b76a2977740`
+- Fetched: 2026-11-25, with the User-Agent `ferrofed-vendor (scripts/vendor)`
 - Artefacts: 1 committed, 0 cache only, 0 needing
   manual retrieval
 - Files in this directory: 1 besides this one, each verbatim as the
   publisher serves it
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
-  `PROVENANCE.md` excluded): `72c2d135c6d085d052b373530779389a53d5c942740cbac12a2ff3da1ef4ffea`
+  `PROVENANCE.md` excluded): `d12eb4122925a51329059ca86734154f6278e3cf64a8eb979c953de57a51a589`
 - Read by: #1290 (the re-check of decisions A51, A60 to A72, A81 and A102 against
   the MyHealth@EU guides), and the testkit
 
-The MyHealth@EU Laboratory Result Report service on FHIR (Wave 8), derived
+The MyHealth@EU Laboratory Result Report service on FHIR, derived
 from the HL7 Europe Laboratory Report, canonical
 `http://fhir.ehdsi.eu/laboratory`, committed under CC0-1.0.
 
 ## Artefacts
 
-### `myhealth.eu.fhir.laboratory-9.1.1.tgz` (committed)
+### `myhealth.eu.fhir.laboratory-9.2.0.tgz` (committed)
 
-- Source: <https://packages.fhir.org/myhealth.eu.fhir.laboratory/9.1.1>
-- Version: 9.1.1, Wave 9 (FHIR 4.0.1, 2026-05-05)
-- sha256: `3e3bd638231997fd99799a40a7d8934541ca5ba65304f3a4b3886a7e675b0b56`
+- Source: <https://build-fhir.ehdsi.eu/laboratory/package.tgz>
+- Version: 9.2.0, CI build (FHIR 4.0.1, 2026-11-24)
+- sha256: `e258e974945caa6f0f41a0816231d617638f56c3f16bf6382760ecb2ca3dd0ce`
 - Licence: CC0-1.0: the license of the package manifest and of the ImplementationGuide resource
-- Note: The registry tarball as served, package manifest included; the archive is committed whole so its sha256 stays the pin. The same bytes https://fhir.ehdsi.eu/laboratory/package.tgz serves; https://build-fhir.ehdsi.eu/laboratory/ serves a 9.2.0 build of 2026-10-22 (read 2026-10-24).
+- Note: The CI build https://build-fhir.ehdsi.eu/ serves, the line the family validates against by owner ruling of 2026-11-24 (#1951); not on packages.fhir.org, so a new build fails the pin loudly and scripts/checks/pin-freshness.sh reports it.

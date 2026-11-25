@@ -63,12 +63,13 @@ readonly RELEASES=https://github.com/hapifhir/org.hl7.fhir.core/releases/downloa
 # The vendored packages loaded with -ig: the ones holding the profiles the
 # documents claim (bundle-eu-eps, composition-eu-eps, patient-eu-eps and the
 # EU core profile a mapped section writes to), and the MyHealth@EU Master
-# Value Sets Catalogue, whose value sets those profiles bind (such as
-# eHDSIAllergenNoDrug), so the bindings are checked offline.
+# Value Sets Catalogue at its CI build (#1951), whose value sets those
+# profiles bind (such as eHDSIAllergenNoDrug), so the bindings are checked
+# offline.
 readonly IGS="\
 docs/specs/eu-hl7-eps/hl7.fhir.eu.eps-1.0.0-ballot.tgz
 docs/specs/eu-hl7-base/hl7.fhir.eu.base-2.0.1.tgz
-docs/specs/ehdsi-mvc/myhealth.eu.fhir.mvc-package-9.1.0.tgz"
+docs/specs/ehdsi-mvc/myhealth.eu.fhir.mvc-package-10.1.0.tgz"
 
 # The vendored packages the dependencies of IGS name, put in the cache.
 readonly VENDORED="\
@@ -97,6 +98,8 @@ hl7.terminology.r4	6.3.0	5e080e5343406f964022b086da713df374e410245c518166c5b1b93
 hl7.terminology.r4	6.5.0	a28b638483a11df696ed92198276236d759e41c7a3a8960c9e7e7d0a1185bd06
 hl7.terminology.r4	7.1.0	1cb0cd5601972925fcd04f2c175d9cc63a9ecd9346a91a6e735f1a865dc5fba1
 hl7.terminology.r4	7.3.0	1a1ef2aa22ecc820341267f2bdba3b2d1f4adafb9bdddfc9e51c611cd64f3b54
+hl7.terminology.r4	7.5.0	1da3004587602c3f5120061abc2309fef1f96668a477a9964354fa9af6fa6e60
+hl7.fhir.uv.extensions.r4	5.4.0	e93eb1ece7d14e6b3dfaa7af5ac510577957cb5fd2b61ef95cdcfbbdca81c96d
 hl7.fhir.uv.ipa	1.1.0	013b9f91683c496fc09eed93a8798b47dcbfb775587890fa3e11253a2409feef
 hl7.fhir.uv.smart-app-launch	2.0.0	627e7a64e7abe130201fbae2ee7d2cb85d7d94972458d302c4d06d59e2c7d084
 hl7.fhir.uv.ips	1.1.0	403c4141101810e924f2928287985084819d8a5cc3a62e2b3840a557129840ef

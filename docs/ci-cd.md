@@ -26,11 +26,11 @@ has run on every change since the workspace landed.
 | Workflow | Runs on | What it does |
 |---|---|---|
 | `ci.yml` | push to `main`, pull request into `main` or a security patch branch, merge group, dispatch | the two tiers below and the `conclusion` check |
-| `perf.yml` | called by `ci.yml` on a pull request that reaches the gateway, on a push to `main` and a dispatch, and by `release.yml` on the tagged commit; in a merge group its verdict passes without a build (§The merge queue proves the merged tree) | the performance gate: `ferrohealth-perf`'s A/B mode, the release build of the change and of its base (the merge base with the pull request's base, the commit before a push, or the previous release, which gives way to the oldest commit after it that carries the gate contract when it carries none, #1813) run side by side on one runner, each under its own tree's `perf/ferrofed.toml` and `perf/arm.env` and over the nodes and FerroPIX its own tree's compose files pin, the head's idle phase with every background worker running held to absolute limits, pairs of load phases with the head judged over the base, and a planted store poller the idle phase must fail (`scripts/perf/gate.sh`, #1687, #1731); an attempt that ends with exit 2 on any CPU model, or with exit 1 on a stall-prone one, is retried on a fresh runner at most twice, through `.github/actions/perf-attempt`, and its verdict job passes when the last attempt passed |
+| `perf.yml` | called by `ci.yml` on a pull request that reaches the gateway, on a push to `main` and a dispatch, and by `release.yml` on the tagged commit | the performance gate: `ferrohealth-perf`'s A/B mode, the release build of the change and of its base (the merge base with the pull request's base, the commit before a push, or the previous release, which gives way to the oldest commit after it that carries the gate contract when it carries none, #1813) run side by side on one runner, each under its own tree's `perf/ferrofed.toml` and `perf/arm.env` and over the nodes and FerroPIX its own tree's compose files pin, the head's idle phase with every background worker running held to absolute limits, pairs of load phases with the head judged over the base, and a planted store poller the idle phase must fail (`scripts/perf/gate.sh`, #1687, #1731); an attempt that ends with exit 2 on any CPU model, or with exit 1 on a stall-prone one, is retried on a fresh runner at most twice, through `.github/actions/perf-attempt`, and its verdict job passes when the last attempt passed |
 | `label-guards.yml` | the `no-changelog` or `no-crate-bump` label added to or removed from a pull request, and the completion of a pull request's CI run | re-runs the guard that label escapes, and with it `conclusion`, in the CI run on the head commit (§Triggers and concurrency) |
-| `codeql.yml` | push to `main` and pull request into `main` or a security patch branch, touching workflows, actions, its configuration or Rust; Mondays | CodeQL in advanced setup; the Actions analysis runs now, the Rust analysis is gated on a root `Cargo.toml` and leaves out the `tests/` trees through `.github/codeql/codeql-config.yml` |
+| `codeql.yml` | push to `main` and pull request into `main` or a security patch branch, touching workflows, actions, its configuration or Rust; Mondays; never a merge group, and a newer push cancels a running analysis (owner decision, 2026-11-25) | CodeQL in advanced setup; the Actions analysis runs now, the Rust analysis is gated on a root `Cargo.toml` and leaves out the `tests/` trees through `.github/codeql/codeql-config.yml` |
 | `scorecard.yml` | push to `main`, a branch-protection change, Mondays | OpenSSF Scorecard, results uploaded to code scanning |
-| `sonar.yml` | push to `main`, same-repository pull requests | SonarQube Cloud, advisory; the Rust coverage steps are gated on a root `Cargo.toml` |
+| `sonar.yml` | push to `main`; Mondays; never a pull request or a merge group, and a newer push to `main` cancels a running analysis (owner decision, 2026-11-25) | SonarQube Cloud, advisory; the Rust coverage steps are gated on a root `Cargo.toml` |
 | `docs.yml` | push to `main`, pull request, dispatch | builds the site (the landing page at `/`, the book under `/docs/`) on every event and deploys it to GitHub Pages from `main` only |
 | `pin-freshness.yml` | Mondays, dispatch | the pins nothing else watches, the testkit images included, compared with upstream, one issue when one is behind; each other product's `ghcr.io/ferrohealth/*` image against that product's latest release and index digest, one issue per image behind; and the acts adopted under Regulation (EU) 2025/327 with the Commission initiatives on it, one issue per newly adopted act |
 | `release.yml` | a pushed `v*` tag, dispatch at a tag | the release lane: tag checked against the declared version, changelog section as the notes, draft then publish, with a tag whose tree has no root `Cargo.toml` refused at `plan` (`docs/release.md`) |
@@ -526,16 +526,22 @@ that makes it stale refreshes it in the same pull request (#143).
 
 The family holds every pull-request run and every merge-group run of
 `ci.yml` under 20 minutes of wall time, runner queue included (owner,
-2026-11-09). A merge-group run answers one question: does the merged tree
-build and pass its functional gates. Build, clippy, the tests, the e2e and
-binding runs, the guards, the codegen drift and the conformance pass lists
-all run there. The long non-functional gates do not: the performance gate
-runs on the pull request that reaches the gateway and on every push to
-`main`, and in a merge group `perf.yml` builds nothing and its
-`perf verdict` job passes with a step summary that says why (#1788). The
-fuzz lane never ran in a merge group. No gate is weakened by this: the
-thresholds, the phases and the retry rule are the same, and only the event
-the gate runs on changes. A regression that two pull requests cause only
+2026-11-09). The merge-group run is light (owner, 2026-11-25): the pull
+request already ran the full suite on the same change, and queues of about
+ten entries fell out at the 60-minute check timeout when every group ran it
+again. In a merge group `ci.yml` runs `lint`, `guards`, `rustfmt`,
+`fuzz-lockfile`, `cargo-deny` and `test` in smoke mode: every test target
+of the workspace compiled with every feature in the dev profile, only the
+unit tests (`--lib --bins`) run, no integration suite or doctest. The
+compile stays in the queue: two pull requests that each passed alone can
+break a test binary together. Clippy, the binding tests, e2e, the conformance report,
+the FHIR Validator, release-compose, rustdoc, msrv, the feature lints, the
+console build, the journeys, the publish dry run and the performance gate
+are skipped at job level, so they start no runner, and run on the pull
+request and on every push to `main`. `conclusion` keeps its name and reads
+a skipped lane as a pass, so it judges the merge group on the light set and
+the pull request on the full one. The fuzz lane never ran in a merge group.
+No gate is weakened: only the event a lane runs on changes. A regression that two pull requests cause only
 together surfaces on the push to `main`, and its fix is a follow-up pull
 request. No specification governs this: our own design.
 

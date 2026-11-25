@@ -22,32 +22,26 @@ name: SonarQube Cloud
 on:
   push:
     branches: [main]
-  pull_request:
-    types: [opened, synchronize, reopened]
+  schedule:
+    - cron: "41 4 * * 1" # Mondays 04:41 UTC
 
-# A new push to a pull request supersedes its running analysis, so that run is
-# cancelled. A run on main keeps going: each analyzes a distinct commit whose
-# result the dashboard and code scanning keep.
+# It runs on a push to main and weekly, never on a pull request or a merge
+# group: it gates no merge, and the org shares 20 concurrent jobs that the
+# gates need (owner decision, 2026-11-25). A newer push to main replaces a
+# running analysis.
 concurrency:
   group: sonar-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 permissions: {}
 
 jobs:
   scan:
     name: analyze
-    # Pull-request analysis authenticates with SONAR_TOKEN, which a fork pull
-    # request cannot read, and neither can a DEPENDABOT one: a dependabot-actor
-    # run reads Dependabot secrets rather than Actions secrets, so the scan
-    # would die on "Not authorized". A dependency bump has nothing to decorate
-    # anyway, and the post-merge push to main analyzes the merged result.
-    if: github.event_name == 'push' || (github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
       contents: read
-      pull-requests: read # PR decoration reads the pull-request metadata
       security-events: write # the main-branch SARIF upload to code scanning
       actions: read # upload-sarif reads the run it belongs to
     steps:
@@ -131,17 +125,13 @@ jobs:
       # SonarQube Cloud reports to GitHub code scanning itself only on Sonar's
       # Enterprise plan, so the main branch's open issues are converted to
       # SARIF here and uploaded the way scorecard.yml uploads its own; the
-      # alerts stay advisory. Pull requests are not uploaded: their analysis
-      # holds only the issues the change adds, and code scanning would read
-      # every other alert as fixed.
+      # alerts stay advisory.
       - name: Convert the main branch's open issues to SARIF
-        if: github.event_name == 'push'
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: scripts/sonar/sarif.sh sonar.sarif
 
       - name: Upload the SARIF log to code scanning
-        if: github.event_name == 'push'
         uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: sonar.sarif

@@ -1,1 +1,0 @@
-- The FHIR Feed to the audit repository goes out through the gateway's own outbound client of `[audit.repository.endpoint]`, with its TLS, timeouts, credential and retries, behind `ihe-atna` 0.23's `atna::feed::FeedClient`. `ihe-atna` and `ehds-logging` move to 0.23, which depend on no `ferrohealth-smart` (#1901).

@@ -4,8 +4,8 @@
 //! What a token states about its professional comes from the issuer's
 //! `[auth.issuer.<name>.attributes]` table, which `ferrohealth-smart` reads: an issuer
 //! with no table states none of it, and the per-issuer
-//! `professional_issuing_authority` the gateway read before is refused,
-//! naming its replacement.
+//! `professional_issuing_authority` the gateway read before is an unknown
+//! key.
 #![allow(
     clippy::panic_in_result_fn,
     reason = "a test asserts, and returns its setup errors"
@@ -37,30 +37,18 @@ async fn an_issuer_without_an_attributes_table_states_no_purpose() -> TestResult
     assert_refused(&gateway, request, Refusal::PurposeOfUse).await
 }
 
-/// The `professional_issuing_authority` 0.0.20 retired refuses the load,
-/// naming the `[auth.issuer.<name>.attributes]` source that replaces it (the family's
-/// one-release rule, `ferrohealth_config::removed`).
+/// The `professional_issuing_authority` 0.0.20 retired is an unknown key
+/// once its one release of named refusal has passed (the family's
+/// one-release rule).
 #[test]
-fn the_retired_issuing_authority_key_is_refused_naming_its_replacement() -> TestResult {
+fn the_retired_issuing_authority_key_is_an_unknown_key() -> TestResult {
     let text = "[[trust.issuer]]\nissuer = \"https://issuer.example.test\"\nprofessional_issuing_authority = \"hp_issuing_authority\"\n";
     let refused = Config::from_sources(Some(text), &BTreeMap::new())
         .err()
         .ok_or("the retired key is refused at load")?;
-    let ConfigError::Retired(retired) = &refused else {
-        return Err(format!("expected a retired-key refusal, got {refused:?}").into());
-    };
-    let named: Vec<(&str, &str)> = retired
-        .removals()
-        .iter()
-        .map(|removal| (removal.key(), removal.replacement().unwrap_or_default()))
-        .collect();
-    assert_eq!(1, named.len(), "{named:?}");
     assert!(
-        named.iter().any(|(key, replacement)| {
-            *key == "trust.issuer[0].professional_issuing_authority"
-                && replacement.contains("professional.issuing_authority_name")
-        }),
-        "{named:?}"
+        matches!(refused, ConfigError::Load { .. }),
+        "an unknown key: {refused:?}"
     );
     Ok(())
 }

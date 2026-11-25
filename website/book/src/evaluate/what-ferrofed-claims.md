@@ -616,6 +616,26 @@ Released on 2026-11-12.
   quickstart on FerroPIX 0.0.29
   ([#1864](https://github.com/FerroHEALTH/FerroFED/issues/1864), [#1474](https://github.com/FerroHEALTH/FerroFED/issues/1474)).
 
+### v0.0.21: one registry of clients, and the summary's further sections
+
+Released on 2026-11-25.
+
+- Client authentication on the one-registry `ferrohealth-smart` 0.34: an
+  issuer table naming only its `issuer` trusts a SMART App Launch 2.2
+  authorization server, the caller is read from the token's standard
+  claims, and the authorization server's registry is the one list of
+  clients; another party's issuer keeps `kind = "federation"`. Every issuer
+  is a named `[auth.issuer.<name>]` table
+  ([#1946](https://github.com/FerroHEALTH/FerroFED/issues/1946), [#1915](https://github.com/FerroHEALTH/FerroFED/issues/1915)).
+- The patient summary's problems, allergies and intolerances, medical
+  devices and procedures from `eehrxf` 0.26, and a document a
+  representative inserts, a `Patient` token's actor or a `RelatedPerson`,
+  marked as the representative's
+  ([#1946](https://github.com/FerroHEALTH/FerroFED/issues/1946), [#1948](https://github.com/FerroHEALTH/FerroFED/issues/1948)).
+- FerroFED's own store tested on PostgreSQL 19, the audit spool written as
+  segments, and the quickstart on FerroPIX 0.0.39
+  ([#1941](https://github.com/FerroHEALTH/FerroFED/issues/1941), [#1922](https://github.com/FerroHEALTH/FerroFED/issues/1922), [#1927](https://github.com/FerroHEALTH/FerroFED/issues/1927)).
+
 ## Limitations
 
 Regulation (EU) 2025/327 Art 28(b) forbids "failing to inform the

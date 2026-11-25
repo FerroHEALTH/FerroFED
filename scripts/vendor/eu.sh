@@ -150,6 +150,10 @@ pin commit reg-ec-2008-765-en.xhtml "OJ L 218, 13.8.2008, p. 30 (CELEX 32008R076
   https://publications.europa.eu/resource/cellar/fdd70f57-7032-4121-92ae-ccf8ef68c15b.0006.02/DOC_1 \
   837732e0248a0e8777fe826b3ce5c1a97073dad7bf66c71eb675e940c0368aea "$eu_act" \
   'Regulation (EC) No 765/2008 of 9 July 2008, as published. Article 39(1) of Regulation (EU) 2019/1020 deleted its Article 2, points 1, 2, 14, 15, 17, 18 and 19, and its Chapter III, from 16 July 2021; its Article 30, the general principles of the CE marking, is unchanged and is the article Regulation (EU) 2025/327 (Art 41(3)) and Regulation (EU) 2024/2847 (Art 29) apply. Pinned at the Cellar manifestation the CELEX resource resolves to.'
+pin commit comm-c-2026-6013-en.xhtml "OJ C, C/2026/6013, 17.11.2026 (CELEX 52026XC06013), English" \
+  https://publications.europa.eu/resource/cellar/dcbc848b-e227-11f1-aefc-01aa75ed71a1.0006.03/DOC_1 \
+  06a9de5d027f614610ab6716772df90696228b5e23c7ee76676d26cf348eb502 "$eu_act" \
+  'Commission guidance on the application of Regulation (EU) 2024/2847, under its Article 26(1) and (2): not binding, how the Commission reads the scope, free and open-source software, substantial modifications, the support period (its section 5), important and critical products, the risk assessment and due diligence on integrated components (its section 7.3), remote data processing and the reporting obligations. Pinned at the Cellar manifestation the CELEX resource resolves to.'
 pinned_corpus eu-cra "EU Cyber Resilience Act and market surveillance acts" \
   "the Cyber Resilience Act and the EU market surveillance acts" \
   "Regulation (EU) 2024/2847, the Cyber Resilience Act, with its three
@@ -158,7 +162,8 @@ Regulation (EU) 2025/2392 on the technical description of its important and
 critical product categories; Commission Delegated Regulations (EU)
 2025/1535, which excludes products within the scope of Regulation (EU) No
 168/2013, and (EU) 2026/881, on when a CSIRT may delay passing on a
-notification; Regulation (EU) 2019/1020 on market
+notification; the Commission guidance C/2026/6013 on its application;
+Regulation (EU) 2019/1020 on market
 surveillance and compliance of products, whose Article 3 definitions of
 placing on the market, making available on the market, manufacturer and
 economic operator Regulation (EU) 2025/327 takes in its Article 2(1)(d);
@@ -169,7 +174,7 @@ December 2011 on the reuse of Commission documents, vendored at
 \`docs/specs/eu-ehds/dec-eu-2011-833-en.xhtml\`. Each is the text as
 published, with no later amendment applied; the notes name the amendments
 the research reads." "" \
-  $'#654 (the Cyber Resilience Act, the market-placement definitions and the economic-operator duties for a source-available release) and\n  #844 (the delegated acts under the Cyber Resilience Act)'
+  $'#654 (the Cyber Resilience Act, the market-placement definitions and the economic-operator duties for a source-available release),\n  #844 (the delegated acts under the Cyber Resilience Act) and\n  #1935 (the Commission guidance on its application)'
 
 pin commit myhealth.eu.fhir.ncp-api-9.1.1-ci.tgz "9.1.1-ci (ci-build, draft, 2026-09-08)" \
   https://build-fhir.ehdsi.eu/ncp-api/package.tgz \
