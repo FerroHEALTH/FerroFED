@@ -369,6 +369,8 @@ fn entries(
     let mut matches = Vec::new();
     if read.admits_summaries() && !gathered.resolved.is_empty() {
         let id = fhir.ids.document((SUMMARY_HOLDER, listing.patient));
+        // NOTE: IHE ITI TF-1 §18.3.3.1: an On-Demand Document Entry keeps its uniqueId, and each
+        // document written from it on retrieve takes a new one, as `Patient/$summary` does.
         matches.push((
             located(&id),
             Match::Written(Box::new(list::on_demand(
