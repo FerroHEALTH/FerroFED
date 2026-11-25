@@ -515,7 +515,8 @@ stay with the contact point:
 
 The Commission has not adopted the implementing act on the exchange
 format (Regulation (EU) 2025/327 Art 15(1)), and its Have your say page
-(initiative 17512) lists the draft act as upcoming, with no text. The
+(initiative 17512) shows the draft act in inter-service consultation, with
+no published text (read 2026-11-24). The
 closest published text is the Xt-EHR joint action's deliverables D6.1
 (Patient Summary) and D6.2 (electronic prescription and dispensation),
 which FerroFED reads as a draft (`scripts/vendor/xt-ehr.sh`). Their

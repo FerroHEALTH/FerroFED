@@ -154,7 +154,9 @@ release, free of charge, to get the fix
 
 Cadasto B.V. keeps publishing security fixes, in new releases, for at least
 five years after each release (Art 13(8)), and ships them only in the
-newest release (Art 13(10)). The end date of each release is the date until
+newest release (Art 13(10)), the reading the Commission's guidance gives
+both for software released as successive versions (C/2026/6013, section 5,
+points 128 to 131). The end date of each release is the date until
 which that commitment runs; the release itself is supported only while it
 is the newest. The end dates, as `SECURITY.md` lists them:
 
