@@ -18,8 +18,9 @@
 #                 when it has one, is a heading of a Markdown file or a test
 #                 function of a Rust file;
 #   the renders   the badge file, the README block and the book page block
-#                 equal what scripts/conformance/myhealth-eu.sh renders, and
-#                 the book summary lists the page;
+#                 equal what scripts/conformance/myhealth-eu.sh renders, the
+#                 badge carries the EU emblem on EU blue, and the book
+#                 summary lists the page;
 #   no text       the catalogue is privileged-access: a conclusion is short,
 #                 carries no quotation mark, no requirement verb and none of
 #                 the catalogue's own terms, the page carries no quotation
@@ -29,7 +30,7 @@
 # Usage:
 #   scripts/checks/myhealth-eu.sh
 #   scripts/checks/myhealth-eu.sh --self-test
-# Needs awk, git, grep, sed and shasum or sha256sum. Exit 1 naming each
+# Needs awk, git, grep, jq, sed and shasum or sha256sum. Exit 1 naming each
 # refusal; 2 on a usage error; 0 otherwise.
 set -euo pipefail
 export LC_ALL=C
@@ -186,6 +187,8 @@ check_renders() {
   else
     fail "$RENDER could not render the badge."
   fi
+  jq -e '.namedLogo == "europeanunion" and .labelColor == "#003399"' "$BADGE" > /dev/null 2>&1 ||
+    fail "$BADGE carries no EU emblem on EU blue."
   if bash "$RENDER" --readme-block > "$fresh" 2> /dev/null; then
     sed -n '/^<!-- myhealth-eu:begin -->$/,/^<!-- myhealth-eu:end -->$/p' "$README" | diff -q "$fresh" - > /dev/null ||
       fail "the $README myhealth-eu block is stale (run $RENDER --write)."
@@ -302,6 +305,7 @@ self_test() {
       "$repo/docs" "$repo/website/book/src/evaluate" "$repo/tests"
     cp "$script" "$repo/scripts/checks/myhealth-eu.sh"
     cp "$render" "$repo/scripts/conformance/myhealth-eu.sh"
+    cp -R "$(dirname "$script")/badge-logos" "$repo/scripts/checks/badge-logos"
     printf '# Evidence\n\n## The evidence\n' > "$repo/docs/evidence.md"
     printf '#[test]\nfn a_test() {}\n\nfn not_a_test() {}\n' > "$repo/tests/it.rs"
     {

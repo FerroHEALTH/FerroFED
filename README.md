@@ -14,14 +14,14 @@
 **Project**<br>
 [![Release](https://img.shields.io/github/v/release/FerroHEALTH/FerroFED?sort=semver&logo=github&label=release)](https://github.com/FerroHEALTH/FerroFED/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/FerroHEALTH/FerroFED/ci.yml?branch=main&logo=githubactions&logoColor=white&label=CI)](https://github.com/FerroHEALTH/FerroFED/actions/workflows/ci.yml)
-[![License: BUSL-1.1](https://img.shields.io/badge/License-BUSL--1.1-blue)](LICENSE)
+[![License: BUSL-1.1](https://img.shields.io/badge/License-BUSL--1.1-blue?logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI%2BPHBhdGggZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTEyIDN2MThNNyAyMWgxME00IDdoMTZNNCA3TDEgMTRhMyAzIDAgMCAwIDYgMFpNMjAgN2wtMyA3YTMgMyAwIDAgMCA2IDBaIi8%2BPC9zdmc%2B)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-ferrofed.eu-blue?logo=mdbook)](https://ferrofed.eu/docs/)
 [![GHCR](https://img.shields.io/badge/ghcr.io-ferrofed-2496ED?logo=docker&logoColor=white)](https://github.com/FerroHEALTH/FerroFED/pkgs/container/ferrofed)
 [![Image pulls](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fghcr-badge.elias.eu.org%2Fapi%2FFerroHEALTH%2FFerroFED%2Fferrofed&query=downloadCount&label=image%20pulls&logo=github)](https://github.com/FerroHEALTH/FerroFED/pkgs/container/ferrofed)
 
 **Quality and security**<br>
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/FerroHEALTH/FerroFED/badge)](https://scorecard.dev/viewer/?uri=github.com/FerroHEALTH/FerroFED)
-[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15130/badge)](https://www.bestpractices.dev/projects/15130)
+[![OpenSSF Scorecard](https://img.shields.io/ossf-scorecard/github.com/FerroHEALTH/FerroFED?label=openssf%20scorecard&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI%2BPHBhdGggZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTEyIDJsOCAzdjZjMCA1LTMuNSA5LjUtOCAxMS00LjUtMS41LTgtNi04LTExVjVaTTguNSAxMmwyLjUgMi41IDQuNS01Ii8%2BPC9zdmc%2B)](https://scorecard.dev/viewer/?uri=github.com/FerroHEALTH/FerroFED)
+[![OpenSSF Best Practices](https://img.shields.io/cii/level/15130?label=openssf%20best%20practices&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI%2BPHBhdGggZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTEyIDJhNiA2IDAgMSAwIDAgMTIgNiA2IDAgMSAwIDAtMTJaTTguNSAxMyA3IDIybDUtMyA1IDMtMS41LTkiLz48L3N2Zz4%3D)](https://www.bestpractices.dev/projects/15130)
 [![Quality gate](https://img.shields.io/sonar/quality_gate/FerroHEALTH_FerroFED?server=https%3A%2F%2Fsonarcloud.io&logo=sonarqubecloud&label=quality%20gate)](https://sonarcloud.io/summary/overall?id=FerroHEALTH_FerroFED)
 [![Coverage](https://img.shields.io/sonar/coverage/FerroHEALTH_FerroFED?server=https%3A%2F%2Fsonarcloud.io&logo=sonarqubecloud&label=coverage)](https://sonarcloud.io/summary/new_code?id=FerroHEALTH_FerroFED)
 [![CodeQL](https://img.shields.io/github/actions/workflow/status/FerroHEALTH/FerroFED/codeql.yml?branch=main&logo=github&label=CodeQL)](https://github.com/FerroHEALTH/FerroFED/actions/workflows/codeql.yml)
@@ -35,8 +35,8 @@
 [![Federation Tier 1.0.1 operator points](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fbadges%2Ffederation-operator.json)](https://ferrofed.eu/docs/evaluate/conformance.html)
 [![AQL golden cases](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fbadges%2Faql-golden.json)](conformance/aql-golden/pass-list.txt)
 <!-- conformance:end -->
-[![EHDS](https://img.shields.io/badge/EHDS-regulatory%20status-blue?logo=europeanunion)](https://ferrofed.eu/docs/evaluate/regulatory-status.html)
-[![CRA](https://img.shields.io/badge/CRA-risk%20assessment-blue?logo=europeanunion)](https://ferrofed.eu/docs/evaluate/cra-risk-assessment.html)
+[![EHDS](https://img.shields.io/badge/EHDS-regulatory%20status-blue?logo=europeanunion&labelColor=003399&logoColor=FFCC00)](https://ferrofed.eu/docs/evaluate/regulatory-status.html)
+[![CRA](https://img.shields.io/badge/CRA-risk%20assessment-blue?logo=europeanunion&labelColor=003399&logoColor=FFCC00)](https://ferrofed.eu/docs/evaluate/cra-risk-assessment.html)
 <!-- myhealth-eu:begin -->
 [![MyHealth@EU self-assessment](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fmyhealth-eu-badge.json)](https://ferrofed.eu/docs/evaluate/myhealth-eu.html)
 <!-- myhealth-eu:end -->
