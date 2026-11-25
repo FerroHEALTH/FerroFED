@@ -34,7 +34,10 @@
 #      differs from what `scripts/conformance/matrix.sh --badges-write` writes;
 #  10. a badge file, or a static badge of the README, carries no logo;
 #  11. the README lacks the small caption under the conformance heading that
-#      says once what the badges count (owner decision, 2026-11-25).
+#      says once what the badges count (owner decision, 2026-11-25);
+#  12. a badge's colour does not follow its count: green when all pass,
+#      yellow when some do, red when none do, blue when it counts nothing
+#      (owner decision, 2026-11-25).
 #
 # The golden test, in the Rust tier, fails when a listed case stops passing or
 # an unlisted case passes, so the pass list this reads is what the tests hold.
@@ -274,6 +277,10 @@ badge_logo_readme README.md || problem "a README badge carries no logo"
 
 # 11. The caption under the conformance heading.
 badge_caption_check README.md || problem "the README has no conformance caption"
+
+# 12. Every badge's colour follows its count, and an uncounted badge is blue.
+badge_color_check "$BADGES"/*.json conformance/myhealth-eu-badge.json conformance/myhealth-eu/*.json ||
+  problem "a badge's colour does not follow its count"
 
 if [[ "$fail" -ne 0 ]]; then
   exit 1
