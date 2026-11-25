@@ -16,7 +16,8 @@
 #                  discharge and each verdict valid or invalid; the
 #                  validator lane holds the rows to its run;
 #   the badges     every badge scripts/conformance/myhealth-eu.sh renders
-#                  equals its file;
+#                  equals its file, and each CI-line badge carries the EU
+#                  emblem on EU blue;
 #   the words      no badge label says certified, compliant or conformant:
 #                  the badges are self-tested and confer nothing.
 #
@@ -27,6 +28,8 @@
 # error; 0 otherwise.
 set -euo pipefail
 export LC_ALL=C
+# shellcheck source=scripts/checks/badge-logos/logo.sh
+source "$(dirname "${BASH_SOURCE[0]}")/badge-logos/logo.sh"
 
 readonly SEARCH=conformance/myhealth-eu-search.tsv
 readonly VALIDATION=conformance/myhealth-eu-validation.tsv
@@ -104,7 +107,18 @@ check_badges() {
     fi
   done
   rm -f -- "$fresh"
+  check_emblem conformance/myhealth-eu/*.json
   check_words conformance/myhealth-eu-badge.json conformance/myhealth-eu/*.json conformance/badges/*.json
+}
+
+# check_emblem FILE...: every badge FILE carries the EU emblem on EU blue.
+check_emblem() {
+  local file
+  badge_logo_check "$@" || fail "a MyHealth@EU badge carries no logo."
+  for file in "$@"; do
+    jq -e '.namedLogo == "europeanunion" and .labelColor == "#003399"' "$file" > /dev/null 2>&1 ||
+      fail "$file carries no EU emblem on EU blue."
+  done
 }
 
 # check_words FILE...: no badge label of FILE says a banned word.
@@ -140,6 +154,18 @@ self_test() {
       exit 1
     }
   done
+  printf '{"label":"MyHealth@EU Core 1.0.1 (CI)","message":"1/1","labelColor":"#003399","namedLogo":"europeanunion","logoColor":"#FFCC00"}\n' > "$work/emblem.json"
+  failed=0
+  check_emblem "$work/emblem.json" 2> /dev/null
+  [[ "$failed" -eq 0 ]] || {
+    echo "myhealth-eu-ci: self-test failed: a badge with the EU emblem was refused" >&2
+    exit 1
+  }
+  check_emblem "$work/plain.json" 2> /dev/null
+  [[ "$failed" -eq 1 ]] || {
+    echo "myhealth-eu-ci: self-test failed: a badge without a logo passed" >&2
+    exit 1
+  }
   failed=0
   echo "myhealth-eu-ci: self-test OK."
 }

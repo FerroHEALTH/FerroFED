@@ -12,9 +12,9 @@
 # conformance/myhealth-eu.tsv is the source. The badge is a shields.io
 # endpoint file (https://shields.io/badges/endpoint-badge) counting the rows
 # met among the rows that bind the gateway, always blue and always marked
-# self-assessed. Beside it, on the MyHealth@EU CI line (#1952), one badge per
-# NAME of BADGES: the NCPeH API DocumentReference search parameters the
-# gateway answers, from conformance/myhealth-eu-search.tsv, and the
+# self-assessed, with the EU emblem on EU blue. Beside it, on the MyHealth@EU
+# CI line (#1952), one badge per NAME of BADGES: the NCPeH API
+# DocumentReference search parameters the gateway answers, from conformance/myhealth-eu-search.tsv, and the
 # documents valid against MyHealth@EU Core, Laboratory Report and Hospital
 # Discharge Report, from conformance/myhealth-eu-validation.tsv, which the
 # validator lane holds to its run (scripts/checks/fhir-validator.sh
@@ -26,6 +26,8 @@
 # a fresh rendering. No specification governs this: our own design.
 set -euo pipefail
 export LC_ALL=C
+# shellcheck source=scripts/checks/badge-logos/logo.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../checks/badge-logos/logo.sh"
 
 readonly MAPPING=conformance/myhealth-eu.tsv
 readonly BADGE=conformance/myhealth-eu-badge.json
@@ -90,14 +92,16 @@ ci_badge() {
   else
     message="$(data "$VALIDATION" | awk -F'\t' -v guide="$name" '$1 == guide { n++; if ($3 == "valid") v++ } END { printf "%d/%d valid, self-tested", v, n }')"
   fi
-  printf '{"schemaVersion":1,"label":"%s","message":"%s","color":"blue"}\n' "$label" "$message"
+  jq -cn --arg label "$label" --arg message "$message" --argjson logo "$(badge_logo_fields eu)" \
+    '{schemaVersion: 1, label: $label, message: $message, color: "blue"} + $logo'
 }
 
 badge() {
   case "${1:-self-assessed}" in
   self-assessed)
-    printf '{"schemaVersion":1,"label":"MyHealth@EU self-assessed","message":"catalogue %s · %s/%s met","color":"blue"}\n' \
-      "$CATALOGUE" "$(count met)" "$(count)"
+    jq -cn --arg message "catalogue $CATALOGUE · $(count met)/$(count) met, self-assessed" \
+      --argjson logo "$(badge_logo_fields eu)" \
+      '{schemaVersion: 1, label: "MyHealth@EU", message: $message, color: "blue"} + $logo'
     ;;
   *) ci_badge "$1" ;;
   esac

@@ -41,6 +41,7 @@
 # specification version docs/VERSIONS.md pins. The README block between the
 # conformance:begin and conformance:end markers renders those files. The book
 # page links the specification site at that same pin, so a re-pin moves both.
+# Each badge carries a pictogram of scripts/checks/badge-logos/ as its logo.
 #
 # The derived columns come from the vendored specification, never from a hand:
 #
@@ -64,6 +65,8 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$root"
+# shellcheck source=scripts/checks/badge-logos/logo.sh
+source scripts/checks/badge-logos/logo.sh
 
 readonly PAGES=docs/specs/federation-spec/modules/ROOT/pages
 readonly MATRIX=conformance/matrix.tsv
@@ -683,11 +686,12 @@ colour_of() {
   fi
 }
 
-# One endpoint badge file: label, message, colour. The labels and messages
-# are written here and carry no character JSON escapes.
+# One endpoint badge file: label, message, colour, logo.
 badge_json() {
-  local label="$1" message="$2" colour="$3"
-  printf '{"schemaVersion":1,"label":"%s","message":"%s","color":"%s"}\n' "$label" "$message" "$colour"
+  local label="$1" message="$2" colour="$3" logo
+  logo="$(badge_logo_fields "$4")"
+  jq -cn --arg label "$label" --arg message "$message" --arg color "$colour" --argjson logo "$logo" \
+    '{schemaVersion: 1, label: $label, message: $message, color: $color} + $logo'
 }
 
 # matrix_count ACTOR [STATUS]: the number of matrix rows with ACTOR, and with
@@ -727,10 +731,10 @@ write_badges() {
   total="$(sed -n 's/^total \([0-9][0-9]*\)$/\1/p' "$PASS_LIST")"
   [[ -n "$total" ]] || die "$PASS_LIST has no total line"
   mkdir -p "$dir"
-  badge_json "$(label_of federation-gateway)" "$covered / $gateway covered" "$(colour_of "$covered" "$gateway")" > "$dir/federation-gateway.json"
-  badge_json "$(label_of federation-node)" "$node, a member node's to meet" blue > "$dir/federation-node.json"
-  badge_json "$(label_of federation-operator)" "$operator, the operator's to meet" blue > "$dir/federation-operator.json"
-  badge_json "$(label_of aql-golden)" "$passed / $total" "$(colour_of "$passed" "$total")" > "$dir/aql-golden.json"
+  badge_json "$(label_of federation-gateway)" "$covered / $gateway covered" "$(colour_of "$covered" "$gateway")" network > "$dir/federation-gateway.json"
+  badge_json "$(label_of federation-node)" "$node, a member node's to meet" blue network > "$dir/federation-node.json"
+  badge_json "$(label_of federation-operator)" "$operator, the operator's to meet" blue network > "$dir/federation-operator.json"
+  badge_json "$(label_of aql-golden)" "$passed / $total" "$(colour_of "$passed" "$total")" database > "$dir/aql-golden.json"
 }
 
 # The README block with its markers: the three matrix badges, linked to the
