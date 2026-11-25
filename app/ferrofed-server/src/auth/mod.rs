@@ -82,7 +82,9 @@ use ferrohealth_smart::sender::replay::{MemoryReplayStore, ReplayStore};
 use http::HeaderMap;
 use secrecy::SecretString;
 
-use crate::auth::caller::{Actor, Caller, PatientContext, Professional, Stated, VerifiedBy};
+use crate::auth::caller::{
+    Actor, Caller, PatientContext, Professional, Representation, Stated, VerifiedBy,
+};
 use crate::auth::contact_point::ContactPoints;
 use crate::auth::introspection::Introspected;
 use crate::auth::permission::{Requirement, Resource};
@@ -537,17 +539,20 @@ impl Gate {
     }
 }
 
-/// The representative acting for the patient whose own token `smart` is:
-/// the current actor of its RFC 8693 §4.1 `act` claim, as the issuer
-/// asserts it.
-// NOTE: Regulation (EU) 2025/327 Art 4(2); ferrohealth-smart reads `act` as asserted, and only
-// a `Patient` token's actor acts for the patient the token names.
-fn representative(smart: &SmartCaller) -> Option<Actor> {
+/// Who acts for the patient as the representative `smart` names: the
+/// current actor of a `Patient` token's RFC 8693 §4.1 `act` claim, as the
+/// issuer asserts it, or a `RelatedPerson` user with the patient in context.
+// NOTE: Regulation (EU) 2025/327 Art 4(2); ferrohealth-smart reads `act` as asserted and names
+// a `RelatedPerson` with a patient in context that patient's representative.
+fn representative(smart: &SmartCaller) -> Option<Representation> {
     match (smart.kind(), smart.actor()) {
-        (CallerKind::Patient, Some(actor)) => Some(Actor {
+        (CallerKind::Patient, Some(actor)) => Some(Representation::Actor(Actor {
             issuer: Some(actor.issuer.clone()).filter(|issuer| !issuer.is_empty()),
             subject: Some(actor.sub.clone()).filter(|sub| !sub.is_empty()),
-        }),
+        })),
+        (CallerKind::RelatedPerson, _) if smart.represented().is_some() => {
+            Some(Representation::RelatedPerson)
+        }
         _ => None,
     }
 }
@@ -783,14 +788,14 @@ mod representative_tests {
     use ferrohealth_smart::resource::Caller as SmartCaller;
 
     use super::representative;
-    use crate::auth::caller::Actor;
+    use crate::auth::caller::{Actor, Representation};
 
-    fn caller(kind: CallerKind, actor: Option<SmartActor>) -> SmartCaller {
+    fn caller(kind: CallerKind, patient: Option<&str>, actor: Option<SmartActor>) -> SmartCaller {
         let caller = SmartCaller::new(
             String::from("synthetic-subject"),
             Some(String::from("synthetic-client")),
             "patient/*.rs",
-            None,
+            patient.map(str::to_owned),
             kind,
         );
         match actor {
@@ -809,23 +814,45 @@ mod representative_tests {
     #[test]
     fn the_actor_of_a_patient_token_is_the_patients_representative() {
         assert_eq!(
-            Some(Actor {
+            Some(Representation::Actor(Actor {
                 issuer: Some(String::from("https://actor.example.test")),
                 subject: Some(String::from("synthetic-actor")),
-            }),
-            representative(&caller(CallerKind::Patient, Some(actor())))
+            })),
+            representative(&caller(CallerKind::Patient, None, Some(actor())))
+        );
+    }
+
+    #[test]
+    fn a_related_person_with_the_patient_in_context_is_the_representative() {
+        assert_eq!(
+            Some(Representation::RelatedPerson),
+            representative(&caller(
+                CallerKind::RelatedPerson,
+                Some("synthetic-context"),
+                None
+            ))
+        );
+        assert_eq!(
+            None,
+            representative(&caller(CallerKind::RelatedPerson, None, None))
         );
     }
 
     #[test]
     fn no_other_token_names_a_representative() {
-        assert_eq!(None, representative(&caller(CallerKind::Patient, None)));
+        assert_eq!(
+            None,
+            representative(&caller(CallerKind::Patient, None, None))
+        );
         for kind in [
             CallerKind::Practitioner,
             CallerKind::Person,
             CallerKind::User,
         ] {
-            assert_eq!(None, representative(&caller(kind, Some(actor()))));
+            assert_eq!(
+                None,
+                representative(&caller(kind, Some("synthetic-context"), Some(actor())))
+            );
         }
     }
 }

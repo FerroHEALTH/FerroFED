@@ -89,8 +89,8 @@
   lines, split at 750; empty allow-list here
 - [Dependency sweep to latest](deps-latest-sweep.md): compare pins with
   crates.io and FerroEHR's crate list every session
-- [Mermaid diagrams](mermaid-diagrams.md): render every fence with
-  mermaid-cli before a PR
+- [Mermaid diagrams](mermaid-diagrams.md): every diagram is a mermaid block, never ASCII
+  art; render each fence before a PR; owner 2026-11-24
 - [Perl edit pitfalls](perl-edit-pitfalls.md): heredoc literals, re-read
   before matching, `cargo clean -p` on a stale rmeta
 - [Forum replies short and plain](forum-replies-short-plain.md): anything the

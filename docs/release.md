@@ -20,9 +20,12 @@ branch runs it the same way as a tag on `main` (§ Cutting a security patch
 release). `workflow_dispatch` re-runs
 it for a tag that already exists and has to be dispatched at that tag.
 
-```text
-plan ── github-release (draft) ── build-binaries ── build-image ──┬─ vulnerability-record ── scan-and-tag ── finalize-release (publish) ── milestone
-                               └─ build-console ─────────────────┘
+```mermaid
+flowchart LR
+    plan --> release["github-release (draft)"]
+    release --> binaries["build-binaries"] --> image["build-image"] --> record["vulnerability-record"]
+    release --> console["build-console"] --> record
+    record --> scan["scan-and-tag"] --> finalize["finalize-release (publish)"] --> milestone
 ```
 
 - **plan** validates the tag shape, refuses a dispatch that is not at the
