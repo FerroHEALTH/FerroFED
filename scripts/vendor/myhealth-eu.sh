@@ -54,12 +54,17 @@ cc0='CC0-1.0: the license of the package manifest and of the ImplementationGuide
 ccby='CC-BY-4.0: the license of the package manifest and of the ImplementationGuide resource, whose copyright reads "Copyright European Union, represented by the European Commission - DG SANTE. Licenced under CC-BY-4.0."'
 whole='The registry tarball as served, package manifest included; the archive is committed whole so its sha256 stays the pin.'
 build='The package the MyHealth@EU site serves for its current build (package.json says notForPublication: true); not on packages.fhir.org, so a new build fails the pin loudly.'
+ci=https://build-fhir.ehdsi.eu
+ci_build='The CI build https://build-fhir.ehdsi.eu/ serves, the line the family validates against by owner ruling of 2026-11-24 (#1951); not on packages.fhir.org, so a new build fails the pin loudly and scripts/checks/pin-freshness.sh reports it.'
 read_by=$'#1290 (the re-check of decisions A51, A60 to A72, A81 and A102 against\n  the MyHealth@EU guides), and the testkit'
 
+pin commit myhealth.eu.fhir.core-1.0.1.tgz "1.0.1, CI build (FHIR 4.0.1, 2026-11-23)" \
+  "$ci/core/package.tgz" \
+  5952fc7b1c1e737b42db4d5624b70d0e24ea232a01ee2c11d874f68a7d0ebe47 "$cc0" "$ci_build"
 pin commit myhealth.eu.fhir.core-1.0.0.tgz "1.0.0, Wave 9 (FHIR 4.0.1, 2026-05-04)" \
   "$registry/myhealth.eu.fhir.core/1.0.0" \
   d40b9979dd971a76fc39452aee4091a5f79a9d46192ece7c28e70b4d429a9270 "$cc0" \
-  "$whole $site/core/package.tgz serves a rebuild of 1.0.0 of 2026-05-04 with other bytes, and https://build-fhir.ehdsi.eu/core/ a 1.0.1 build of 2026-10-16 (read 2026-10-24)."
+  "$whole The version the Patient Summary, ePrescription and eDispensation, Medical Imaging Report and Vaccination guides depend on; their builds have no newer CI build."
 pinned_corpus ehdsi-core "MyHealth@EU Core" \
   "the MyHealth@EU Core FHIR IG myhealth.eu.fhir.core" \
   "The shared foundation of the MyHealth@EU FHIR guides, canonical
@@ -101,23 +106,21 @@ Dispense guide, canonical \`http://fhir.ehdsi.eu/epd\`, with its rendered
 home page, committed under CC-BY-4.0, with the copyright the ImplementationGuide resource carries kept
 verbatim in the package." "" "$read_by"
 
-pin commit myhealth.eu.fhir.laboratory-9.1.1.tgz "9.1.1, Wave 9 (FHIR 4.0.1, 2026-05-05)" \
-  "$registry/myhealth.eu.fhir.laboratory/9.1.1" \
-  3e3bd638231997fd99799a40a7d8934541ca5ba65304f3a4b3886a7e675b0b56 "$cc0" \
-  "$whole The same bytes $site/laboratory/package.tgz serves; https://build-fhir.ehdsi.eu/laboratory/ serves a 9.2.0 build of 2026-10-22 (read 2026-10-24)."
+pin commit myhealth.eu.fhir.laboratory-9.2.0.tgz "9.2.0, CI build (FHIR 4.0.1, 2026-11-24)" \
+  "$ci/laboratory/package.tgz" \
+  e258e974945caa6f0f41a0816231d617638f56c3f16bf6382760ecb2ca3dd0ce "$cc0" "$ci_build"
 pinned_corpus ehdsi-laboratory "MyHealth@EU Laboratory Report" \
   "the MyHealth@EU Laboratory Report FHIR IG myhealth.eu.fhir.laboratory" \
-  "The MyHealth@EU Laboratory Result Report service on FHIR (Wave 8), derived
+  "The MyHealth@EU Laboratory Result Report service on FHIR, derived
 from the HL7 Europe Laboratory Report, canonical
 \`http://fhir.ehdsi.eu/laboratory\`, committed under CC0-1.0." "" "$read_by"
 
-pin commit myhealth.eu.fhir.hdr-9.1.1.tgz "9.1.1, draft build (FHIR 4.0.1, 2026-05-05)" \
-  "$site/hdr/package.tgz" \
-  38eb62092c18aa269c72cdceac01d706b293a5e5389186c682c50467bf84b38c "$cc0" "$build"
+pin commit myhealth.eu.fhir.hdr-9.2.0.tgz "9.2.0, CI build (FHIR 4.0.1, 2026-11-24)" \
+  "$ci/hdr/package.tgz" \
+  f3b649348d82c94821ef201ab9513517cfc143aa30cf623093f8772f21b93f6b "$cc0" "$ci_build"
 pinned_corpus ehdsi-hdr "MyHealth@EU Hospital Discharge Report" \
   "the MyHealth@EU Hospital Discharge Report FHIR IG myhealth.eu.fhir.hdr" \
-  "The MyHealth@EU Hospital Discharge Report service on FHIR (Wave 9),
-derived from the HL7 Europe Hospital Discharge Report, canonical
+  "The MyHealth@EU Hospital Discharge Report service on FHIR, derived from the HL7 Europe Hospital Discharge Report, canonical
 \`http://fhir.ehdsi.eu/hdr\`, committed under CC0-1.0." "" "$read_by"
 
 pin commit myhealth.eu.fhir.imaging-9.1.1.tgz "9.1.1, draft build (FHIR 4.0.1, 2026-05-05)" \

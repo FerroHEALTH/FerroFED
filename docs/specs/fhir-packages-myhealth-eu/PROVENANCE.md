@@ -8,9 +8,9 @@ URL and the sha256 of its bytes. Never edit a file here: change the pins in
 the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
-  the pins): `40c0a9bdd1b3da6c3061474c0ef3c0ef1e387ef2f8c74ce1fce99786cf7b3e32`
-- Fetched: 2026-10-24, with the User-Agent `ferrofed-vendor (scripts/vendor)`
-- Artefacts: 0 committed, 3 cache only, 0 needing
+  the pins): `3268287edc16e49a0d28270787ec93fb8bd06ee3f0ef7f171ee437b1adfe2cee`
+- Fetched: 2026-11-25, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+- Artefacts: 0 committed, 5 cache only, 0 needing
   manual retrieval
 - Files in this directory: 0 besides this one, each verbatim as the
   publisher serves it
@@ -47,6 +47,26 @@ for their size (19 MB).
 - Not redistributed: the script fetches it into `.vendor-cache/fhir-packages-myhealth-eu/`, which git
   ignores; this repository carries none of its content.
 - Note: The registry tarball as served, kept in the cache for its size. The version hl7.fhir.eu.laboratory 2.1.0 and hl7.fhir.eu.hdr 1.0.0 depend on.
+
+### `hl7.terminology.r4-7.5.0.tgz` (cache only, not redistributed)
+
+- Source: <https://packages.fhir.org/hl7.terminology.r4/7.5.0>
+- Version: 7.5.0 (FHIR 4.0.1)
+- sha256: `1da3004587602c3f5120061abc2309fef1f96668a477a9964354fa9af6fa6e60`
+- Licence: CC0-1.0: the license of the package manifest
+- Not redistributed: the script fetches it into `.vendor-cache/fhir-packages-myhealth-eu/`, which git
+  ignores; this repository carries none of its content.
+- Note: The registry tarball as served, kept in the cache for its size. The version the MyHealth@EU Core 1.0.1, Laboratory Report 9.2.0 and Hospital Discharge Report 9.2.0 CI builds depend on.
+
+### `hl7.fhir.uv.extensions.r4-5.4.0.tgz` (cache only, not redistributed)
+
+- Source: <https://packages.fhir.org/hl7.fhir.uv.extensions.r4/5.4.0>
+- Version: 5.4.0 (FHIR 4.0.1)
+- sha256: `e93eb1ece7d14e6b3dfaa7af5ac510577957cb5fd2b61ef95cdcfbbdca81c96d`
+- Licence: CC0-1.0: the license of the package manifest
+- Not redistributed: the script fetches it into `.vendor-cache/fhir-packages-myhealth-eu/`, which git
+  ignores; this repository carries none of its content.
+- Note: The registry tarball as served, kept in the cache for its size. The version the MyHealth@EU Core 1.0.1, Laboratory Report 9.2.0 and Hospital Discharge Report 9.2.0 CI builds depend on.
 
 ### `hl7.fhir.uv.xver-r5.r4-0.0.1-snapshot-2.tgz` (cache only, not redistributed)
 

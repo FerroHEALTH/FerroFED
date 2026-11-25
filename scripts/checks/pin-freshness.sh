@@ -121,13 +121,7 @@ IHE Pharmacy Medication Prescription and Dispense	ihe.pharm.mpd.r4	the version t
 IHE MHD FHIR package	ihe.iti.mhd	the version the pinned MyHealth@EU NCPeH API depends on
 HL7 Europe EU Health Data API	hl7.fhir.eu.health-data-api	-
 HL7 Europe Imaging Report	hl7.fhir.eu.imaging	-
-HL7 Europe Hospital Discharge Report	hl7.fhir.eu.hdr	-
-MyHealth@EU Master Value Sets Catalogue	myhealth.eu.fhir.mvc-package	-
-MyHealth@EU Core	myhealth.eu.fhir.core	-
-MyHealth@EU Patient Summary	myhealth.eu.fhir.eps	-
-MyHealth@EU ePrescription and eDispensation	myhealth.eu.fhir.epd	-
-MyHealth@EU Laboratory Report	myhealth.eu.fhir.laboratory	-
-MyHealth@EU Vaccination	myhealth.eu.fhir.euvac	-"
+HL7 Europe Hospital Discharge Report	hl7.fhir.eu.hdr	-"
 
 # One "matrix label<TAB>URL" record per line: a document IHE publishes at a
 # URL that names no revision, pinned by the sha256 of its bytes. Bytes that
@@ -139,12 +133,21 @@ IHE RESTful ATNA supplement	https://www.ihe.net/uploadedFiles/Documents/ITI/IHE_
 # One "matrix label<TAB>package<TAB>URL" record per line: a FHIR package its
 # publisher serves only at a URL that names no version and serves the current
 # build, read against the version the package manifest of the tarball served
-# there now names. A rebuild of the same version is caught by the vendor
-# script, which fails when an upstream byte moves.
+# there now names, and, where the row names the build's date as "serves
+# (YYYY-MM-DD)", against the manifest's `date`. A rebuild of the same version
+# is caught by the vendor script too, which fails when an upstream byte moves.
+# Every MyHealth@EU guide is watched on the CI line, by owner ruling of
+# 2026-11-24 (#1951).
 readonly WATCHED_BUILDS="\
 MyHealth@EU NCPeH API and OpenNCP	myhealth.eu.fhir.ncp-api	https://build-fhir.ehdsi.eu/ncp-api/package.tgz
-MyHealth@EU Hospital Discharge Report	myhealth.eu.fhir.hdr	https://fhir.ehdsi.eu/hdr/package.tgz
-MyHealth@EU Medical Imaging Report	myhealth.eu.fhir.imaging	https://fhir.ehdsi.eu/imaging/package.tgz
+MyHealth@EU Master Value Sets Catalogue	myhealth.eu.fhir.mvc-package	https://build-fhir.ehdsi.eu/mvc-package/package.tgz
+MyHealth@EU Core	myhealth.eu.fhir.core	https://build-fhir.ehdsi.eu/core/package.tgz
+MyHealth@EU Laboratory Report	myhealth.eu.fhir.laboratory	https://build-fhir.ehdsi.eu/laboratory/package.tgz
+MyHealth@EU Hospital Discharge Report	myhealth.eu.fhir.hdr	https://build-fhir.ehdsi.eu/hdr/package.tgz
+MyHealth@EU Medical Imaging Report	myhealth.eu.fhir.imaging	https://build-fhir.ehdsi.eu/imaging/package.tgz
+MyHealth@EU Patient Summary	myhealth.eu.fhir.eps	https://build-fhir.ehdsi.eu/eps/package.tgz
+MyHealth@EU ePrescription and eDispensation	myhealth.eu.fhir.epd	https://build-fhir.ehdsi.eu/epd/package.tgz
+MyHealth@EU Vaccination	myhealth.eu.fhir.euvac	https://build-fhir.ehdsi.eu/euvac/package.tgz
 Xt-EHR Metadata Foundation	hl7.eu.fhir.xt-ehr.metadata	https://xt-ehr.github.io/xt-ehr-metadata/package.tgz"
 
 # The European Commission's GitLab, where the eHDSI repositories live. One
@@ -309,6 +312,30 @@ matrix_cell_token() {
 package_version() {
   tar -xzOf - package/package.json 2> /dev/null | jq --raw-output '.version // empty' 2> /dev/null
 }
+
+# package_manifest: the version and the date (`YYYY-MM-DD`, or empty) the
+# package manifest of the tarball on stdin names, one tab apart.
+package_manifest() {
+  tar -xzOf - package/package.json 2> /dev/null |
+    jq --raw-output '"\(.version // "")\t\((.date // "") | tostring | if test("^[0-9]{8}") then .[0:4] + "-" + .[4:6] + "-" + .[6:8] else "" end)"' 2> /dev/null
+}
+
+# matrix_build_date LABEL [MATRIX]: the date the matrix row LABEL names as
+# "serves (YYYY-MM-DD)", or nothing.
+matrix_build_date() {
+  local label="$1" matrix="${2:-$MATRIX}"
+  awk -F'|' -v want="$label" '
+    NF >= 3 {
+      label = $2; gsub(/`/, "", label); gsub(/^[ \t]+|[ \t]+$/, "", label)
+      if (label != want) next
+      if (match($3, /serves \([0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\)/)) print substr($3, RSTART + 8, 10)
+      exit
+    }' "$matrix"
+}
+
+# The index of the MyHealth@EU CI line, whose cards link every guide it
+# builds as https://build-fhir.ehdsi.eu/<guide>.
+readonly CI_INDEX=https://build-fhir.ehdsi.eu/
 
 # gitlab_project PATH: PATH as the one URL-encoded segment the GitLab API
 # takes for a project.
@@ -653,6 +680,18 @@ self_test() {
       failed=1
     fi
   }
+  work="$(mktemp -d)"
+  # shellcheck disable=SC2016 # the backticks are the matrix's own Markdown
+  printf '%s\n' '| Item | Pin | Repeated in |' '|---|---|---|' \
+    '| MyHealth@EU Core | pin-set digest `0`, package `myhealth.eu.fhir.core` 1.0.1, the CI build `build-fhir.ehdsi.eu` serves (2026-11-23), tarball sha256 `0` | x |' \
+    '| MyHealth@EU Vaccination | package `myhealth.eu.fhir.euvac` 10.0.0-preview | x |' > "$work/dated.md"
+  expect 2026-11-23 "$(matrix_build_date 'MyHealth@EU Core' "$work/dated.md")" "the date of a CI build row"
+  expect "" "$(matrix_build_date 'MyHealth@EU Vaccination' "$work/dated.md")" "a row that names no build date"
+  mkdir -p "$work/package"
+  printf '{"version":"9.2.0","date":"20261124114216"}' > "$work/package/package.json"
+  expect "9.2.0$(printf '\t')2026-11-24" "$(tar -czf - -C "$work" package/package.json | package_manifest)" \
+    "the version and the date of a package manifest"
+  rm -rf "$work"
   got="$(printf '%s\n' 4.3.3 4.3 latest sha-4b271bc 4.4.0-rc1 4.3.10 4.3.9 | newest_release 4.3.3)"
   expect 4.3.10 "$got" "a release beside floating, commit and pre-release tags"
   got="$(printf '%s\n' 15.19 18 18.1 18.1-alpine 15.20 18beta1 | newest_release 15.19)"
@@ -1005,19 +1044,41 @@ while IFS=$'\t' read -r label package url; do
     continue
   fi
 
-  if ! served="$(curl --fail --silent --show-error --location --user-agent "$REGISTRY_UA" "$url" \
-    | package_version)" || [[ -z "$served" ]]; then
+  if ! manifest="$(curl --fail --silent --show-error --location --user-agent "$REGISTRY_UA" "$url" \
+    | package_manifest)" || [[ -z "${manifest%%$'\t'*}" ]]; then
     printf 'UNREADABLE %s: could not read the version of the package %s serves\n' "$label" "$url"
     unreadable=1
     continue
   fi
-  if [[ "$pinned" = "$served" ]]; then
-    printf 'current    %s %s %s (%s)\n' "$label" "$package" "$pinned" "$url"
-  else
+  served="${manifest%%$'\t'*}"
+  served_date="${manifest#*$'\t'}"
+  pinned_date="$(matrix_build_date "$label")"
+  if [[ "$pinned" != "$served" ]]; then
     printf 'STALE      %s: %s pinned %s, %s now serves %s\n' "$label" "$package" "$pinned" "$url" "$served"
     stale=1
+  elif [[ -n "$pinned_date" && "$pinned_date" != "$served_date" ]]; then
+    printf 'STALE      %s: %s %s pinned as the build of %s, %s now serves the build of %s\n' \
+      "$label" "$package" "$pinned" "$pinned_date" "$url" "${served_date:-an undated build}"
+    stale=1
+  else
+    printf 'current    %s %s %s (%s)\n' "$label" "$package" "$pinned" "$url"
   fi
 done <<< "$WATCHED_BUILDS"
+
+# A guide the CI line builds that no watched build names is new.
+if ! index="$(curl --fail --silent --show-error --location --user-agent "$REGISTRY_UA" "$CI_INDEX")"; then
+  printf 'UNREADABLE MyHealth@EU CI line: could not read %s\n' "$CI_INDEX"
+  unreadable=1
+else
+  while read -r guide; do
+    [[ -n "$guide" ]] || continue
+    if grep -qF "${CI_INDEX}${guide}/package.tgz" <<< "$WATCHED_BUILDS"; then
+      continue
+    fi
+    printf 'NEW        MyHealth@EU CI line builds a guide no pin watches: %s%s\n' "$CI_INDEX" "$guide"
+    stale=1
+  done < <(grep -oE "href=\"${CI_INDEX}[a-z0-9-]+" <<< "$index" | sed "s|href=\"${CI_INDEX}||" | sort -u)
+fi
 
 # The corpora pinned by commit on the Commission's GitLab, each against the
 # head of its branch.

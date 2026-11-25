@@ -95,8 +95,9 @@ const PINNED: &[(&str, &str, &[&str])] = &[
         &[
             "ehdsi/myhealth.eu.fhir.ncp-api-9.1.1-ci.tgz",
             "ehdsi-core/myhealth.eu.fhir.core-1.0.0.tgz",
-            "ehdsi-laboratory/myhealth.eu.fhir.laboratory-9.1.1.tgz",
-            "ehdsi-hdr/myhealth.eu.fhir.hdr-9.1.1.tgz",
+            "ehdsi-core/myhealth.eu.fhir.core-1.0.1.tgz",
+            "ehdsi-laboratory/myhealth.eu.fhir.laboratory-9.2.0.tgz",
+            "ehdsi-hdr/myhealth.eu.fhir.hdr-9.2.0.tgz",
             "ehdsi-imaging/myhealth.eu.fhir.imaging-9.1.1.tgz",
             "eu-hl7-laboratory/hl7.fhir.eu.laboratory-2.1.0.tgz",
             "eu-hl7-hdr/hl7.fhir.eu.hdr-1.0.0.tgz",
@@ -133,14 +134,15 @@ const PINNED: &[(&str, &str, &[&str])] = &[
 /// own design, #1313).
 const CLOSURE_ROOTS: &[&str] = &[
     "ehdsi/myhealth.eu.fhir.ncp-api-9.1.1-ci.tgz",
-    "ehdsi-core/myhealth.eu.fhir.core-1.0.0.tgz",
+    "ehdsi-core/myhealth.eu.fhir.core-1.0.1.tgz",
     "ehdsi-eps/myhealth.eu.fhir.eps-1.0.0-poc.tgz",
     "ehdsi-epd/myhealth.eu.fhir.epd-1.0.0-poc.tgz",
-    "ehdsi-laboratory/myhealth.eu.fhir.laboratory-9.1.1.tgz",
-    "ehdsi-hdr/myhealth.eu.fhir.hdr-9.1.1.tgz",
+    "ehdsi-laboratory/myhealth.eu.fhir.laboratory-9.2.0.tgz",
+    "ehdsi-hdr/myhealth.eu.fhir.hdr-9.2.0.tgz",
     "ehdsi-imaging/myhealth.eu.fhir.imaging-9.1.1.tgz",
     "ehdsi-euvac/myhealth.eu.fhir.euvac-10.0.0-preview.tgz",
     "ehdsi-mvc/myhealth.eu.fhir.mvc-package-9.1.0.tgz",
+    "ehdsi-mvc/myhealth.eu.fhir.mvc-package-10.1.0.tgz",
     "eu-hl7-laboratory/hl7.fhir.eu.laboratory-2.1.0.tgz",
     "eu-hl7-hdr/hl7.fhir.eu.hdr-1.0.0.tgz",
 ];
@@ -259,19 +261,19 @@ fn the_myhealth_guides_derive_from_the_vendored_versions() -> TestResult {
     // (package, dependency, the version its package manifest names)
     let cited = [
         (
-            "ehdsi-core/myhealth.eu.fhir.core-1.0.0.tgz",
+            "ehdsi-core/myhealth.eu.fhir.core-1.0.1.tgz",
             "xtehr.eu.ehds.models",
-            "0.3.0",
+            "1.0.0",
         ),
         (
-            "ehdsi-core/myhealth.eu.fhir.core-1.0.0.tgz",
+            "ehdsi-core/myhealth.eu.fhir.core-1.0.1.tgz",
             "myhealth.eu.fhir.mvc-package",
             "9.1.0",
         ),
         (
-            "ehdsi-core/myhealth.eu.fhir.core-1.0.0.tgz",
+            "ehdsi-core/myhealth.eu.fhir.core-1.0.1.tgz",
             "hl7.fhir.eu.base",
-            "2.0.0",
+            "2.0.1",
         ),
         (
             "ehdsi/myhealth.eu.fhir.ncp-api-9.1.1-ci.tgz",
@@ -279,14 +281,14 @@ fn the_myhealth_guides_derive_from_the_vendored_versions() -> TestResult {
             "9.1.0",
         ),
         (
-            "ehdsi-laboratory/myhealth.eu.fhir.laboratory-9.1.1.tgz",
+            "ehdsi-laboratory/myhealth.eu.fhir.laboratory-9.2.0.tgz",
             "hl7.fhir.eu.laboratory",
-            "2.0.0",
+            "2.1.0",
         ),
         (
-            "ehdsi-hdr/myhealth.eu.fhir.hdr-9.1.1.tgz",
+            "ehdsi-hdr/myhealth.eu.fhir.hdr-9.2.0.tgz",
             "hl7.fhir.eu.hdr",
-            "0.1.0-ballot",
+            "1.0.0",
         ),
         (
             "ehdsi-eps/myhealth.eu.fhir.eps-1.0.0-poc.tgz",
