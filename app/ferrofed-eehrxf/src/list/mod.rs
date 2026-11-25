@@ -124,6 +124,9 @@ pub enum Subject {
     /// the reference names it, `[id]`, `Patient/[id]` or an absolute URL
     /// (FHIR R4 search §3.1.1.4.11).
     Patient(String),
+    /// `_id` alone, or a read by id: by the logical id of a document the
+    /// face listed, which stands for its patient.
+    Document(String),
 }
 
 impl std::fmt::Debug for Subject {
@@ -131,6 +134,7 @@ impl std::fmt::Debug for Subject {
         match self {
             Self::Identifier { .. } => f.write_str("Identifier"),
             Self::Patient(_) => f.write_str("Patient"),
+            Self::Document(_) => f.write_str("Document"),
         }
     }
 }
@@ -139,9 +143,11 @@ impl std::fmt::Debug for Subject {
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
 pub enum ListRefusal {
-    /// The search names neither `patient.identifier` nor `patient`.
+    /// The search names neither `patient.identifier` nor `patient`, nor
+    /// one document by `_id`.
     #[error(
-        "the search names the patient by patient.identifier=system|value or by patient=Patient/id"
+        "the search names the patient by patient.identifier=system|value or patient=Patient/id, \
+         or one document by _id"
     )]
     NoPatient,
     /// The patient is named more than once, or several patients are.
@@ -152,7 +158,7 @@ pub enum ListRefusal {
     Unqualified,
     /// The search carries a parameter or a modifier the face does not take.
     #[error(
-        "the search takes patient.identifier, patient, type, category, contenttype, status, modality, \
+        "the search takes patient.identifier, patient, _id, type, category, contenttype, status, modality, \
          bodysite, creation, date, period and _format alone, with no modifier"
     )]
     Parameter,
@@ -223,6 +229,7 @@ impl ListRequest {
         let mut discharge = DISCHARGE_REPORTS.to_vec();
         let mut imaging = IMAGING_DOCUMENTS.to_vec();
         let mut criteria = Criteria::default();
+        let mut ids = Vec::new();
         for (name, value) in pairs {
             match &*name {
                 // NOTE: FHIR R4 search, several values; a comma separates the values a parameter
@@ -257,18 +264,50 @@ impl ListRequest {
                     }
                 }
                 other => {
+                    if other == "_id" {
+                        ids.push(value.clone().into_owned());
+                    }
                     if !criteria.read(other, &value)? {
                         return Err(ListRefusal::Parameter);
                     }
                 }
             }
         }
+        // NOTE: no specification governs this: our own design; one `_id` of one value names
+        // the document's patient through the record of the id, as a read by id does.
+        let subject = match (subject, ids.as_slice()) {
+            (Some(subject), _) => subject,
+            (None, [id]) if !id.contains(',') => Subject::Document(id.clone()),
+            (None, _) => return Err(ListRefusal::NoPatient),
+        };
         Ok(Self {
-            subject: subject.ok_or(ListRefusal::NoPatient)?,
+            subject,
             summaries,
             laboratory,
             discharge,
             imaging,
+            criteria,
+        })
+    }
+}
+
+impl ListRequest {
+    /// The search a read of the document `id` runs: every type the face
+    /// lists, the document's patient named by the id, and the entry the id
+    /// names selected.
+    ///
+    /// # Errors
+    ///
+    /// [`ListRefusal::Value`] when `id` is no `_id` value.
+    pub fn read(id: &str) -> Result<Self, ListRefusal> {
+        let mut criteria = Criteria::default();
+        criteria.read("_id", &fhir_search::escape::escape(id))?;
+        Ok(Self {
+            subject: Subject::Document(id.to_owned()),
+            summaries: true,
+            laboratory: true,
+            discharge: DISCHARGE_REPORTS.to_vec(),
+            imaging: IMAGING_DOCUMENTS.to_vec(),
             criteria,
         })
     }
@@ -493,18 +532,18 @@ fn organisation(organisation: &Organisation) -> Reference {
     }
 }
 
-/// Returns the `OperationOutcome` that says the `patient` a search named
+/// Returns the `OperationOutcome` that says the id a search or a read named
 /// is no id the gateway holds a record of, so the caller repeats the
-/// `Patient` lookup.
+/// search that gave it.
 #[must_use]
-pub fn unknown_patient() -> OperationOutcome {
+pub fn unknown_id() -> OperationOutcome {
     OperationOutcome {
         issue: vec![OperationOutcomeIssue {
             severity: "warning".into(),
             code: "not-found".into(),
             diagnostics: Some(
-                "the patient id is unknown or has expired; repeat the Patient lookup and search \
-                 with the id it answers"
+                "the id is unknown or has expired; repeat the Patient lookup or the document \
+                 search and use the id it answers"
                     .into(),
             ),
             ..OperationOutcomeIssue::default()
@@ -599,6 +638,25 @@ pub fn json(listed: &Match) -> Result<Value, serde_json::Error> {
         }
         Match::Passed(body) => Ok(body.clone()),
     }
+}
+
+/// Returns the logical id of the `DocumentReference` `listed` names.
+#[must_use]
+pub fn id(listed: &Match) -> Option<&str> {
+    match listed {
+        Match::Written(reference) => reference.id.as_deref(),
+        Match::Passed(body) => body.get("id").and_then(Value::as_str),
+    }
+}
+
+/// Returns `document`, a member's `DocumentReference`, with the logical id
+/// `id` in place of the member's own.
+#[must_use]
+pub fn renamed(mut document: Value, id: &str) -> Value {
+    if let Value::Object(resource) = &mut document {
+        resource.insert("id".to_owned(), Value::String(id.to_owned()));
+    }
+    document
 }
 
 /// Returns the `searchset` of the `matches`, each under its full URL, and
@@ -720,6 +778,25 @@ mod tests {
             );
             assert!(read.admits_summaries(), "{query}");
         }
+    }
+
+    #[test]
+    fn one_id_alone_names_its_document_and_more_name_no_patient() {
+        let read = ListRequest::from_query(Some("_id=abc")).unwrap();
+        assert_eq!(read.subject(), &Subject::Document("abc".to_owned()));
+        let read = ListRequest::from_query(Some("_id=abc&patient.identifier=a%7Cb")).unwrap();
+        assert!(matches!(read.subject(), Subject::Identifier { .. }));
+        for query in ["_id=a,b", "_id=a&_id=b"] {
+            assert_eq!(
+                ListRequest::from_query(Some(query)),
+                Err(ListRefusal::NoPatient),
+                "{query}"
+            );
+        }
+        assert_eq!(
+            ListRequest::read("abc").unwrap().subject(),
+            &Subject::Document("abc".to_owned())
+        );
     }
 
     #[test]

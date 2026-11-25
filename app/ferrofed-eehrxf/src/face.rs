@@ -319,95 +319,128 @@ pub fn bundle(receivers: &Receivers) -> CapabilityStatementRestResource {
 /// The `DocumentReference` resource of the capability statement: the
 /// search-type interaction with the parameters the list takes, after the
 /// HL7 Europe EU Health Data API Document Access Provider and the
-/// MyHealth@EU national contact point API (`CapabilityStatementMyHealthEu`).
+/// MyHealth@EU national contact point API (`CapabilityStatementMyHealthEu`),
+/// and, when the gateway keeps its ids `recorded`, the read.
 fn documents(recorded: bool) -> CapabilityStatementRestResource {
-    let typed = |(name, kind): (&str, &str), definition: Option<&str>, documentation: &str| {
-        CapabilityStatementRestResourceSearchParam {
-            name: name.into(),
-            definition: definition.map(Into::into),
-            r#type: kind.into(),
-            documentation: Some(documentation.into()),
-            ..CapabilityStatementRestResourceSearchParam::default()
-        }
-    };
-    let parameter = |name: &str, definition: Option<&str>, documentation: &str| {
-        typed((name, "token"), definition, documentation)
-    };
-    let dated = |name: &str, definition: &str, documentation: &str| {
-        typed((name, "date"), Some(definition), documentation)
-    };
-    let mut search_param = vec![parameter(
-        "patient.identifier",
+    let mut search_param = vec![search_parameter(
+        ("patient.identifier", "token"),
         None,
         "The patient, as system|value; one patient alone, or patient instead.",
     )];
     // NOTE: FHIR R4 capabilitystatement.html: the statement describes what the server supports,
-    // and a patient id resolves only through the store's record of it.
+    // and an id resolves to its patient only through the store's record of it.
     if recorded {
-        search_param.push(typed(
+        search_param.push(search_parameter(
             ("patient", "reference"),
             Some("http://hl7.org/fhir/SearchParameter/clinical-patient"),
             "The Patient a lookup answered, by its id; an id the gateway no longer holds answers an outcome entry asking for the lookup again.",
         ));
     }
+    search_param.push(search_parameter(
+        ("_id", "token"),
+        Some("http://hl7.org/fhir/SearchParameter/Resource-id"),
+        if recorded {
+            "A listed document's stable id, beside the patient or alone, which names its patient."
+        } else {
+            "A listed document's stable id, beside the patient."
+        },
+    ));
+    search_param.extend(evaluated());
+    let mut interaction = vec![CapabilityStatementRestResourceInteraction {
+        code: "search-type".into(),
+        ..CapabilityStatementRestResourceInteraction::default()
+    }];
+    if recorded {
+        interaction.push(CapabilityStatementRestResourceInteraction {
+            code: "read".into(),
+            documentation: Some(
+                "The read of a listed document by its stable id, while the gateway holds its record."
+                    .into(),
+            ),
+            ..CapabilityStatementRestResourceInteraction::default()
+        });
+    }
     CapabilityStatementRestResource {
         r#type: "DocumentReference".into(),
         supported_profile: vec![crate::list::DOCUMENT_REFERENCE_PROFILE.into()],
-        interaction: vec![CapabilityStatementRestResourceInteraction {
-            code: "search-type".into(),
-            ..CapabilityStatementRestResourceInteraction::default()
-        }],
-        search_param: search_param
-            .into_iter()
-            .chain([
-            parameter(
-                "type",
-                Some("http://hl7.org/fhir/SearchParameter/clinical-type"),
-                "The document type, a LOINC code of the EEHRxF document type value sets.",
-            ),
-            parameter(
-                "category",
-                Some("http://hl7.org/fhir/SearchParameter/DocumentReference-category"),
-                "DocumentReference.category, evaluated by the gateway on every listed entry.",
-            ),
-            parameter(
-                "contenttype",
-                Some("http://hl7.org/fhir/SearchParameter/DocumentReference-contenttype"),
-                "content.attachment.contentType, evaluated by the gateway on every listed entry.",
-            ),
-            parameter(
-                "status",
-                Some("http://hl7.org/fhir/SearchParameter/DocumentReference-status"),
-                "DocumentReference.status, evaluated by the gateway on every listed entry.",
-            ),
-            parameter(
-                "modality",
-                Some("http://fhir.ehdsi.eu/ncp-api/SearchParameter/DocumentReference-modality"),
-                "The R5 modality extension, evaluated by the gateway on every listed entry.",
-            ),
-            parameter(
-                "bodysite",
-                Some("http://fhir.ehdsi.eu/ncp-api/SearchParameter/DocumentReference-bodysite"),
-                "The R5 bodySite extension's concept, evaluated by the gateway on every listed entry.",
-            ),
-            dated(
-                "creation",
-                "https://profiles.ihe.net/ITI/MHD/SearchParameter/DocumentReference-Creation",
-                "content.attachment.creation, evaluated by the gateway on every listed entry.",
-            ),
-            dated(
-                "date",
-                "http://hl7.org/fhir/SearchParameter/DocumentReference-date",
-                "DocumentReference.date, evaluated by the gateway on every listed entry.",
-            ),
-            dated(
-                "period",
-                "http://hl7.org/fhir/SearchParameter/DocumentReference-period",
-                "context.period, evaluated by the gateway on every listed entry.",
-            ),
-        ])
-            .collect(),
+        interaction,
+        search_param,
         ..CapabilityStatementRestResource::default()
+    }
+}
+
+/// The search parameters the list evaluates on every entry it lists, with
+/// `type`.
+fn evaluated() -> [CapabilityStatementRestResourceSearchParam; 9] {
+    let on_entry = |(name, kind): (&str, &str), definition: &str, element: &str| {
+        search_parameter(
+            (name, kind),
+            Some(definition),
+            &format!("{element}, evaluated by the gateway on every listed entry."),
+        )
+    };
+    [
+        search_parameter(
+            ("type", "token"),
+            Some("http://hl7.org/fhir/SearchParameter/clinical-type"),
+            "The document type, a LOINC code of the EEHRxF document type value sets.",
+        ),
+        on_entry(
+            ("category", "token"),
+            "http://hl7.org/fhir/SearchParameter/DocumentReference-category",
+            "DocumentReference.category",
+        ),
+        on_entry(
+            ("contenttype", "token"),
+            "http://hl7.org/fhir/SearchParameter/DocumentReference-contenttype",
+            "content.attachment.contentType",
+        ),
+        on_entry(
+            ("status", "token"),
+            "http://hl7.org/fhir/SearchParameter/DocumentReference-status",
+            "DocumentReference.status",
+        ),
+        on_entry(
+            ("modality", "token"),
+            "http://fhir.ehdsi.eu/ncp-api/SearchParameter/DocumentReference-modality",
+            "The R5 modality extension",
+        ),
+        on_entry(
+            ("bodysite", "token"),
+            "http://fhir.ehdsi.eu/ncp-api/SearchParameter/DocumentReference-bodysite",
+            "The R5 bodySite extension's concept",
+        ),
+        on_entry(
+            ("creation", "date"),
+            "https://profiles.ihe.net/ITI/MHD/SearchParameter/DocumentReference-Creation",
+            "content.attachment.creation",
+        ),
+        on_entry(
+            ("date", "date"),
+            "http://hl7.org/fhir/SearchParameter/DocumentReference-date",
+            "DocumentReference.date",
+        ),
+        on_entry(
+            ("period", "date"),
+            "http://hl7.org/fhir/SearchParameter/DocumentReference-period",
+            "context.period",
+        ),
+    ]
+}
+
+/// One search parameter of the statement: its name and type, its
+/// definition and what it searches.
+fn search_parameter(
+    (name, kind): (&str, &str),
+    definition: Option<&str>,
+    documentation: &str,
+) -> CapabilityStatementRestResourceSearchParam {
+    CapabilityStatementRestResourceSearchParam {
+        name: name.into(),
+        definition: definition.map(Into::into),
+        r#type: kind.into(),
+        documentation: Some(documentation.into()),
+        ..CapabilityStatementRestResourceSearchParam::default()
     }
 }
 

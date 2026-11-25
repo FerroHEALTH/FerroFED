@@ -19,6 +19,7 @@ The face answers six requests today:
 | `GET` or `POST {fhir-base}/Patient/$summary` | the patient summary, an HL7 Europe Patient Summary document `Bundle` |
 | `POST {fhir-base}/Bundle` | a document received in the exchange format, written to the member its category is declared for |
 | `GET {fhir-base}/DocumentReference` | the document list: the summary the gateway writes on request and each member's own one ([The document list](#the-document-list)) |
+| `GET {fhir-base}/DocumentReference/{id}` | one listed document by its stable id, with `[store]` set ([Reading a listed document](#reading-a-listed-document)) |
 | `GET {fhir-base}/Binary/{token}` | a member's own document, at the URL the document list names |
 
 The gate refuses every other path under `{fhir-base}`, and every other
@@ -55,7 +56,7 @@ with HKDF-SHA-256 from `fhir.id_key`, in lowercase base32, 52 characters.
 The identifier cannot be read back from the id. With `[store]` set, each
 answer that names the patient also records the identifier the id stands
 for in FerroFED's store, sealed with AES-256-GCM under a second key derived
-from `fhir.id_key`, for `fhir.patient_id_lifetime` (`24h` unless set) after
+from `fhir.id_key`, for `fhir.id_lifetime` (`24h` unless set) after
 the last answer. A document search can then name the patient by this id
 ([The document list](#the-document-list)). The derivation and the window
 are FerroFED's own design; no specification governs them. The face keeps no
@@ -268,11 +269,16 @@ Authorization: Bearer <token>
   `Patient/{id}`, `{id}` or `{fhir-base}/Patient/{id}`. The gateway reads
   the identifier the store holds for the id and searches by it, so the
   answer is the one `patient.identifier` gives. An id the store does not
-  hold, never recorded or past `fhir.patient_id_lifetime`, matches nothing:
+  hold, never recorded or past `fhir.id_lifetime`, matches nothing:
   the answer is the empty `searchset` with an `outcome` entry, `not-found`,
   asking you to repeat the lookup (FHIR R4 search §3.1.1.7), and no member
   is asked. Without `[store]` a `patient` search is a `400`, and `metadata`
   does not declare the parameter. Name the patient by one of the two, once.
+- `_id` selects the entries with the ids it names. Beside the patient it
+  needs no store. Alone, with one id, it names the document's patient
+  through the store's record of the id, as a read does, and an id the store
+  does not hold answers the empty `searchset` with the `outcome` entry
+  asking you to repeat the search.
 - `type`, when sent, is a token: `60591-5`, `http://loinc.org|60591-5` or
   `http://loinc.org|`. A `type` that admits no document type the list
   serves (the patient summary, and the laboratory, discharge and imaging
@@ -298,7 +304,11 @@ Authorization: Bearer <token>
 The answer is a `Bundle` of type `searchset`, each entry a `DocumentReference`
 that claims the `EehrxfMhdDocumentReference` profile, typed LOINC `60591-5`
 in the `Patient-Summaries` category, its `subject` the identifier you sent
-and the reference `Patient/{id}` to the patient's stable id:
+and the reference `Patient/{id}` to the patient's stable id. Each entry
+has a stable id, the same in every list, derived like the patient's id
+from its holder and the holder's id of the document (a member's own
+`DocumentReference` takes it in place of the member's id), under the full
+URL `{fhir-base}/DocumentReference/{id}`:
 
 - The summary the gateway writes on request, its custodian the operator of
   `[fhir.operator]`. The gateway does not write it to list it: its
@@ -352,6 +362,19 @@ reports and imaging documents a member serves itself
 `metadata` declares the search: the `DocumentReference` resource with the
 `search-type` interaction, its supported profile and each parameter above
 with its definition, and the `Binary` read.
+
+### Reading a listed document
+
+With `[store]` set, `GET {fhir-base}/DocumentReference/{id}` answers the
+entry a list named by `id`. The list records the patient each of its
+entries stands for, sealed, as it records the patient's id, for
+`fhir.id_lifetime`. The read finds that patient, runs the list for it under
+the same admission, treatment relationship check and access record, and
+answers the one entry with the id, `200`. An id the store does not hold,
+never recorded or expired, is a `404` with an `OperationOutcome` asking you
+to repeat the search, and no member is asked. An id no entry of the list
+has any more is a `404`, saying so when a member did not answer. Without
+`[store]` the read is a `400`, and `metadata` does not declare it.
 
 ### Reading a member's document
 

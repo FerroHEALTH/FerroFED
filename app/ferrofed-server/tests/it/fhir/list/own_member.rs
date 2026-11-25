@@ -213,7 +213,8 @@ struct RawSearchset {
 }
 
 /// The one document `text` lists, with the text the gateway wrote of the
-/// member's document of the id `declared` names.
+/// member's document `declared` names, and that text with the member's
+/// own id in place of the gateway's stable id, which is checked to be one.
 pub(super) fn listed(
     declared: &Declared,
     text: &str,
@@ -223,15 +224,19 @@ pub(super) fn listed(
     let [reference] = matches.as_slice() else {
         return Err(format!("one document listed: {bundle}").into());
     };
+    let id = reference["id"].as_str().ok_or("an id")?;
+    if id.len() != 52 || id == declared.document {
+        return Err(format!("the gateway's stable id, not the member's: {id}").into());
+    }
     let raw: RawSearchset = serde_json::from_str(text)?;
-    let id = format!("\"{}\"", declared.document);
+    let stable = format!("\"{id}\"");
     let written = raw
         .entry
         .iter()
         .map(|entry| entry.resource.get())
-        .find(|resource| resource.contains(&id))
+        .find(|resource| resource.contains(&stable))
         .ok_or("the member's document")?
-        .to_owned();
+        .replace(&stable, &format!("\"{}\"", declared.document));
     Ok(((*reference).clone(), written))
 }
 

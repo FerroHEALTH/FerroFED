@@ -5,10 +5,8 @@
 //! national contact point API 9.1.1-ci `patient`): every entry the gateway
 //! writes names the patient by the id the lookup answers, the same in every
 //! answer; with FerroFED's store, `patient=Patient/<id>` lists the patient's
-//! documents, and an id the store does not hold, never recorded or past its
-//! window, answers the empty `searchset` with an `outcome` entry asking for
-//! the lookup again (FHIR R4 search §3.1.1.7); without a store the search is
-//! refused and `metadata` declares no `patient`.
+//! documents (`crate::e2e::face_ids`); without a store the search is refused
+//! and `metadata` declares no `patient`.
 
 use axum::body::Body;
 use http::{Request, StatusCode};
@@ -129,7 +127,10 @@ async fn without_a_store_a_search_by_patient_is_refused_and_not_declared() -> Te
     members.proxy_b.clear_journal();
     let (status, text) = call(app.clone(), search(&format!("patient=Patient%2F{id}"))?).await?;
     assert_eq!(StatusCode::BAD_REQUEST, status, "{text}");
-    assert!(text.contains("keeps no record of patient ids"), "{text}");
+    assert!(
+        text.contains("keeps no record of the ids it gives"),
+        "{text}"
+    );
     assert!(members.proxy_a.journal().is_empty() && members.proxy_b.journal().is_empty());
     assert!(!declared(&app).await?.iter().any(|name| name == "patient"));
     Ok(())

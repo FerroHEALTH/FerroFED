@@ -24,6 +24,7 @@ use ferrofed_eehrxf::list::{self, Match};
 use ferrofed_engine::hygiene::Withheld;
 use ferrofed_engine::single_node::native_search::{By, SearchAsked, Searched};
 use ferrofed_registry::id::EndpointId;
+use fhir_types::codec::Value;
 use http::StatusCode;
 use openehr_federation::status::EndpointStatus;
 
@@ -64,9 +65,24 @@ pub(super) fn listed(
                 let base = snapshot.native_endpoint(&own.chosen.native)?.url();
                 let signer = federation.signer()?;
                 for document in pages.iter().flat_map(|page| &page.prescriptions) {
+                    let resource = &document.kept.resource;
+                    // NOTE: FHIR R4 search: every match carries its logical id; one with none cannot be
+                    // named by a stable id of the gateway's, so the member is named as in node-error.
+                    let Some(held) = resource.get("id").and_then(Value::as_str) else {
+                        outcomes.push((
+                            minted_urn(),
+                            list::unread(
+                                endpoint,
+                                own.kind.documents(),
+                                "a DocumentReference with no id",
+                            ),
+                        ));
+                        continue;
+                    };
+                    let id = fhir.ids.document((endpoint, held));
                     // NOTE: no specification governs this: our own design; the attachment URL alone
                     // changes, so the document is read through the gateway's access check and record.
-                    let passed = list::readdressed(&document.kept.resource, |url| {
+                    let passed = list::readdressed(resource, |url| {
                         let binary = binary(base, url)?;
                         let token = super::binary::mint_own(
                             signer,
@@ -77,7 +93,10 @@ pub(super) fn listed(
                         .ok()?;
                         Some(format!("Binary/{token}"))
                     })?;
-                    matches.push((minted_urn(), Match::Passed(passed)));
+                    matches.push((
+                        format!("{}/DocumentReference/{}", fhir.absolute, id.as_str()),
+                        Match::Passed(list::renamed(passed, id.as_str())),
+                    ));
                 }
             }
             prescriptions::Held::Unusable { reason, .. } => {
