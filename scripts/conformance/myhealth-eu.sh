@@ -12,13 +12,15 @@
 # conformance/myhealth-eu.tsv is the source. The badge is a shields.io
 # endpoint file (https://shields.io/badges/endpoint-badge) counting the rows
 # met among the rows that bind the gateway, always blue and always marked
-# self-assessed. The README block between the myhealth-eu:begin and
+# self-assessed, with the EU emblem on EU blue. The README block between the myhealth-eu:begin and
 # myhealth-eu:end markers links the badge to the book page, and the page
 # block between the same markers in website/book/src/evaluate/myhealth-eu.md
 # is the table of every row. scripts/checks/myhealth-eu.sh holds all three to
 # a fresh rendering. No specification governs this: our own design.
 set -euo pipefail
 export LC_ALL=C
+# shellcheck source=scripts/checks/badge-logos/logo.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../checks/badge-logos/logo.sh"
 
 readonly MAPPING=conformance/myhealth-eu.tsv
 readonly BADGE=conformance/myhealth-eu-badge.json
@@ -49,8 +51,9 @@ count() {
 }
 
 badge() {
-  printf '{"schemaVersion":1,"label":"MyHealth@EU","message":"catalogue %s · %s/%s met, self-assessed","color":"blue"}\n' \
-    "$CATALOGUE" "$(count met)" "$(count)"
+  jq -cn --arg message "catalogue $CATALOGUE · $(count met)/$(count) met, self-assessed" \
+    --argjson logo "$(badge_logo_fields eu)" \
+    '{schemaVersion: 1, label: "MyHealth@EU", message: $message, color: "blue"} + $logo'
 }
 
 readme_block() {

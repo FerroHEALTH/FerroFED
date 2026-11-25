@@ -31,7 +31,8 @@
 #   8. conformance/aql-golden/pass-list.txt is unsorted, names a case the
 #      vendored corpus does not hold, or records another total than it holds;
 #   9. a file under conformance/badges/ or the README conformance block
-#      differs from what `scripts/conformance/matrix.sh --badges-write` writes.
+#      differs from what `scripts/conformance/matrix.sh --badges-write` writes;
+#  10. a badge file, or a static badge of the README, carries no logo.
 #
 # The golden test, in the Rust tier, fails when a listed case stops passing or
 # an unlisted case passes, so the pass list this reads is what the tests hold.
@@ -262,6 +263,12 @@ if ! diff -u "$work/block.held" "$work/block.md" > "$work/diff" 2>&1; then
   problem "the README.md conformance block is stale (run scripts/conformance/matrix.sh --badges-write):"
   sed "$INDENT" "$work/diff" >&2
 fi
+
+# 10. Every badge carries a logo of scripts/checks/badge-logos/.
+# shellcheck source=scripts/checks/badge-logos/logo.sh
+source scripts/checks/badge-logos/logo.sh
+badge_logo_check "$BADGES"/*.json conformance/myhealth-eu-badge.json || problem "a badge carries no logo"
+badge_logo_readme README.md || problem "a README badge carries no logo"
 
 if [[ "$fail" -ne 0 ]]; then
   exit 1
