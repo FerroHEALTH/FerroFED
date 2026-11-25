@@ -1,1 +1,0 @@
-- A document a `RelatedPerson` user inserts on the FHIR face under a grant confined to the person, with the person in context, names that related person as every entry's provider, a `PARTY_IDENTIFIED` holding the token's `sub` issued by its `iss`, and its access record says a representative inserted it (Regulation (EU) 2025/327 Art 4(2), Art 5) (#1948).
