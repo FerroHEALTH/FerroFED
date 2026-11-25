@@ -103,6 +103,12 @@ pin cache hl7.terminology.r4-7.2.0.tgz "7.2.0 (FHIR 4.0.1)" "$registry/hl7.termi
 pin cache hl7.terminology.r4-7.4.0.tgz "7.4.0 (FHIR 4.0.1)" "$registry/hl7.terminology.r4/7.4.0" \
   1dc558c204f5ee1f2b96ab9a8cd83d0811475b08a4e06a7c2bcea55d1ab116ed "$cc0" \
   "$cached The version hl7.fhir.eu.laboratory 2.1.0 and hl7.fhir.eu.hdr 1.0.0 depend on."
+pin cache hl7.terminology.r4-7.5.0.tgz "7.5.0 (FHIR 4.0.1)" "$registry/hl7.terminology.r4/7.5.0" \
+  1da3004587602c3f5120061abc2309fef1f96668a477a9964354fa9af6fa6e60 "$cc0" \
+  "$cached The version the MyHealth@EU Core 1.0.1, Laboratory Report 9.2.0 and Hospital Discharge Report 9.2.0 CI builds depend on."
+pin cache hl7.fhir.uv.extensions.r4-5.4.0.tgz "5.4.0 (FHIR 4.0.1)" "$registry/hl7.fhir.uv.extensions.r4/5.4.0" \
+  e93eb1ece7d14e6b3dfaa7af5ac510577957cb5fd2b61ef95cdcfbbdca81c96d "$cc0" \
+  "$cached The version the MyHealth@EU Core 1.0.1, Laboratory Report 9.2.0 and Hospital Discharge Report 9.2.0 CI builds depend on."
 pin cache hl7.fhir.uv.xver-r5.r4-0.0.1-snapshot-2.tgz "0.0.1-snapshot-2 (FHIR 4.0.1)" \
   "$registry/hl7.fhir.uv.xver-r5.r4/0.0.1-snapshot-2" \
   e28ec496b04c9fa681b4c4971afb4fefc56f4dc45f2680c2935b589656731946 "$cc0" \

@@ -214,7 +214,11 @@ canonical \`http://hl7.eu/fhir/hdr\`, committed under CC0-1.0." "" "$read_by_cat
 pin commit myhealth.eu.fhir.mvc-package-9.1.0.tgz "9.1.0 (FHIR 4.0.1, 2026-05-08)" \
   "$registry/myhealth.eu.fhir.mvc-package/9.1.0" \
   3f99350f36a2a1ea17b7fde37c39ff766bd5c3bc9a29c6183af1acfd07b78ce1 "$cc0" \
-  "$whole Its document type value sets code each MyHealth@EU service by LOINC, with no category code system."
+  "$whole The version MyHealth@EU Core 1.0.1, Laboratory Report 9.2.0, Hospital Discharge Report 9.2.0 and the NCPeH API 9.1.1-ci depend on. Its document type value sets code each MyHealth@EU service by LOINC, with no category code system."
+pin commit myhealth.eu.fhir.mvc-package-10.1.0.tgz "10.1.0, CI build (FHIR 4.0.1, 2026-10-29)" \
+  "https://build-fhir.ehdsi.eu/mvc-package/package.tgz" \
+  8f42b6d0e3a5bad3517a7fe01025b1112d80b12503a66fa8495f9806a81de0e4 "$cc0" \
+  'The CI build https://build-fhir.ehdsi.eu/ serves, the line the family tracks by owner ruling of 2026-11-24 (#1951); not on packages.fhir.org, so a new build fails the pin loudly and scripts/checks/pin-freshness.sh reports it.'
 pinned_corpus ehdsi-mvc "MyHealth@EU Master Value Sets Catalogue" \
   "the MyHealth@EU Master Value Sets Catalogue myhealth.eu.fhir.mvc-package" \
   "The value sets MyHealth@EU exchanges are coded with, canonical
