@@ -230,6 +230,21 @@ pub(crate) const ENTRIES: &[Entry] = &[
         FHIR,
     ),
     whole("fhir.receive", Section::Fhir, Some("[]"), FHIR),
+    Entry {
+        key: "fhir.id_key",
+        section: Section::Fhir,
+        default: None,
+        restart: FHIR,
+        kind: Kind::Secret {
+            file: "fhir.id_key_file",
+        },
+    },
+    scalar(
+        "fhir.patient_id_lifetime",
+        Section::Fhir,
+        Some("\"24h\""),
+        FHIR,
+    ),
 ];
 
 /// The setting whose dotted key is `key`.

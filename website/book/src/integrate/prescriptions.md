@@ -44,6 +44,7 @@ You declare in `[[fhir.serve]]` the members that meet
 ```toml
 [fhir]
 base = "/fhir"
+id_key_file = "/run/secrets/fhir-id-key"
 receive_namespaces = ["urn:oid:2.999.1"]   # needed once dispensations are served
 
 [[fhir.serve]]

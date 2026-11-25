@@ -86,6 +86,7 @@ pub mod federation;
 pub mod fhir;
 pub mod fhir_wire;
 pub mod health;
+pub mod ids;
 pub mod jwks;
 pub mod localization;
 pub mod metrics;

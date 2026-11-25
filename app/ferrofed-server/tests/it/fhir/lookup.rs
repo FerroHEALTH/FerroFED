@@ -84,7 +84,7 @@ async fn a_patient_a_member_holds_is_found_as_the_supplier_holds_it_and_no_membe
     let dir = tempfile::tempdir()?;
     let pdq = supplier().await;
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
-    let (status, text) = call(app, of_patient()?).await?;
+    let (status, text) = call(app.clone(), of_patient()?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let bundle: Value = serde_json::from_str(&text)?;
     assert_eq!(bundle["type"], "searchset", "{bundle}");
@@ -115,9 +115,21 @@ async fn a_patient_a_member_holds_is_found_as_the_supplier_holds_it_and_no_membe
     );
     assert_eq!(patient["birthDate"], BIRTH_DATE);
     let id = patient["id"].as_str().ok_or("an id")?;
+    let full_url = entry["fullUrl"].as_str().ok_or("a fullUrl")?;
+    assert!(
+        full_url.starts_with("http") && full_url.ends_with(&format!("{FHIR}/Patient/{id}")),
+        "the absolute URL of the Patient on the face: {full_url}"
+    );
+    assert_eq!(id.len(), 52, "{id}");
+    assert!(!id.contains(PATIENT_TAIL), "no identifier in the id: {id}");
+    let (_, again) = call(app, of_patient()?).await?;
+    let again: Value = serde_json::from_str(&again)?;
     assert_eq!(
-        entry["fullUrl"].as_str(),
-        Some(format!("urn:uuid:{id}").as_str())
+        again
+            .pointer("/entry/0/resource/id")
+            .and_then(Value::as_str),
+        Some(id),
+        "FHIR R4 Resource.id: the same patient has the same id in every answer"
     );
     assert!(
         nothing_sent(&a, &b).await?,

@@ -121,19 +121,10 @@ impl Store {
         &self,
         dispensation: &Dispensation,
     ) -> Result<Option<Dispenser>, StoreError> {
-        let key = dispensation.as_str().to_owned();
-        self.call_async(move |client| {
-            Box::pin(async move {
-                let Some(row) = client.query_opt(READ, &[&key]).await.map_err(backend)? else {
-                    return Ok(None);
-                };
-                Ok(Some(Dispenser {
-                    organization: row.try_get(0).map_err(backend)?,
-                    facility: (
-                        row.try_get(1).map_err(backend)?,
-                        row.try_get(2).map_err(backend)?,
-                    ),
-                }))
+        self.row_by_key(READ, dispensation.as_str().to_owned(), |row| {
+            Ok(Dispenser {
+                organization: row.try_get(0)?,
+                facility: (row.try_get(1)?, row.try_get(2)?),
             })
         })
         .await

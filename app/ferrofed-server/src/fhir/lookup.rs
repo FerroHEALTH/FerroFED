@@ -37,6 +37,7 @@ use crate::facade::summary::own::Wanted;
 use crate::facade::summary::{self as gathered, Gathered, Scope, Unsummarised};
 use crate::federation::Federation;
 use crate::fhir_wire::fhir_json;
+use crate::ids::PatientId;
 
 /// `GET {fhir-base}/Patient?identifier=system|value`.
 pub(super) async fn patients(asked: Asked, uri: Uri) -> Response {
@@ -67,7 +68,25 @@ pub(super) async fn patients(asked: Asked, uri: Uri) -> Response {
             )
             .await
             {
-                Ok(gathered) => found(federation, &gathered, (patient, &header)),
+                Ok(gathered) => {
+                    // NOTE: §11.3: the patient is a match only where it resolved at a member, so
+                    // only then is its id recorded.
+                    let id = if gathered.resolved.is_empty() {
+                        None
+                    } else {
+                        let store = asked.state.store().map(AsRef::as_ref);
+                        Some(
+                            super::patient_id::recorded(store, admitted.fhir, patient, logged)
+                                .await,
+                        )
+                    };
+                    found(
+                        federation,
+                        &gathered,
+                        (patient, &header),
+                        (id, &admitted.fhir.absolute),
+                    )
+                }
                 // NOTE: FHIR R4 search, Federation Tier §11.3, Regulation (EU) 2025/327 Art 8: a patient
                 // no member holds matches nothing, and one no member may disclose answers alike.
                 Err(unsummarised) if unsummarised.reaches_no_member() => empty(),
@@ -133,16 +152,14 @@ fn found(
     federation: &Federation,
     gathered: &Gathered,
     ((system, value), header): ((&str, &str), &PatientHeader),
+    (id, absolute): (Option<PatientId>, &str),
 ) -> Response {
     let minted = || uuid::Uuid::new_v4().to_string();
     let mut matches = Vec::new();
-    // NOTE: §11.3: the patient is a match only where it resolved at a member, so a lookup whose
-    // every member was unresolved names none.
-    if !gathered.resolved.is_empty() {
-        let id = minted();
+    if let Some(id) = id {
         matches.push((
-            format!("urn:uuid:{id}"),
-            header_patient(&id, (system, value), header),
+            format!("{absolute}/Patient/{}", id.as_str()),
+            header_patient(id.as_str(), (system, value), header),
         ));
     }
     // NOTE: Federation Tier §11.3, §11.4: under best-effort, a member the resolver could not

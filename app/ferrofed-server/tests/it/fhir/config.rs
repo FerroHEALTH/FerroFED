@@ -117,8 +117,9 @@ fn a_face_with_no_operator_or_no_mapping_is_refused() -> TestResult {
         ),
         "{refused:?}"
     );
-    let unmapped =
-        format!("\n[fhir]\nbase = \"{FHIR}\"\n\n[fhir.operator]\nname = \"Synthetic Operator\"\n");
+    let unmapped = format!(
+        "\n[fhir]\nbase = \"{FHIR}\"\nid_key = \"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8\"\n\n[fhir.operator]\nname = \"Synthetic Operator\"\n"
+    );
     let refused = resolved(dir.path(), &public(), &unmapped);
     assert!(
         matches!(
