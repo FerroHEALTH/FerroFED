@@ -30,6 +30,8 @@ eehrxf = { workspace = true, features = [
   "dispensation",
   "openehr",
 ] }
+# The FHIR R4 search value grammar of the document list's parameters (#1975).
+fhir-search.workspace = true
 # The R4 resources the document and the face write.
 fhir-types = { workspace = true, features = ["r4", "resources"] }
 # The call context and run settings of a mapping run.

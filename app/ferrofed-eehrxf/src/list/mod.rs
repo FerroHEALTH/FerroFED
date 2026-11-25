@@ -7,7 +7,9 @@
 //! The search is the HL7 Europe EU Health Data API 1.0.0-ballot Document
 //! Access Provider's `DocumentReference` search-type interaction, with its
 //! `patient.identifier` and `type` parameters
-//! (`CapabilityStatement-EEHRxF-DocumentAccessProvider`). It names the
+//! (`CapabilityStatement-EEHRxF-DocumentAccessProvider`), and the further
+//! parameters of the MyHealth@EU national contact point API the gateway
+//! evaluates on every entry ([`criteria`]). It names the
 //! patient by an identifier with its system, as `$summary` does, so the
 //! patient is always the one an identity service confirms (§5.2, N32). Each
 //! entry follows the `EehrxfMhdDocumentReference` profile: one for the
@@ -18,6 +20,7 @@
 //! has its own `DocumentReference`s listed as it holds them ([`Match::Passed`]), each
 //! attachment URL readdressed to the gateway's ([`readdressed`]).
 
+pub mod criteria;
 pub mod written;
 
 use fhir_types::codec::Value;
@@ -33,6 +36,7 @@ use fhir_types::r4::reference::Reference;
 use fhir_types::r4::resource::{Resource, UnknownResource};
 
 use crate::face::FHIR_JSON;
+use crate::list::criteria::{Criteria, CriterionError};
 use crate::summary::Organisation;
 
 /// The canonical URL of the profile every entry follows.
@@ -92,6 +96,7 @@ pub struct ListRequest {
     laboratory: bool,
     discharge: Vec<&'static str>,
     imaging: Vec<&'static str>,
+    criteria: Criteria,
 }
 
 impl std::fmt::Debug for ListRequest {
@@ -101,6 +106,7 @@ impl std::fmt::Debug for ListRequest {
             .field("laboratory", &self.laboratory)
             .field("discharge", &self.discharge)
             .field("imaging", &self.imaging)
+            .field("criteria", &self.criteria)
             .finish_non_exhaustive()
     }
 }
@@ -120,8 +126,14 @@ pub enum ListRefusal {
     #[error("the identifier names its system and its value as system|value")]
     Unqualified,
     /// The search carries a parameter or a modifier the face does not take.
-    #[error("the search takes patient.identifier, type and _format alone")]
+    #[error(
+        "the search takes patient.identifier, type, category, contenttype, status, modality, \
+         bodysite, creation, date, period and _format alone, with no modifier"
+    )]
     Parameter,
+    /// A value is outside its parameter's grammar.
+    #[error(transparent)]
+    Value(#[from] CriterionError),
     /// The `_format` asks for something other than FHIR JSON.
     #[error("the face answers application/fhir+json alone")]
     Format,
@@ -170,6 +182,15 @@ impl ListRequest {
         &self.imaging
     }
 
+    /// Returns whether `document`, a listed `DocumentReference` as JSON,
+    /// meets every national contact point API parameter the search gives,
+    /// the instant `now`
+    /// deciding an `ap` date.
+    #[must_use]
+    pub fn selects(&self, document: &Value, now: jiff::Timestamp) -> bool {
+        self.criteria.selects(document, now)
+    }
+
     /// Reads the search from the query string `query` of a `GET`.
     ///
     /// # Errors
@@ -182,6 +203,7 @@ impl ListRequest {
         let mut laboratory = true;
         let mut discharge = DISCHARGE_REPORTS.to_vec();
         let mut imaging = IMAGING_DOCUMENTS.to_vec();
+        let mut criteria = Criteria::default();
         for (name, value) in pairs {
             match &*name {
                 "patient.identifier" => {
@@ -207,7 +229,11 @@ impl ListRequest {
                         return Err(ListRefusal::Format);
                     }
                 }
-                _ => return Err(ListRefusal::Parameter),
+                other => {
+                    if !criteria.read(other, &value)? {
+                        return Err(ListRefusal::Parameter);
+                    }
+                }
             }
         }
         let identifier = identifier.ok_or(ListRefusal::NoPatient)?;
@@ -222,6 +248,7 @@ impl ListRequest {
             laboratory,
             discharge,
             imaging,
+            criteria,
         })
     }
 }
@@ -502,6 +529,22 @@ impl std::fmt::Debug for Match {
     }
 }
 
+/// Returns the JSON form of the `DocumentReference` `listed` names, which
+/// the search parameters are evaluated on.
+///
+/// # Errors
+///
+/// The `serde_json` error when a written `DocumentReference` does not
+/// serialise.
+pub fn json(listed: &Match) -> Result<Value, serde_json::Error> {
+    match listed {
+        Match::Written(reference) => {
+            serde_json::to_value(reference.as_ref()).map(Value::from_serde_json)
+        }
+        Match::Passed(body) => Ok(body.clone()),
+    }
+}
+
 /// Returns the `searchset` of the `matches`, each under its full URL, and
 /// the `outcomes` that say what the list misses.
 #[must_use]
@@ -594,6 +637,9 @@ pub fn unread(endpoint: &str, documents: &str, reason: &str) -> OperationOutcome
 #[cfg(test)]
 mod tests {
     use super::{ListRefusal, ListRequest, Match, attachment_urls, readdressed, searchset};
+    use crate::list::criteria::CriterionError;
+    use fhir_search::date::DateError;
+    use fhir_search::token::TokenError;
     use fhir_types::codec::Value;
 
     #[test]
@@ -641,8 +687,26 @@ mod tests {
                 ListRefusal::Several,
             ),
             (
-                "patient.identifier=a%7Cb&status=current",
+                "patient.identifier=a%7Cb&status:not=current",
                 ListRefusal::Parameter,
+            ),
+            (
+                "patient.identifier=a%7Cb&relatesto=DocumentReference%2F1",
+                ListRefusal::Parameter,
+            ),
+            (
+                "patient.identifier=a%7Cb&date=2026-13",
+                ListRefusal::Value(CriterionError::Date {
+                    name: "date",
+                    source: DateError::Form,
+                }),
+            ),
+            (
+                "patient.identifier=a%7Cb&contenttype=a%7Cb%7Cc",
+                ListRefusal::Value(CriterionError::Token {
+                    name: "contenttype",
+                    source: TokenError::Bars,
+                }),
             ),
             (
                 "patient.identifier=a%7Cb&type:text=summary",

@@ -1423,6 +1423,7 @@ dependencies = [
  "ferrofed-testkit",
  "ferrohealth-server",
  "ferrohealth-smart",
+ "fhir-search",
  "fhir-types",
  "fhirconnect",
  "http",
@@ -1893,6 +1894,7 @@ version = "0.1.131"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be5dab1500c0cd3a318de1277ce59697fb4428bd253130a08cc823fa25b71a36"
 dependencies = [
+ "jiff 0.2.46",
  "thiserror",
  "unicode-normalization",
 ]
