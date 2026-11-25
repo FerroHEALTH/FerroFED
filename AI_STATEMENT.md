@@ -155,8 +155,8 @@ the full enforcement register.
   deny` policy, `actionlint`, `zizmor`, `shellcheck`, and CodeQL over the
   workflows ([`.claude/rules/ci-cd.md`](.claude/rules/ci-cd.md)). The Rust half
   activates with the Cargo workspace; the workflow and shell half runs today.
-- **A second machine opinion.** SonarQube Cloud runs on every pull request and
-  every push to `main`; its findings are advisory, never outrank the
+- **A second machine opinion.** SonarQube Cloud runs on every push to `main`
+  and weekly; its findings are advisory, never outrank the
   specifications or the gates, and it commits nothing
   ([`.claude/rules/ai-code-review.md`](.claude/rules/ai-code-review.md)).
 

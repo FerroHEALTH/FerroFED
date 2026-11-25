@@ -27,8 +27,7 @@
 # reached its time limit ends with no exit code). At most two retries run.
 # scripts/perf/verdict.sh passes the gate when the last attempt that ran
 # passed; a breach on any other model fails at once, with no retry, and a
-# run cancelled by its concurrency group or a person retries nothing. In a
-# merge group ci.yml passes `skip` and only the verdict job runs (#1788).
+# run cancelled by its concurrency group or a person retries nothing.
 # No specification governs this: our own design.
 name: Perf
 
@@ -38,7 +37,7 @@ on:
       base:
         description: >-
           The commit or ref the base is the merge base with: the pull
-          request's base, the merge group's, or the commit before a push.
+          request's base, or the commit before a push.
           Empty takes the previous release.
         required: false
         default: ""
@@ -47,13 +46,6 @@ on:
         description: Restore and save the Rust build cache; the release lane passes false.
         required: false
         default: true
-        type: boolean
-      skip:
-        description: >-
-          Build and judge nothing, and pass the verdict with a summary saying
-          why; ci.yml passes true in a merge-group run.
-        required: false
-        default: false
         type: boolean
     outputs:
       base:
@@ -77,7 +69,6 @@ env:
 jobs:
   build:
     name: perf build
-    if: ${{ !inputs.skip }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
@@ -191,21 +182,8 @@ jobs:
     permissions:
       contents: read
     steps:
-      # The merge queue proves the merged tree; the gate ran on the pull
-      # request and runs again on the push to main. No specification governs
-      # this: our own design.
-      - name: The gate is not run in a merge group
-        if: inputs.skip
-        run: |
-          set -euo pipefail
-          {
-            echo "### Performance gate skipped"
-            echo
-            echo "A merge-group run proves the merged tree and builds nothing for the performance gate. The gate ran on the pull request and runs on the push to main with the same thresholds."
-          } >> "$GITHUB_STEP_SUMMARY"
-          echo "performance gate skipped in the merge group"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: ${{ always() && !inputs.skip }}
+        if: always()
         with:
           persist-credentials: false
           sparse-checkout: scripts/perf
@@ -213,7 +191,7 @@ jobs:
         if: cancelled()
         run: echo "RUN_CANCELLED=true" >> "$GITHUB_ENV"
       - name: The build finished
-        if: ${{ always() && !inputs.skip }}
+        if: always()
         env:
           BUILD: ${{ needs.build.result }}
         run: |
@@ -223,7 +201,7 @@ jobs:
             exit 1
           fi
       - name: The last attempt passed
-        if: ${{ always() && !inputs.skip }}
+        if: always()
         env:
           RESULT_1: ${{ needs.perf.result }}
           RESULT_2: ${{ needs.perf-retry.result }}

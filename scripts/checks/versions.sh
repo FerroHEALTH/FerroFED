@@ -1369,6 +1369,18 @@ else
       note "OK: ferrohealth-ui =$want (root Cargo.toml agrees)"
     fi
   fi
+  # The console rule links FerroUI's guides at the tag of the pin (#1934).
+  rule=.claude/rules/console-ui.md
+  if [[ -f "$rule" ]]; then
+    tick=$'\x60'
+    stale="$(grep -oE "FerroUI/(blob|tree)/v[0-9][^/]*|today ${tick}=?v?[0-9][^${tick}]*${tick}" "$rule" |
+      grep -vE "/v$want\$|${tick}=?v?$want${tick}\$" || true)"
+    if [[ -n "$stale" ]]; then
+      bad "$rule names FerroUI $(tr '\n' ' ' <<< "$stale")where $matrix pins $want"
+    else
+      note "OK: $rule links FerroUI v$want"
+    fi
+  fi
 fi
 # The browser journeys: the WebDriver client against the root Cargo.toml, and
 # the Chrome for Testing release the journeys job installs.

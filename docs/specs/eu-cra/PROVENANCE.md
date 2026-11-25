@@ -8,16 +8,17 @@ URL and the sha256 of its bytes. Never edit a file here: change the pins in
 the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
-  the pins): `c5641e7937d0a0a9638af933a62143b1a9807fa002a1b3b337632e527e4f655f`
-- Fetched: 2026-10-29, with the User-Agent `ferrofed-vendor (scripts/vendor)`
-- Artefacts: 9 committed, 0 cache only, 0 needing
+  the pins): `bed14f10ce9bafbbce5ce1006a58e28c2e5534ff50ad9e50aa8d94d8fe62e382`
+- Fetched: 2026-11-24, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+- Artefacts: 10 committed, 0 cache only, 0 needing
   manual retrieval
-- Files in this directory: 9 besides this one, each verbatim as the
+- Files in this directory: 10 besides this one, each verbatim as the
   publisher serves it
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
-  `PROVENANCE.md` excluded): `7239a6c71f28b2821bf1e4e97998388f83bdf483e592ef87f4119fdd34e795af`
-- Read by: #654 (the Cyber Resilience Act, the market-placement definitions and the economic-operator duties for a source-available release) and
-  #844 (the delegated acts under the Cyber Resilience Act)
+  `PROVENANCE.md` excluded): `bbca984a94524ddf5d01c97e7643e81f296c57e23ae9600850f840efff514f39`
+- Read by: #654 (the Cyber Resilience Act, the market-placement definitions and the economic-operator duties for a source-available release),
+  #844 (the delegated acts under the Cyber Resilience Act) and
+  #1935 (the Commission guidance on its application)
 
 Regulation (EU) 2024/2847, the Cyber Resilience Act, with its three
 corrigenda that have an English version and Commission Implementing
@@ -25,7 +26,8 @@ Regulation (EU) 2025/2392 on the technical description of its important and
 critical product categories; Commission Delegated Regulations (EU)
 2025/1535, which excludes products within the scope of Regulation (EU) No
 168/2013, and (EU) 2026/881, on when a CSIRT may delay passing on a
-notification; Regulation (EU) 2019/1020 on market
+notification; the Commission guidance C/2026/6013 on its application;
+Regulation (EU) 2019/1020 on market
 surveillance and compliance of products, whose Article 3 definitions of
 placing on the market, making available on the market, manufacturer and
 economic operator Regulation (EU) 2025/327 takes in its Article 2(1)(d);
@@ -110,3 +112,11 @@ the research reads.
 - sha256: `837732e0248a0e8777fe826b3ce5c1a97073dad7bf66c71eb675e940c0368aea`
 - Licence: An official EU legal act published in the Official Journal; reuse under Commission Decision 2011/833/EU of 12 December 2011 on the reuse of Commission documents
 - Note: Regulation (EC) No 765/2008 of 9 July 2008, as published. Article 39(1) of Regulation (EU) 2019/1020 deleted its Article 2, points 1, 2, 14, 15, 17, 18 and 19, and its Chapter III, from 16 July 2021; its Article 30, the general principles of the CE marking, is unchanged and is the article Regulation (EU) 2025/327 (Art 41(3)) and Regulation (EU) 2024/2847 (Art 29) apply. Pinned at the Cellar manifestation the CELEX resource resolves to.
+
+### `comm-c-2026-6013-en.xhtml` (committed)
+
+- Source: <https://publications.europa.eu/resource/cellar/dcbc848b-e227-11f1-aefc-01aa75ed71a1.0006.03/DOC_1>
+- Version: OJ C, C/2026/6013, 17.11.2026 (CELEX 52026XC06013), English
+- sha256: `06a9de5d027f614610ab6716772df90696228b5e23c7ee76676d26cf348eb502`
+- Licence: An official EU legal act published in the Official Journal; reuse under Commission Decision 2011/833/EU of 12 December 2011 on the reuse of Commission documents
+- Note: Commission guidance on the application of Regulation (EU) 2024/2847, under its Article 26(1) and (2): not binding, how the Commission reads the scope, free and open-source software, substantial modifications, the support period (its section 5), important and critical products, the risk assessment and due diligence on integrated components (its section 7.3), remote data processing and the reporting obligations. Pinned at the Cellar manifestation the CELEX resource resolves to.

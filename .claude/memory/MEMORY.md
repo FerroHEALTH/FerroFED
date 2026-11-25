@@ -15,6 +15,9 @@
   merge-group run of `ci.yml` under 20 minutes, queue included; long
   non-functional gates run on the pull request and on `main`, never in the
   merge queue; owner 2026-11-09
+- [Merge queue is light](merge-queue-light.md): the merge-group run is the
+  guards, rustfmt, cargo-deny and a unit-test smoke set; the full suite runs
+  on the pull request and on main; owner 2026-11-25
 
 - [Product scope](product-scope.md): the owner's product statement is the
   ceiling on what this repository may claim; a transparent ITS-REST gateway
