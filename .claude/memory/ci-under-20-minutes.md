@@ -14,10 +14,9 @@ the run's creation to its conclusion with the runner queue counted.
 
 The merge queue proves the merged tree, never the performance. A long
 non-functional gate (the A/B performance gate, fuzz, a long corpus sweep)
-runs on the pull request and on every push to `main`. In a merge group its
-job keeps its name and reports success without running, with a summary that
-says why (#1788). Functional gates (build, clippy, tests, guards, drift,
-conformance pass lists) still run in the merge group.
+runs on the pull request and on every push to `main` and is skipped in a
+merge group. Since 2026-11-25 the merge group runs only the light set
+([[merge-queue-light]]).
 
 **Why:** the merge queue tests one pull request after another, so a 40 to
 120 minute merge-group run held every waiting pull request behind it, and

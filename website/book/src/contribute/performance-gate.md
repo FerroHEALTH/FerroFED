@@ -28,7 +28,6 @@ The base is:
 
 - for a pull request, the merge base of the commit CI checks out with the
   pull request's base branch;
-- for a merge group, its base on `main`;
 - for a push to `main`, the commit before the push;
 - for a manual dispatch, the previous release tag;
 - for the release commit, the previous release tag, or the oldest commit
