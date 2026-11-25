@@ -1,1 +1,0 @@
-- The quickstart runs FerroPIX 0.0.38, on `ferrohealth-smart` 0.32 with its issuer as a named table, beside the rebuilt `postgres:18.6` image and `mock-oauth2-server` 7.0.1 (#1917).

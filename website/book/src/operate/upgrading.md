@@ -107,15 +107,30 @@ to get the fix; upgrading is free
   `[auth.issuer.<name>.attributes]`, `.federation` and `.party`, without
   their `issuer` key, and `[auth.issuer.introspection]` and
   `[auth.issuer.assurance]` become `[auth.issuer.<name>.introspection]` and
-  `.assurance`. Rename `profile = "…"` to `preset = "…"`, and move every
-  profile key (`first_party_clients`, `delegates`, `act_represents_patient`,
-  `token_types`, `client_claims` and the rest) into
-  `[auth.issuer.<name>.profile]`. In each
-  `[credentials."<id>".credentials.onward]` table, `profile` is now `preset`
-  and the `keys` table is now `profile`. `[[trust.issuer]]` and
+  `.assurance`. In each `[credentials."<id>".credentials.onward]` table,
+  the `keys` table is now `profile`. `[[trust.issuer]]` and
   `[[federation.contact_point]]` keep naming an issuer by its identifier
   ([Client authentication](authentication.md), #1915).
-- The `nl` preset and the four `nl.*` federation fields are gone. Map the
+- Trust each authorization server with a table that names its `issuer`,
+  and `kind` only for `kind = "federation"`. Delete `kind = "persons"`,
+  `"patients"` and `"machines"`, `profile`, `preset`, `profile_file`,
+  `scopeless_subjects`, the `[auth.idp]` table, and every profile key that
+  listed clients or classified callers (`first_party_clients`, `delegates`,
+  `audience_delegates`, `issuer_client_is_person`, `patient_context`,
+  `fhir_user_patient`, `representation`, `act_represents_patient`, `guest`
+  and the vendor keys); each is an unknown key and refuses the start.
+  Register your clients at the authorization server, have it sign `at+jwt`
+  tokens with `scope` and `client_id`, and name a user's `fhirUser`. In each
+  onward table delete `kind` (but `federation`) and `profile`, and set the
+  grant with `onward_grant`, `onward_indicator`, `onward_parameters`,
+  `onward_client_id` and `onward_subject_audience` in its `profile` table
+  ([Client authentication](authentication.md),
+  [Onward credentials](onward-credentials.md), #1946).
+- `[[trust.issuer]] professional_issuing_authority`, which v0.0.20 refused
+  by name, is now an unknown key; name the claim as the
+  `"professional.issuing_authority_name"` source of the issuer's attributes
+  table (#1956).
+- The four `nl.*` federation fields are gone. Map the
   claims the Mitz question reads to `professional.hp_identifier` (the UZI
   number), `professional.hp_professional_role` (the UZI role),
   `provider.healthcare_provider_identifier` (the URA) and
@@ -130,6 +145,18 @@ to get the fix; upgrading is free
   sends the token endpoint; set `security_profile = "fapi2"` when its
   authorization server is a FAPI 2.0 one
   ([Onward credentials](onward-credentials.md), #1895).
+- Name each issuer in one table: a second table of the same issuer refuses
+  the start, naming the issuer (#1899).
+- Delete `[auth.dpop] external_url`, an unknown key now, and set
+  `gateway.public_url` to the URL clients reach the gateway at, with its
+  base path: a `DPoP` proof's `htu` is compared with that URL's origin, the
+  request's whole path appended, and `[auth.dpop]` is refused without it
+  ([Client authentication](authentication.md#dpop), #1891).
+- Let the previous release deliver its audit spool before you start this
+  one: a spool directory holding the `.msg` files v0.0.20 wrote refuses the
+  start, naming the file. Wait until `GET {base}/operator/dependencies`
+  reads `up` for the audit repository and the spool holds no `.msg` file,
+  or move the files out (#1922).
 - Move `[auth] ca_file` to `[auth.tls] trust_roots_file`. `auth.ca_file` is
   an unknown key and refuses the start, as it has since v0.0.19, and v0.0.21
   reads `[auth.tls]`, which v0.0.19 and v0.0.20 refused
