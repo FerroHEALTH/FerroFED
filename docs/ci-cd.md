@@ -530,9 +530,11 @@ The family holds every pull-request run and every merge-group run of
 request already ran the full suite on the same change, and queues of about
 ten entries fell out at the 60-minute check timeout when every group ran it
 again. In a merge group `ci.yml` runs `lint`, `guards`, `rustfmt`,
-`fuzz-lockfile`, `cargo-deny` and `test` in smoke mode: the workspace built
-in the dev profile with its unit tests (`--lib --bins`), no integration
-suite or doctest. Clippy, the binding tests, e2e, the conformance report,
+`fuzz-lockfile`, `cargo-deny` and `test` in smoke mode: every test target
+of the workspace compiled with every feature in the dev profile, only the
+unit tests (`--lib --bins`) run, no integration suite or doctest. The
+compile stays in the queue: two pull requests that each passed alone can
+break a test binary together. Clippy, the binding tests, e2e, the conformance report,
 the FHIR Validator, release-compose, rustdoc, msrv, the feature lints, the
 console build, the journeys, the publish dry run and the performance gate
 are skipped at job level, so they start no runner, and run on the pull
