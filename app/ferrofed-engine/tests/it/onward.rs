@@ -31,6 +31,7 @@ use ferrohealth_smart::client::assertion::{
 use ferrohealth_smart::client::cache::Clock as TokenClock;
 use ferrohealth_smart::client::keys::{KeyRing, KeyRingError};
 use ferrohealth_smart::client::{ClientCredentials, Endpoint};
+use ferrohealth_smart::jws::algorithm::Algorithm as JwsAlgorithm;
 use jsonwebtoken::Algorithm;
 use jsonwebtoken::jwk::JwkSet;
 use openehr_federation::outcome::ErrorDetail;
@@ -100,7 +101,7 @@ impl TokenClock for ManualClock {
 fn key() -> Result<AssertionKey, Box<dyn Error>> {
     Ok(AssertionKey::from_pem(
         oauth::Curve::P384.pem()?.as_bytes(),
-        Some(Algorithm::ES384),
+        Some(JwsAlgorithm::Es384),
         None,
     )?)
 }
@@ -330,8 +331,8 @@ async fn the_assertion_carries_the_rfc_7523_claims() -> TestResult {
 #[test]
 fn the_kid_is_the_rfc_7638_thumbprint_of_the_key() -> TestResult {
     let pem = oauth::Curve::P384.pem()?;
-    let once = AssertionKey::from_pem(pem.clone().as_bytes(), Some(Algorithm::ES384), None)?;
-    let again = AssertionKey::from_pem(pem.as_bytes(), Some(Algorithm::ES384), None)?;
+    let once = AssertionKey::from_pem(pem.clone().as_bytes(), Some(JwsAlgorithm::Es384), None)?;
+    let again = AssertionKey::from_pem(pem.as_bytes(), Some(JwsAlgorithm::Es384), None)?;
     assert_eq!(once.kid(), again.kid());
     let public: jsonwebtoken::jwk::Jwk = serde_json::from_value(once.public_jwk())?;
     let thumbprint = public.thumbprint(jsonwebtoken::jwk::ThumbprintHash::SHA256)?;
@@ -350,14 +351,14 @@ fn the_kid_is_the_rfc_7638_thumbprint_of_the_key() -> TestResult {
 fn a_key_that_is_no_es384_key_is_refused() -> TestResult {
     let p256 = AssertionKey::from_pem(
         oauth::Curve::P256.pem()?.as_bytes(),
-        Some(Algorithm::ES384),
+        Some(JwsAlgorithm::Es384),
         None,
     );
     assert!(
-        matches!(p256, Err(AssertionError::Public { .. })),
-        "a P-256 key derives no ES384 public key: {p256:?}"
+        matches!(p256, Err(AssertionError::Algorithm { .. })),
+        "a P-256 key cannot sign ES384: {p256:?}"
     );
-    let garbage = AssertionKey::from_pem("not a key".as_bytes(), Some(Algorithm::ES384), None);
+    let garbage = AssertionKey::from_pem("not a key".as_bytes(), Some(JwsAlgorithm::Es384), None);
     assert!(
         matches!(garbage, Err(AssertionError::Key { .. })),
         "{garbage:?}"
@@ -368,8 +369,8 @@ fn a_key_that_is_no_es384_key_is_refused() -> TestResult {
 #[test]
 fn a_previous_key_that_is_the_current_key_is_refused() -> TestResult {
     let pem = oauth::Curve::P384.pem()?;
-    let current = AssertionKey::from_pem(pem.clone().as_bytes(), Some(Algorithm::ES384), None)?;
-    let previous = AssertionKey::from_pem(pem.as_bytes(), Some(Algorithm::ES384), None)?;
+    let current = AssertionKey::from_pem(pem.clone().as_bytes(), Some(JwsAlgorithm::Es384), None)?;
+    let previous = AssertionKey::from_pem(pem.as_bytes(), Some(JwsAlgorithm::Es384), None)?;
     let refused = KeyRing::new(current).with_previous_for(previous, Duration::from_mins(65));
     assert!(
         matches!(refused, Err(KeyRingError::SameKey { .. })),

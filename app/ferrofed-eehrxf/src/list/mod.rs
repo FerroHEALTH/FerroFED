@@ -63,18 +63,29 @@ pub const LABORATORY_REPORT: &str = "11502-2";
 pub const DISCHARGE_REPORTS: [&str; 2] = [DISCHARGE_SUMMARY, "100719-4"];
 
 /// The LOINC code of a discharge summary, the first code of the
-/// `eehrxf-document-type-discharge-report-vs` value set, the type a
-/// discharge report the gateway writes is listed under.
+/// `eehrxf-document-type-discharge-report-vs` value set.
 pub const DISCHARGE_SUMMARY: &str = "18842-5";
+
+/// The LOINC code a discharge report the gateway writes is listed under.
+///
+/// It is the hospital discharge summary `composition-eu-hdr` fixes, and the
+/// one code of MyHealth@EU `eHDSIHospitalDischargeReportType`.
+pub const HOSPITAL_DISCHARGE_SUMMARY: &str = "34105-7";
 
 /// The LOINC codes of a medical imaging document, the codes of the
 /// `eehrxf-document-type-medical-imaging-vs` value set, in its order.
-pub const IMAGING_DOCUMENTS: [&str; 2] = [IMAGING_REPORT, "18748-4"];
+pub const IMAGING_DOCUMENTS: [&str; 2] = [IMAGING_REPORT, IMAGING_STUDY];
 
 /// The LOINC code of a diagnostic imaging report, the first code of the
-/// `eehrxf-document-type-medical-imaging-vs` value set, the type an imaging
-/// report the gateway writes is listed under.
+/// `eehrxf-document-type-medical-imaging-vs` value set.
 pub const IMAGING_REPORT: &str = "85430-7";
+
+/// The LOINC code an imaging report the gateway writes is listed under.
+///
+/// It is the diagnostic imaging study, the second code of the
+/// `eehrxf-document-type-medical-imaging-vs` value set and the one code of
+/// MyHealth@EU `eHDSIMedicalImagingReportType`.
+pub const IMAGING_STUDY: &str = "18748-4";
 
 /// The canonical URL of the document `Bundle` profile the gateway's own
 /// summary follows.
@@ -93,6 +104,7 @@ pub struct ListRequest {
     subject: Subject,
     summaries: bool,
     laboratory: bool,
+    hospital_discharge: bool,
     discharge: Vec<&'static str>,
     imaging: Vec<&'static str>,
     criteria: Criteria,
@@ -103,6 +115,7 @@ impl std::fmt::Debug for ListRequest {
         f.debug_struct("ListRequest")
             .field("summaries", &self.summaries)
             .field("laboratory", &self.laboratory)
+            .field("hospital_discharge", &self.hospital_discharge)
             .field("discharge", &self.discharge)
             .field("imaging", &self.imaging)
             .field("criteria", &self.criteria)
@@ -191,6 +204,13 @@ impl ListRequest {
         self.laboratory
     }
 
+    /// Returns whether every `type` the search gives admits a hospital
+    /// discharge summary ([`HOSPITAL_DISCHARGE_SUMMARY`]).
+    #[must_use]
+    pub fn admits_hospital_discharge(&self) -> bool {
+        self.hospital_discharge
+    }
+
     /// Returns the codes of [`DISCHARGE_REPORTS`] every `type` the search
     /// gives admits, in their order; none when it admits no discharge
     /// report.
@@ -226,6 +246,7 @@ impl ListRequest {
         let mut subject = None;
         let mut summaries = true;
         let mut laboratory = true;
+        let mut hospital_discharge = true;
         let mut discharge = DISCHARGE_REPORTS.to_vec();
         let mut imaging = IMAGING_DOCUMENTS.to_vec();
         let mut criteria = Criteria::default();
@@ -254,6 +275,9 @@ impl ListRequest {
                     laboratory &= value
                         .split(',')
                         .any(|token| admits(token, LABORATORY_REPORT));
+                    hospital_discharge &= value
+                        .split(',')
+                        .any(|token| admits(token, HOSPITAL_DISCHARGE_SUMMARY));
                     for codes in [&mut discharge, &mut imaging] {
                         codes.retain(|code| value.split(',').any(|token| admits(token, code)));
                     }
@@ -284,6 +308,7 @@ impl ListRequest {
             subject,
             summaries,
             laboratory,
+            hospital_discharge,
             discharge,
             imaging,
             criteria,
@@ -306,6 +331,7 @@ impl ListRequest {
             subject: Subject::Document(id.to_owned()),
             summaries: true,
             laboratory: true,
+            hospital_discharge: true,
             discharge: DISCHARGE_REPORTS.to_vec(),
             imaging: IMAGING_DOCUMENTS.to_vec(),
             criteria,
@@ -488,16 +514,7 @@ pub(super) fn entry(
             }],
             ..CodeableConcept::default()
         }],
-        subject: Some(Reference {
-            reference: Some(format!("Patient/{}", listing.patient).into()),
-            r#type: Some("Patient".into()),
-            identifier: Some(Box::new(Identifier {
-                system: Some(listing.system.into()),
-                value: Some(listing.value.into()),
-                ..Identifier::default()
-            })),
-            ..Reference::default()
-        }),
+        subject: Some(subject(listing)),
         date: Some(listing.date.into()),
         custodian: Some(organisation(custodian)),
         content: vec![DocumentReferenceContent {
@@ -509,9 +526,24 @@ pub(super) fn entry(
     }
 }
 
+/// The reference to the patient of `listing`: its id on the face and the
+/// identifier the search named it by.
+pub(super) fn subject(listing: Listing<'_>) -> Reference {
+    Reference {
+        reference: Some(format!("Patient/{}", listing.patient).into()),
+        r#type: Some("Patient".into()),
+        identifier: Some(Box::new(Identifier {
+            system: Some(listing.system.into()),
+            value: Some(listing.value.into()),
+            ..Identifier::default()
+        })),
+        ..Reference::default()
+    }
+}
+
 /// The logical reference to `organisation`: its first identifier and its
 /// name.
-fn organisation(organisation: &Organisation) -> Reference {
+pub(super) fn organisation(organisation: &Organisation) -> Reference {
     Reference {
         r#type: Some("Organization".into()),
         identifier: organisation.identifiers.first().map(|(system, value)| {

@@ -15,7 +15,7 @@ use ferrohealth_smart::client::fapi2::Fapi2Error;
 use ferrohealth_smart::client::keys::{KeyRing, KeyRingError};
 use ferrohealth_smart::client::{ClientCredentials, TokenError};
 use ferrohealth_smart::config::credentials::OauthSection;
-use jsonwebtoken::Algorithm;
+use ferrohealth_smart::jws::algorithm::Algorithm;
 use jsonwebtoken::jwk::JwkSet;
 use openehr_its::rest::client::CredentialsProvider as _;
 
@@ -117,7 +117,7 @@ async fn a_previous_client_key_that_is_the_current_one_or_no_es256_key_is_refuse
     );
     let p384 = AssertionKey::from_pem(
         oauth::Curve::P384.pem()?.as_bytes(),
-        Some(Algorithm::ES384),
+        Some(Algorithm::Es384),
         None,
     )?;
     let es384 = rotated(grant(&server, key, &prover()?)?, p384)?.validate();

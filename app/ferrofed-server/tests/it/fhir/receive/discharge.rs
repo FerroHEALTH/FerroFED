@@ -130,7 +130,7 @@ async fn a_members_discharge_composition_is_listed_and_read_as_a_discharge_repor
     let dir = tempfile::tempdir()?;
     let pdq = supplier().await;
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
-    let (status, text) = call(app.clone(), list("&type=18842-5")?).await?;
+    let (status, text) = call(app.clone(), list("&type=34105-7")?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let bundle: Value = serde_json::from_str(&text)?;
     let matches = entries(&bundle, "match");
@@ -139,10 +139,10 @@ async fn a_members_discharge_composition_is_listed_and_read_as_a_discharge_repor
     };
     assert_eq!(
         reference.pointer("/type/coding/0/code"),
-        Some(&Value::from("18842-5"))
+        Some(&Value::from("34105-7"))
     );
     assert_eq!(
-        reference.pointer("/category/0/coding/0/code"),
+        reference.pointer("/category/0/coding/1/code"),
         Some(&Value::from("Discharge-Reports"))
     );
     assert_eq!(
@@ -218,7 +218,7 @@ async fn read_with(
         (&crossref, &writing(pdq, &declared())),
         &settings_with_room(),
     )?;
-    let (status, text) = call(app.clone(), list("&type=18842-5")?).await?;
+    let (status, text) = call(app.clone(), list("&type=34105-7")?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let bundle: Value = serde_json::from_str(&text)?;
     let url = entries(&bundle, "match")
@@ -413,7 +413,7 @@ async fn a_member_silent_at_the_discharge_query_fails_the_list_and_is_named() ->
     let dir = tempfile::tempdir()?;
     let pdq = supplier().await;
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
-    let (status, text) = call(app, list("&type=18842-5")?).await?;
+    let (status, text) = call(app, list("&type=34105-7")?).await?;
     assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "§11.3: {text}");
     assert!(text.contains("node-a-pub"), "§11.4: {text}");
     Ok(())
@@ -434,7 +434,7 @@ async fn a_list_of_another_type_asks_no_discharge_query() -> TestResult {
         .count();
     assert_eq!(
         0, queried,
-        "the gateway lists its report under 18842-5 alone"
+        "the gateway lists its report under 34105-7 alone"
     );
     Ok(())
 }
@@ -504,7 +504,7 @@ async fn the_written_discharge_list_and_read_are_recorded_under_the_category() -
         (&crossref, &tables),
         &settings_with_room(),
     )?;
-    let (_, text) = call(app.clone(), list("&type=18842-5")?).await?;
+    let (_, text) = call(app.clone(), list("&type=34105-7")?).await?;
     let bundle: Value = serde_json::from_str(&text)?;
     let url = entries(&bundle, "match")
         .first()

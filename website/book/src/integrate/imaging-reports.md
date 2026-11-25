@@ -52,10 +52,13 @@ The list then runs the reserved stored query
 at that does not serve its imaging documents itself. It selects every whole
 composition that contains `openEHR-EHR-OBSERVATION.imaging_exam_result.v1`,
 by the member's own `ehr_id` alone. The list names one `DocumentReference`
-per composition, typed `85430-7`, in the category `Medical-Imaging`, its
-format `BundleReportEuImaging` and its master identifier the composition's
-versioned object as a `urn:uuid:`. A search whose `type` admits only
-`18748-4` asks no member this query.
+per composition, the interoperability component's description of it, typed
+`18748-4`, the one code MyHealth@EU `DocumentReference-minimal` takes for
+an imaging report, in the category `Medical-Imaging`, its format
+`BundleReportEuImaging`, its master identifier the composition's versioned
+object as a `urn:uuid:`, and its version, language and period the
+composition's. A search whose `type` admits only `85430-7` asks no member
+this query.
 
 Reading the URL asks that member alone for the composition and writes it
 as an HL7 Europe Imaging Report 1.0.0-ballot `BundleReportEuImaging`: a

@@ -423,7 +423,7 @@ async fn a_members_laboratory_composition_is_listed_and_read_as_a_laboratory_rep
         Some(&Value::from("11502-2"))
     );
     assert_eq!(
-        reference.pointer("/category/0/coding/0/code"),
+        reference.pointer("/category/0/coding/1/code"),
         Some(&Value::from("Laboratory-Reports"))
     );
     assert_eq!(

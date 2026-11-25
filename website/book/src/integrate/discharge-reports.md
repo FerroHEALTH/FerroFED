@@ -23,7 +23,9 @@ the LOINC codes of `eehrxf-document-type-discharge-report-vs`: `18842-5`
 (discharge summary) and `100719-4` (surgical oncology discharge summary).
 A `type` of either code, alone or in the LOINC system, or
 `http://loinc.org|`, admits them, and a `type` that admits only them lists
-no summary. With no `type`, the list names every document type it serves.
+no summary. The discharge reports the gateway writes are typed `34105-7`,
+which a `type` admits the same way. With no `type`, the list names every
+document type it serves.
 
 ## Discharge reports the gateway writes
 
@@ -63,10 +65,13 @@ The list then runs the reserved stored query
 at that does not serve its discharge reports itself. It selects every whole
 composition of `openEHR-EHR-COMPOSITION.transfer_summary.v1`, by the
 member's own `ehr_id` alone. The list names one `DocumentReference` per
-composition, typed `18842-5`, in the category `Discharge-Reports`, its
-format `bundle-eu-hdr` and its master identifier the composition's
-versioned object as a `urn:uuid:`. A search whose `type` admits only
-`100719-4` asks no member this query. A composition two members hold under
+composition, the interoperability component's description of it, typed
+`34105-7`, the one code MyHealth@EU `DocumentReference-minimal` takes for a
+discharge report, in the category `Discharge-Reports`, its format
+`bundle-eu-hdr`, its master identifier the composition's versioned object
+as a `urn:uuid:`, and its version, language and period the composition's.
+A search whose `type` admits only `18842-5` or `100719-4` asks no member
+this query. A composition two members hold under
 one version id is listed once, from the member that created it.
 
 Reading the URL asks that member alone for the composition and writes it

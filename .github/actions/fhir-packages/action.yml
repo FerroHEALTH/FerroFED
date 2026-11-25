@@ -3,10 +3,11 @@
 name: Restore the FHIR package closure
 description: >-
   Restore the cache-only FHIR packages of the Patient Summary's, the
-  MyHealth@EU guides' and the Imaging Report's dependency closures into
+  MyHealth@EU guides', the Imaging Report's and the NCPeH API's dependency
+  closures into
   their directories under .vendor-cache, where
   ferrofed_testkit::fhir_packages reads them, and save the directories
-  after the job when the key missed. The key is the three PROVENANCE.md files
+  after the job when the key missed. The key is the four PROVENANCE.md files
   that pin each package by URL and sha256, so a re-pin starts a new cache.
   With the cache restored the tests fetch nothing from packages.fhir.org, so
   a resolver gap on the runner fails no test (#1381). The testkit still
@@ -22,4 +23,5 @@ runs:
           .vendor-cache/fhir-packages
           .vendor-cache/fhir-packages-myhealth-eu
           .vendor-cache/fhir-packages-imaging
-        key: fhir-packages-${{ hashFiles('docs/specs/fhir-packages/PROVENANCE.md', 'docs/specs/fhir-packages-myhealth-eu/PROVENANCE.md', 'docs/specs/fhir-packages-imaging/PROVENANCE.md') }}
+          .vendor-cache/fhir-packages-ncp-api
+        key: fhir-packages-${{ hashFiles('docs/specs/fhir-packages/PROVENANCE.md', 'docs/specs/fhir-packages-myhealth-eu/PROVENANCE.md', 'docs/specs/fhir-packages-imaging/PROVENANCE.md', 'docs/specs/fhir-packages-ncp-api/PROVENANCE.md') }}

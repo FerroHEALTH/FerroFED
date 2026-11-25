@@ -19,6 +19,9 @@
 //! 1.0.0-ballot package names beyond that (#1785): the committed
 //! `hl7.fhir.eu.health-data-api` 1.0.0-ballot and the packages
 //! `docs/specs/fhir-packages-imaging/PROVENANCE.md` pins.
+//! [`ncp_api_dependencies`] adds what the MyHealth@EU `NCPeH` API 9.1.1-ci
+//! package names beyond that (#1949): the committed `ihe.iti.mhd` 4.2.2 and
+//! the packages `docs/specs/fhir-packages-ncp-api/PROVENANCE.md` pins.
 //!
 //! FerroBRIDGE's validator refuses a package set that lacks a package a
 //! manifest names. The closure's committed packages sit under `docs/specs/`;
@@ -64,6 +67,17 @@ const IMAGING_CACHE: &str = ".vendor-cache/fhir-packages-imaging";
 /// discharge report's.
 const IMAGING_COMMITTED: &str =
     "docs/specs/eu-hl7-health-data-api/hl7.fhir.eu.health-data-api-1.0.0-ballot.tgz";
+
+/// The provenance that pins the cached packages the `NCPeH` API closure names
+/// beyond the imaging report's.
+const NCP_API_PROVENANCE: &str = "docs/specs/fhir-packages-ncp-api/PROVENANCE.md";
+
+/// The cache directory of the `NCPeH` API closure.
+const NCP_API_CACHE: &str = ".vendor-cache/fhir-packages-ncp-api";
+
+/// The committed package the `NCPeH` API closure names beyond the imaging
+/// report's.
+const NCP_API_COMMITTED: &str = "docs/specs/ihe-mhd/ihe.iti.mhd-4.2.2.tgz";
 
 /// The committed packages the discharge report closure names beyond the
 /// Patient Summary's. The Xt-EHR models declare FHIR 5.0.0, so the
@@ -222,6 +236,27 @@ pub fn imaging_dependencies() -> Result<Vec<PathBuf>, FhirPackagesError> {
     let mut paths = discharge_dependencies()?;
     paths.push(Path::new(ROOT).join(IMAGING_COMMITTED));
     paths.extend(cached(IMAGING_PROVENANCE, IMAGING_CACHE)?);
+    Ok(paths)
+}
+
+/// Returns the path of the committed MyHealth@EU `NCPeH` API 9.1.1-ci
+/// package, whose `DocumentReference-minimal` a list entry is held to.
+#[must_use]
+pub fn ncp_api() -> PathBuf {
+    Path::new(ROOT).join("docs/specs/ehdsi/myhealth.eu.fhir.ncp-api-9.1.1-ci.tgz")
+}
+
+/// Returns every package of the `NCPeH` API package's dependency closure: the
+/// imaging report's, with `ihe.iti.mhd` 4.2.2 and the packages it names
+/// beyond it.
+///
+/// # Errors
+///
+/// The errors of [`dependencies`].
+pub fn ncp_api_dependencies() -> Result<Vec<PathBuf>, FhirPackagesError> {
+    let mut paths = imaging_dependencies()?;
+    paths.push(Path::new(ROOT).join(NCP_API_COMMITTED));
+    paths.extend(cached(NCP_API_PROVENANCE, NCP_API_CACHE)?);
     Ok(paths)
 }
 

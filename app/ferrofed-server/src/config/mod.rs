@@ -587,12 +587,12 @@ pub enum SigningAlgorithm {
 }
 
 impl SigningAlgorithm {
-    /// The algorithm as the JOSE library names it.
+    /// The algorithm as the family's JWS library names it.
     #[must_use]
-    pub const fn algorithm(self) -> jsonwebtoken::Algorithm {
+    pub const fn algorithm(self) -> ferrohealth_smart::jws::algorithm::Algorithm {
         match self {
-            Self::Es256 => jsonwebtoken::Algorithm::ES256,
-            Self::Es384 => jsonwebtoken::Algorithm::ES384,
+            Self::Es256 => ferrohealth_smart::jws::algorithm::Algorithm::Es256,
+            Self::Es384 => ferrohealth_smart::jws::algorithm::Algorithm::Es384,
         }
     }
 }

@@ -316,15 +316,21 @@ impl Written {
         }
     }
 
+    /// Returns the Art 14(1) priority category of the report.
+    #[must_use]
+    pub const fn priority(self) -> Category {
+        match self {
+            Self::Laboratory => Category::Laboratory,
+            Self::Discharge => Category::Discharge,
+            Self::Imaging => Category::Imaging,
+        }
+    }
+
     /// Returns the code of the priority category, such as
     /// `Discharge-Reports`.
     #[must_use]
     pub const fn category(self) -> &'static str {
-        match self {
-            Self::Laboratory => Category::Laboratory.code(),
-            Self::Discharge => Category::Discharge.code(),
-            Self::Imaging => Category::Imaging.code(),
-        }
+        self.priority().code()
     }
 
     /// Returns the document `Bundle` profile the report is written in.

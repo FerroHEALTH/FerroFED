@@ -39,6 +39,7 @@ use ferrohealth_smart::client::dpop::DpopKey;
 use ferrohealth_smart::client::fapi2::{Fapi2, SecurityProfile};
 use ferrohealth_smart::client::{CLIENT_AUTHENTICATION_TYP, ClientCredentials, Endpoint};
 use ferrohealth_smart::config::onward::OnwardSection;
+use ferrohealth_smart::jws::algorithm::Algorithm as JwsAlgorithm;
 use ferrohealth_smart::kind::IssuerKind;
 use jsonwebtoken::Algorithm;
 use openehr_federation::outcome::ErrorDetail;
@@ -85,7 +86,7 @@ const PATIENT: &str = "SYNTHETIC-SUBJECT-9c2e";
 fn client_key() -> Result<AssertionKey, Box<dyn Error>> {
     Ok(AssertionKey::from_pem(
         oauth::Curve::P256.pem()?.as_bytes(),
-        Some(Algorithm::ES256),
+        Some(JwsAlgorithm::Es256),
         None,
     )?)
 }

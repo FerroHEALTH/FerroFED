@@ -26,6 +26,7 @@ use ferrofed_testkit::oauth::{self, TokenEndpoint};
 use ferrohealth_smart::client::assertion::{AssertionError, AssertionKey};
 use ferrohealth_smart::client::keys::{KeyRing, KeyRingError};
 use ferrohealth_smart::client::{ClientCredentials, Endpoint};
+use ferrohealth_smart::jws::algorithm::Algorithm as JwsAlgorithm;
 use jsonwebtoken::Algorithm;
 use jsonwebtoken::jwk::{Jwk, JwkSet, KeyAlgorithm};
 use openehr_its::rest::client::CredentialsProvider;
@@ -65,10 +66,10 @@ fn published_algorithm(key: &AssertionKey) -> Result<Option<KeyAlgorithm>, serde
 #[test]
 fn a_p256_key_signs_es256_and_a_p384_key_es384() -> TestResult {
     let p256 = read(&oauth::Curve::P256.pem()?)?;
-    assert_eq!(Algorithm::ES256, p256.algorithm());
+    assert_eq!(JwsAlgorithm::Es256, p256.algorithm());
     assert_eq!(Some(KeyAlgorithm::ES256), published_algorithm(&p256)?);
     let p384 = read(&oauth::Curve::P384.pem()?)?;
-    assert_eq!(Algorithm::ES384, p384.algorithm());
+    assert_eq!(JwsAlgorithm::Es384, p384.algorithm());
     assert_eq!(Some(KeyAlgorithm::ES384), published_algorithm(&p384)?);
     Ok(())
 }
@@ -77,7 +78,7 @@ fn a_p256_key_signs_es256_and_a_p384_key_es384() -> TestResult {
 fn a_key_on_neither_curve_is_refused_and_quotes_nothing() -> TestResult {
     let p521 = read(&oauth::Curve::P521.pem()?);
     assert!(
-        matches!(p521, Err(AssertionError::Curve { .. })),
+        matches!(p521, Err(AssertionError::Curve)),
         "{p521:?}"
     );
     let garbage = read("Qz7-not-a-key");
