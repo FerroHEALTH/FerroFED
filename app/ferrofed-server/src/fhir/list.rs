@@ -41,7 +41,6 @@ use http::{StatusCode, Uri, header};
 use openehr_federation::status::EndpointStatus;
 
 use super::admission::Asked;
-use super::ids::PatientId;
 use super::patient_id::Unresolved;
 use super::patient_summary::refused;
 use super::trc::Service;
@@ -54,6 +53,7 @@ use crate::facade::summary::own::Wanted;
 use crate::facade::summary::{self as gathered, Gathered, Scope, Unsummarised};
 use crate::federation::Federation;
 use crate::fhir_wire::fhir_json;
+use crate::ids::PatientId;
 
 /// The media type of a member's document that names none (RFC 9110 §8.3).
 const OCTET_STREAM: &str = "application/octet-stream";

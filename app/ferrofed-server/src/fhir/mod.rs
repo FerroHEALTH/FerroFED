@@ -55,7 +55,6 @@ use crate::state::AppState;
 mod admission;
 mod binary;
 pub mod errors;
-pub mod ids;
 mod list;
 mod lookup;
 pub mod medication;

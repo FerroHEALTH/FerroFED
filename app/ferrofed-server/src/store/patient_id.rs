@@ -6,7 +6,7 @@
 //! an earlier answer gave resolves to the patient.
 //!
 //! `ferrofed.patient_id` holds one row per id, its identifier sealed under
-//! a key derived from `fhir.id_key` ([`crate::fhir::ids`]), so the table
+//! a key derived from `fhir.id_key` ([`crate::ids`]), so the table
 //! alone discloses no identifier. Every answer that names the patient
 //! writes the row again with `expires_at` `fhir.patient_id_lifetime` after
 //! it, by the database's own clock, and the sweep deletes a row past it, so
@@ -17,7 +17,7 @@ use std::time::Duration;
 
 use ferrofed_registry::definition::store::StoreError;
 
-use crate::fhir::ids::PatientId;
+use crate::ids::PatientId;
 use crate::store::Store;
 use crate::store::connection::backend;
 
@@ -66,15 +66,7 @@ impl Store {
     /// [`StoreError::Backend`] when the database does not answer in time,
     /// or the statement fails.
     pub async fn patient_id(&self, id: &PatientId) -> Result<Option<Vec<u8>>, StoreError> {
-        let key = id.as_str().to_owned();
-        self.call_async(move |client| {
-            Box::pin(async move {
-                let Some(row) = client.query_opt(READ, &[&key]).await.map_err(backend)? else {
-                    return Ok(None);
-                };
-                row.try_get(0).map(Some).map_err(backend)
-            })
-        })
-        .await
+        self.row_by_key(READ, id.as_str().to_owned(), |row| row.try_get(0))
+            .await
     }
 }

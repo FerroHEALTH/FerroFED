@@ -113,6 +113,34 @@ impl Store {
         self.connection.call_async(work).await
     }
 
+    /// The row `statement` answers for the one parameter `key`, read by
+    /// `read`, or `None` when it answers none.
+    ///
+    /// # Errors
+    ///
+    /// [`StoreError::Backend`] when the database does not answer in time,
+    /// the statement fails or the row does not read.
+    pub(crate) async fn row_by_key<T: Send + 'static>(
+        &self,
+        statement: &'static str,
+        key: String,
+        read: fn(&tokio_postgres::Row) -> Result<T, tokio_postgres::Error>,
+    ) -> Result<Option<T>, StoreError> {
+        self.call_async(move |client| {
+            Box::pin(async move {
+                let Some(row) = client
+                    .query_opt(statement, &[&key])
+                    .await
+                    .map_err(backend)?
+                else {
+                    return Ok(None);
+                };
+                read(&row).map(Some).map_err(backend)
+            })
+        })
+        .await
+    }
+
     /// Asks the database to answer one statement.
     ///
     /// # Errors

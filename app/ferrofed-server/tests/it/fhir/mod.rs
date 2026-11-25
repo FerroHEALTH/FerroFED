@@ -23,7 +23,7 @@ mod config;
 mod contact_point_trc;
 mod header;
 mod independence;
-mod list;
+pub(crate) mod list;
 mod lookup;
 mod native;
 mod patient_grant;

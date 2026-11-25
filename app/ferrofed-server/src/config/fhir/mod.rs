@@ -52,7 +52,7 @@ use crate::config::Config;
 use crate::config::base_path::{BasePath, BasePathError};
 use crate::config::fhir::serve::{ServeEntry, ServeMember, ServeMode};
 use crate::config::public_url::PublicUrl;
-use crate::fhir::ids::{IdError, IdKeys};
+use crate::ids::{IdError, IdKeys};
 
 /// The path segments directly under `{base}` the gateway serves itself,
 /// which `{fhir-base}` may not start with when `{base}` is `/`.

@@ -4,7 +4,7 @@
 //! The stable patient id of an answer, recorded in the store, and the
 //! patient an id a caller sends back stands for.
 //!
-//! The id is derived from the identifier alone ([`super::ids`]), so it is
+//! The id is derived from the identifier alone ([`crate::ids`]), so it is
 //! the same in every answer whether or not the store records it. Recording
 //! renews the row's window; an id the store does not hold, never recorded
 //! or past `fhir.patient_id_lifetime`, resolves to no patient, which the
@@ -13,8 +13,8 @@
 
 use ferrofed_registry::definition::store::StoreError;
 
-use super::ids::{IdError, PatientId};
 use crate::config::fhir::FhirSettings;
+use crate::ids::{IdError, PatientId};
 use crate::store::Store;
 
 /// Why an id a caller sent could not be resolved.
