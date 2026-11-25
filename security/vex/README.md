@@ -45,6 +45,7 @@ later.
 | File | Subject | Authored |
 |---|---|---|
 | `rust-advisories.openvex.json` | The Rust dependency advisories the advisory gate accepts. Each statement carries a `ferrofed:reachability` block (our own extension; OpenVEX defines none) naming the crates the affected package is reached through. | **generated** |
+| `console-cookie.openvex.json` | GHSA-8wcq-xq25-7fhm (RUSTSEC-2026-0594) in `cookie` before 0.18.3, for the operator console images released before 0.0.21: not affected, since the console never forks (#1960). | by hand |
 
 There is no document for the base image's packages. The release scans have
 reported no finding in `gcr.io/distroless/static-debian13`; when one does, it
