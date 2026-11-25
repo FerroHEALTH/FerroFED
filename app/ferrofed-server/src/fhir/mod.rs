@@ -143,6 +143,7 @@ async fn metadata(State(state): State<Arc<AppState>>) -> Response {
             env!("CARGO_PKG_VERSION"),
             &date,
             (receivers, serving),
+            state.store().is_some(),
         ),
     )
 }

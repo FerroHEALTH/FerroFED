@@ -43,6 +43,7 @@ mod own_imaging;
 mod own_laboratory;
 mod own_member;
 mod parameters;
+mod patient;
 mod resolution;
 
 /// The identifier system the members' `ehr_id`s are written in, in the
@@ -150,7 +151,9 @@ impl Members {
             native_endpoint("node-a-eps", ("node-a", "org-a"), self.proxy_a.origin()),
             native_endpoint("node-b-eps", ("node-b", "org-b"), self.proxy_b.origin())
         );
-        let table = format!("[fhir]\nbase = \"{FHIR}\"\nid_key = \"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8\"\n");
+        let table = format!(
+            "[fhir]\nbase = \"{FHIR}\"\nid_key = \"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8\"\n"
+        );
         let text = text_registered(
             dir,
             (
@@ -504,8 +507,8 @@ async fn a_search_naming_no_patient_or_another_parameter_is_refused() -> TestRes
     let members = Members::start(fhir_document(DOCUMENT_A), fhir_document(DOCUMENT_B)).await?;
     let dir = tempfile::tempdir()?;
     let app = members.gateway(dir.path(), ("", ""))?;
-    // NOTE: MyHealth@EU NCPeH API 9.1.1-ci CapabilityStatementMyHealthEu; _id and patient are
-    // refused (conformance/myhealth-eu-search.tsv), and so is a parameter the API does not name.
+    // NOTE: MyHealth@EU NCPeH API 9.1.1-ci CapabilityStatementMyHealthEu; _id is refused, patient
+    // without a store, and a parameter the API does not name (conformance/myhealth-eu-search.tsv).
     let refused = [
         "_id=synthetic",
         "patient=Patient%2Fsynthetic",

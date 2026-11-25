@@ -80,5 +80,8 @@ pub(super) async fn resolved(
     let Some(sealed) = store.patient_id(id).await.map_err(Unresolved::Store)? else {
         return Ok(None);
     };
-    fhir.ids.open(id, &sealed).map(Some).map_err(Unresolved::Open)
+    fhir.ids
+        .open(id, &sealed)
+        .map(Some)
+        .map_err(Unresolved::Open)
 }

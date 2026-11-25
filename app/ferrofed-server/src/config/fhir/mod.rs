@@ -602,14 +602,7 @@ impl Fhir {
         if self.document_url_lifetime.as_secs() == 0 {
             return Err(FhirError::DocumentUrlLifetime);
         }
-        if self.patient_id_lifetime.as_secs() == 0 {
-            return Err(FhirError::PatientIdLifetime);
-        }
-        let id_key = read_secret("fhir.id_key", self.id_key.clone(), self.id_key_file.as_deref())?
-            .ok_or(FhirError::Missing {
-                key: "fhir.id_key",
-            })?;
-        let ids = IdKeys::from_base64url(id_key.expose()).map_err(FhirError::IdKey)?;
+        let ids = self.ids()?;
         Ok(FhirSettings {
             base,
             absolute: absolute.as_str().trim_end_matches('/').to_owned(),
@@ -630,14 +623,33 @@ impl Fhir {
                 self.document_url_lifetime.as_secs(),
             ),
             ids: Arc::new(ids),
-            patient_id_lifetime: std::time::Duration::from_secs(
-                self.patient_id_lifetime.as_secs(),
-            ),
+            patient_id_lifetime: std::time::Duration::from_secs(self.patient_id_lifetime.as_secs()),
             terminology: Terminology::none(),
             validating: None,
             terminology_written: None,
             written: self.clone(),
         })
+    }
+
+    /// Derives the keys of the face's stable ids from `fhir.id_key`, and
+    /// checks the window their record is kept.
+    ///
+    /// # Errors
+    ///
+    /// [`FhirError::Missing`] when no key is given, the secret errors of
+    /// its file, [`FhirError::IdKey`] when it is not 32 bytes of base64url,
+    /// and [`FhirError::PatientIdLifetime`] for a window under one second.
+    fn ids(&self) -> Result<IdKeys, FhirError> {
+        if self.patient_id_lifetime.as_secs() == 0 {
+            return Err(FhirError::PatientIdLifetime);
+        }
+        let key = read_secret(
+            "fhir.id_key",
+            self.id_key.clone(),
+            self.id_key_file.as_deref(),
+        )?
+        .ok_or(FhirError::Missing { key: "fhir.id_key" })?;
+        IdKeys::from_base64url(key.expose()).map_err(FhirError::IdKey)
     }
 
     /// Compiles the `[[fhir.receive]]` entries.

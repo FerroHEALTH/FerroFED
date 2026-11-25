@@ -89,11 +89,8 @@ impl IdKeys {
         }
         let prk = Salt::new(HKDF_SHA256, &[]).extract(&secret);
         let patient = hmac::Key::new(hmac::HMAC_SHA256, &expand(&prk, PATIENT_ID, KEY_LEN)?);
-        let seal = UnboundKey::new(
-            &AES_256_GCM,
-            &expand(&prk, SEAL, AES_256_GCM.key_len())?,
-        )
-        .map_err(|_unspecified| IdError::Key)?;
+        let seal = UnboundKey::new(&AES_256_GCM, &expand(&prk, SEAL, AES_256_GCM.key_len())?)
+            .map_err(|_unspecified| IdError::Key)?;
         Ok(Self {
             patient,
             seal: LessSafeKey::new(seal),
@@ -140,7 +137,8 @@ impl IdKeys {
     /// [`IdError::Open`] when the row does not open under the key and `id`.
     pub fn open(&self, id: &PatientId, row: &[u8]) -> Result<(String, String), IdError> {
         let (nonce, sealed) = row.split_at_checked(NONCE_LEN).ok_or(IdError::Open)?;
-        let nonce = Nonce::try_assume_unique_for_key(nonce).map_err(|_unspecified| IdError::Open)?;
+        let nonce =
+            Nonce::try_assume_unique_for_key(nonce).map_err(|_unspecified| IdError::Open)?;
         let mut sealed = sealed.to_vec();
         let opened = self
             .seal
@@ -171,8 +169,11 @@ impl PatientId {
     #[must_use]
     pub fn parse(id: &str) -> Option<Self> {
         // NOTE: an id of another form is no id the face gave, and matches no patient.
-        (id.len() == 52 && id.bytes().all(|b| b.is_ascii_lowercase() || (b'2'..=b'7').contains(&b)))
-            .then(|| Self(id.to_owned()))
+        (id.len() == 52
+            && id
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || (b'2'..=b'7').contains(&b)))
+        .then(|| Self(id.to_owned()))
     }
 
     /// The id.
@@ -203,10 +204,7 @@ mod tests {
     fn another_key_gives_another_id() {
         let other = IdKeys::from_base64url("AQECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8").unwrap();
         let keys = IdKeys::from_base64url(KEY).unwrap();
-        assert_ne!(
-            keys.patient(("s", "v")),
-            other.patient(("s", "v"))
-        );
+        assert_ne!(keys.patient(("s", "v")), other.patient(("s", "v")));
     }
 
     #[test]
@@ -226,7 +224,10 @@ mod tests {
     #[test]
     fn a_key_of_another_length_is_refused() {
         assert_eq!(IdKeys::from_base64url("AAEC").err(), Some(IdError::Key));
-        assert_eq!(IdKeys::from_base64url("not base64!").err(), Some(IdError::Key));
+        assert_eq!(
+            IdKeys::from_base64url("not base64!").err(),
+            Some(IdError::Key)
+        );
     }
 
     #[test]

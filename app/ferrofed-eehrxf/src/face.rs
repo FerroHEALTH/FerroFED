@@ -196,8 +196,9 @@ pub fn capability(
     version: &str,
     date: &str,
     (receivers, serving): (&Receivers, &Serving),
+    recorded: bool,
 ) -> CapabilityStatement {
-    let mut resource = vec![patient(), documents(), binary()];
+    let mut resource = vec![patient(), documents(recorded), binary()];
     // NOTE: FHIR R4 `capabilitystatement.html`: the statement describes what the server
     // supports, so `Bundle` create is declared only when a member receives a category.
     if !receivers.is_empty() {
@@ -319,7 +320,7 @@ pub fn bundle(receivers: &Receivers) -> CapabilityStatementRestResource {
 /// search-type interaction with the parameters the list takes, after the
 /// HL7 Europe EU Health Data API Document Access Provider and the
 /// MyHealth@EU national contact point API (`CapabilityStatementMyHealthEu`).
-fn documents() -> CapabilityStatementRestResource {
+fn documents(recorded: bool) -> CapabilityStatementRestResource {
     let typed = |(name, kind): (&str, &str), definition: Option<&str>, documentation: &str| {
         CapabilityStatementRestResourceSearchParam {
             name: name.into(),
@@ -335,6 +336,20 @@ fn documents() -> CapabilityStatementRestResource {
     let dated = |name: &str, definition: &str, documentation: &str| {
         typed((name, "date"), Some(definition), documentation)
     };
+    let mut search_param = vec![parameter(
+        "patient.identifier",
+        None,
+        "The patient, as system|value; one patient alone, or patient instead.",
+    )];
+    // NOTE: FHIR R4 capabilitystatement.html: the statement describes what the server supports,
+    // and a patient id resolves only through the store's record of it.
+    if recorded {
+        search_param.push(typed(
+            ("patient", "reference"),
+            Some("http://hl7.org/fhir/SearchParameter/clinical-patient"),
+            "The Patient a lookup answered, by its id; an id the gateway no longer holds answers an outcome entry asking for the lookup again.",
+        ));
+    }
     CapabilityStatementRestResource {
         r#type: "DocumentReference".into(),
         supported_profile: vec![crate::list::DOCUMENT_REFERENCE_PROFILE.into()],
@@ -342,12 +357,9 @@ fn documents() -> CapabilityStatementRestResource {
             code: "search-type".into(),
             ..CapabilityStatementRestResourceInteraction::default()
         }],
-        search_param: vec![
-            parameter(
-                "patient.identifier",
-                None,
-                "The patient, as system|value; required, and one patient alone.",
-            ),
+        search_param: search_param
+            .into_iter()
+            .chain([
             parameter(
                 "type",
                 Some("http://hl7.org/fhir/SearchParameter/clinical-type"),
@@ -393,7 +405,8 @@ fn documents() -> CapabilityStatementRestResource {
                 "http://hl7.org/fhir/SearchParameter/DocumentReference-period",
                 "context.period, evaluated by the gateway on every listed entry.",
             ),
-        ],
+        ])
+            .collect(),
         ..CapabilityStatementRestResource::default()
     }
 }

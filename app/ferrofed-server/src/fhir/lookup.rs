@@ -75,9 +75,17 @@ pub(super) async fn patients(asked: Asked, uri: Uri) -> Response {
                         None
                     } else {
                         let store = asked.state.store().map(AsRef::as_ref);
-                        Some(super::patient_id::recorded(store, admitted.fhir, patient, logged).await)
+                        Some(
+                            super::patient_id::recorded(store, admitted.fhir, patient, logged)
+                                .await,
+                        )
                     };
-                    found(federation, &gathered, (patient, &header), (id, &admitted.fhir.absolute))
+                    found(
+                        federation,
+                        &gathered,
+                        (patient, &header),
+                        (id, &admitted.fhir.absolute),
+                    )
                 }
                 // NOTE: FHIR R4 search, Federation Tier §11.3, Regulation (EU) 2025/327 Art 8: a patient
                 // no member holds matches nothing, and one no member may disclose answers alike.

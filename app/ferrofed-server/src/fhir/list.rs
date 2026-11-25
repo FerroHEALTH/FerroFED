@@ -32,7 +32,7 @@ use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use ehds_logging::category::Category;
 use ferrofed_eehrxf::list::{
-    self, DISCHARGE_SUMMARY, Fetched, IMAGING_REPORT, ListRequest, Listing, Match,
+    self, DISCHARGE_SUMMARY, Fetched, IMAGING_REPORT, ListRequest, Listing, Match, Subject,
 };
 use ferrofed_eehrxf::report::Written;
 use ferrofed_engine::single_node::forward::Forwarded;
@@ -41,6 +41,8 @@ use http::{StatusCode, Uri, header};
 use openehr_federation::status::EndpointStatus;
 
 use super::admission::Asked;
+use super::ids::PatientId;
+use super::patient_id::Unresolved;
 use super::patient_summary::refused;
 use super::trc::Service;
 use super::{UNADMITTED, attach, outcome};
@@ -59,26 +61,7 @@ const OCTET_STREAM: &str = "application/octet-stream";
 /// `GET {fhir-base}/DocumentReference?patient.identifier=system|value`.
 pub(super) async fn documents(asked: Asked, uri: Uri) -> Response {
     let read = ListRequest::from_query(uri.query());
-    let fhir = asked.state.fhir();
-    // NOTE: no specification governs this: our own design; a member declared native for the
-    // category serves its reports itself, with or without the gateway's own mapping.
-    let serves = |category: Category| {
-        asked.state.federation().is_some_and(|federation| {
-            federation
-                .snapshot()
-                .native_endpoints()
-                .any(|native| native.serves(category.code()))
-        })
-    };
-    let laboratory = fhir.is_some_and(|fhir| fhir.laboratory.is_some());
-    let discharge = fhir.is_some_and(|fhir| fhir.discharge.is_some());
-    let imaging = fhir.is_some_and(|fhir| fhir.imaging.is_some());
-    let lists = Lists {
-        laboratory: laboratory || serves(Category::MedicalTestResult),
-        written: (laboratory, discharge, imaging),
-        discharge: discharge || serves(Category::DischargeReport),
-        imaging: imaging || serves(Category::MedicalImaging),
-    };
+    let lists = Lists::declared(&asked);
     super::searched(
         (&asked, Instant::now()),
         read,
@@ -97,7 +80,12 @@ pub(super) async fn documents(asked: Asked, uri: Uri) -> Response {
         },
         async |read, admitted, arrived| {
             let federation = &admitted.federation;
-            let patient = (read.system(), read.value());
+            let store = asked.state.store().map(AsRef::as_ref);
+            let (system, value) = match named(store, admitted.fhir, read.subject()).await {
+                Ok(named) => named,
+                Err(answer) => return answer,
+            };
+            let patient = (system.as_str(), value.as_str());
             let service = if read.admits_summaries() {
                 Service::PatientSummary
             } else {
@@ -115,13 +103,7 @@ pub(super) async fn documents(asked: Asked, uri: Uri) -> Response {
             )
             .await
             {
-                Ok(gathered) => listed(
-                    federation,
-                    (admitted.fhir, admitted.caller),
-                    (&gathered, read),
-                    patient,
-                    &admitted.logged,
-                ),
+                Ok(gathered) => found(store, admitted, (&gathered, read), patient).await,
                 // NOTE: FHIR R4 search, Federation Tier §11.3: a patient no member holds matches no
                 // document, and answers as one no member may disclose does.
                 Err(unsummarised) if unsummarised.reaches_no_member() => {
@@ -172,6 +154,30 @@ struct Lists {
 }
 
 impl Lists {
+    /// The documents the deployment `asked` runs under lists.
+    fn declared(asked: &Asked) -> Self {
+        let fhir = asked.state.fhir();
+        // NOTE: no specification governs this: our own design; a member declared native for the
+        // category serves its reports itself, with or without the gateway's own mapping.
+        let serves = |category: Category| {
+            asked.state.federation().is_some_and(|federation| {
+                federation
+                    .snapshot()
+                    .native_endpoints()
+                    .any(|native| native.serves(category.code()))
+            })
+        };
+        let laboratory = fhir.is_some_and(|fhir| fhir.laboratory.is_some());
+        let discharge = fhir.is_some_and(|fhir| fhir.discharge.is_some());
+        let imaging = fhir.is_some_and(|fhir| fhir.imaging.is_some());
+        Self {
+            laboratory: laboratory || serves(Category::MedicalTestResult),
+            written: (laboratory, discharge, imaging),
+            discharge: discharge || serves(Category::DischargeReport),
+            imaging: imaging || serves(Category::MedicalImaging),
+        }
+    }
+
     /// The documents the search `read` asks the members for beside the
     /// summaries: of each kind the list names, the types it admits.
     fn wanted(self, read: &ListRequest) -> Wanted {
@@ -200,6 +206,34 @@ impl Lists {
     }
 }
 
+/// The list `gathered` gives for `patient` on the request `admitted`, the
+/// patient's id recorded in `store` first, since the list names it.
+async fn found(
+    store: Option<&crate::store::Store>,
+    admitted: &super::admission::Admitted<'_>,
+    (gathered, read): (&Gathered, &ListRequest),
+    (system, value): (&str, &str),
+) -> Response {
+    let id =
+        super::patient_id::recorded(store, admitted.fhir, (system, value), &admitted.logged).await;
+    let date = jiff::Timestamp::now()
+        .strftime("%Y-%m-%dT%H:%M:%SZ")
+        .to_string();
+    let listing = Listing {
+        system,
+        value,
+        patient: id.as_str(),
+        date: &date,
+    };
+    listed(
+        &admitted.federation,
+        (admitted.fhir, admitted.caller),
+        (gathered, read),
+        listing,
+        &admitted.logged,
+    )
+}
+
 /// The `searchset` `gathered` gives for the patient `system`|`value` on the
 /// face `fhir`: the summary its operator has the gateway write when the
 /// patient resolved at a member, each member's own document at a URL signed
@@ -209,17 +243,10 @@ fn listed(
     federation: &Federation,
     (fhir, caller): (&FhirSettings, &Caller),
     (gathered, read): (&Gathered, &ListRequest),
-    (system, value): (&str, &str),
+    listing: Listing<'_>,
     logged: &str,
 ) -> Response {
-    let date = jiff::Timestamp::now()
-        .strftime("%Y-%m-%dT%H:%M:%SZ")
-        .to_string();
-    let listing = Listing {
-        system,
-        value,
-        date: &date,
-    };
+    let (system, value) = (listing.system, listing.value);
     let minted = || uuid::Uuid::new_v4().to_string();
     let (id, unique) = (minted(), format!("urn:uuid:{}", minted()));
     // NOTE: §7.1, §11.3: the gateway writes a summary only from a member the patient resolved
@@ -316,6 +343,73 @@ fn listed(
         ),
     );
     response
+}
+
+/// The patient `subject` names: its identifier as sent, or the identifier
+/// the store holds for the patient id a `patient` reference names.
+///
+/// # Errors
+///
+/// The answer when no patient is resolved: the empty `searchset` with an
+/// `outcome` entry saying the id is unknown or has expired (FHIR R4 search
+/// §3.1.1.7), a `400` when the gateway has no store, and a `500` when the
+/// store does not answer or its record does not open.
+#[expect(
+    clippy::result_large_err,
+    reason = "the answer is the handler's, returned at most once per request"
+)]
+async fn named(
+    store: Option<&crate::store::Store>,
+    fhir: &FhirSettings,
+    subject: &Subject,
+) -> Result<(String, String), Response> {
+    let reference = match subject {
+        Subject::Identifier { system, value } => return Ok((system.clone(), value.clone())),
+        Subject::Patient(reference) => reference,
+    };
+    // NOTE: FHIR R4 search §3.1.1.4.11: a reference is `[id]`, `Patient/[id]` or the absolute
+    // URL; an id of another server's or of another form names no patient the face answered.
+    let absolute = format!("{}/Patient/", fhir.absolute);
+    let id = reference
+        .strip_prefix(&absolute)
+        .or_else(|| reference.strip_prefix("Patient/"))
+        .unwrap_or(reference);
+    let resolved = match PatientId::parse(id) {
+        Some(id) => super::patient_id::resolved(store, fhir, &id).await,
+        None => Ok(None),
+    };
+    match resolved {
+        Ok(Some(patient)) => Ok(patient),
+        Ok(None) => {
+            let unknown = (
+                format!("urn:uuid:{}", uuid::Uuid::new_v4()),
+                list::unknown_patient(),
+            );
+            let mut response =
+                fhir_json(StatusCode::OK, &list::searchset(Vec::new(), vec![unknown]));
+            response.extensions_mut().insert(NoAccess);
+            Err(response)
+        }
+        Err(Unresolved::NoStore) => {
+            let mut response = outcome(
+                StatusCode::BAD_REQUEST,
+                "not-supported",
+                &Unresolved::NoStore.to_string(),
+            );
+            response.extensions_mut().insert(NoAccess);
+            Err(response)
+        }
+        Err(failure) => {
+            tracing::error!(error = %crate::chain(&failure), "a patient id could not be resolved");
+            let mut response = outcome(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "exception",
+                "the patient id could not be resolved",
+            );
+            response.extensions_mut().insert(NoAccess);
+            Err(response)
+        }
+    }
 }
 
 /// The `matches` every search parameter of `read` selects.
