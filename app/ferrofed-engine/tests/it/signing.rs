@@ -77,10 +77,7 @@ fn a_p256_key_signs_es256_and_a_p384_key_es384() -> TestResult {
 #[test]
 fn a_key_on_neither_curve_is_refused_and_quotes_nothing() -> TestResult {
     let p521 = read(&oauth::Curve::P521.pem()?);
-    assert!(
-        matches!(p521, Err(AssertionError::Curve)),
-        "{p521:?}"
-    );
+    assert!(matches!(p521, Err(AssertionError::Curve)), "{p521:?}");
     let garbage = read("Qz7-not-a-key");
     assert!(
         matches!(garbage, Err(AssertionError::Key { .. })),
