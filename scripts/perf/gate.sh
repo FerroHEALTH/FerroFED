@@ -350,6 +350,12 @@ build_base() {
   # From inside the base's tree, so its own toolchain pin builds it.
   (cd "$src" && cargo build --release --locked -p ferrofed-server --bin ferrofed --target-dir "$root/target")
   cp target/release/ferrofed "$BASE_TREE/ferrofed"
+  # The base's sources are extracted after the head's checkout, so cargo would
+  # read the head's first-party crates as fresh; only their artifacts are cleaned,
+  # and the dependencies stay built.
+  local members=()
+  mapfile -t members < <(cargo metadata --no-deps --format-version 1 --locked | jq -r '.packages[].name')
+  cargo clean --release "${members[@]/#/--package=}"
 }
 
 # build [BASE]: the base's release gateway and configuration contract into
