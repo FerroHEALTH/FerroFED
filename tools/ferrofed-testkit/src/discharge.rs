@@ -9,8 +9,9 @@
 //! `docs/specs/ferrobridge-medication/` and
 //! `docs/specs/openehr-ckm-medication/`, which the HDR project `eehrxf`
 //! ships maps over, and a synthetic discharge composition as a member serves
-//! it. Its stay, diagnosis, procedure and medicine are invented for the
-//! tests.
+//! it. Its stay, procedure and medicine are invented for the tests; its
+//! diagnoses carry real ICD-10 codes, since MyHealth@EU binds
+//! `Condition.code` required to `eHDSIProblemWithExceptions`.
 
 use std::error::Error;
 use std::path::PathBuf;
@@ -43,8 +44,12 @@ const BESIDE: [&str; 3] = [
     "openEHR-EHR-ACTION.procedure.v1.adl",
 ];
 
-/// The synthetic diagnosis's code, in a code system under `example.org`.
-pub const DIAGNOSIS: &str = "SYN-DIAGNOSIS-0001";
+/// The diagnosis's ICD-10 code, which MVC 10.1.0 `eHDSIIllnessandDisorder`
+/// lists.
+pub const DIAGNOSIS: &str = "J45.9";
+
+/// The display of [`DIAGNOSIS`].
+const DIAGNOSIS_DISPLAY: &str = "Asthma, unspecified";
 
 /// The synthetic procedure's code, in a code system under `example.org`.
 pub const PROCEDURE: &str = "SYN-PROCEDURE-0001";
@@ -121,6 +126,13 @@ fn synthetic(system: &str, value: &str, code: &str) -> String {
     )
 }
 
+/// An ICD-10 coded text.
+fn icd10(value: &str, code: &str) -> String {
+    format!(
+        r#"{{ "_type": "DV_CODED_TEXT", "value": "{value}", "defining_code": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "{ICD10}" }}, "code_string": "{code}" }} }}"#
+    )
+}
+
 /// A date and time.
 fn instant(value: &str) -> String {
     format!(r#"{{ "_type": "DV_DATE_TIME", "value": "{value}" }}"#)
@@ -153,12 +165,12 @@ fn completed(time: &str, items: &[String]) -> String {
     )
 }
 
-/// The synthetic diagnosis, recognised during the stay.
+/// The diagnosis, recognised during the stay.
 fn diagnosis() -> String {
     evaluation(&[element(
         "at0002",
         "Problem/Diagnosis name",
-        &synthetic("ferrofed-diagnoses", "Synthetic diagnosis", DIAGNOSIS),
+        &icd10(DIAGNOSIS_DISPLAY, DIAGNOSIS),
     )])
 }
 
@@ -195,8 +207,10 @@ pub fn composition(uid: &str) -> String {
 /// element the shipped HDR mapping reads.
 #[derive(Debug, Clone, Copy)]
 pub struct Diagnosis {
-    /// The code of the diagnosis, in a code system under `example.org`.
+    /// The ICD-10 code of the diagnosis.
     pub code: &'static str,
+    /// The display of the code.
+    pub display: &'static str,
     /// When it began.
     pub onset: &'static str,
     /// When it was clinically recognised.
@@ -238,13 +252,15 @@ pub struct Medicine {
 pub const DIAGNOSES: [Diagnosis; 2] = [
     Diagnosis {
         code: DIAGNOSIS,
+        display: DIAGNOSIS_DISPLAY,
         onset: "2026-10-11T18:00:00Z",
         recognised: "2026-10-12T10:15:00Z",
         body_site: "Synthetic body site one",
         comment: "Synthetic diagnosis comment one",
     },
     Diagnosis {
-        code: "SYN-DIAGNOSIS-0002",
+        code: "J18.9",
+        display: "Pneumonia, unspecified",
         onset: "2026-10-13T07:00:00Z",
         recognised: "2026-10-13T09:40:00Z",
         body_site: "Synthetic body site two",
@@ -293,7 +309,7 @@ fn full_diagnosis(diagnosis: &Diagnosis) -> String {
         element(
             "at0002",
             "Problem/Diagnosis name",
-            &synthetic("ferrofed-diagnoses", "Synthetic diagnosis", diagnosis.code),
+            &icd10(diagnosis.display, diagnosis.code),
         ),
         element("at0012", "Body site", &text(diagnosis.body_site)),
         element("at0077", "Date/time of onset", &instant(diagnosis.onset)),
@@ -434,8 +450,8 @@ pub const HOSPITAL_COURSE: &str = "A synthetic hospital course.";
 /// The instant the synthetic sender writes its report at.
 const SENT_AT: &str = "2026-10-21T08:00:00Z";
 
-/// The synthetic diagnoses' code system.
-const DIAGNOSES_SYSTEM: &str = "http://example.org/fhir/CodeSystem/ferrofed-diagnoses";
+/// The ICD-10 code system, by its FHIR URI.
+const ICD10: &str = "http://hl7.org/fhir/sid/icd-10";
 
 /// The synthetic procedures' code system.
 const PROCEDURES_SYSTEM: &str = "http://example.org/fhir/CodeSystem/ferrofed-procedures";
@@ -446,12 +462,8 @@ const PRODUCTS_SYSTEM: &str = "http://example.org/fhir/CodeSystem/ferrofed-produ
 /// The displays a sender that names its codes writes for the codes the
 /// component writes with none, each `(system, code, display)`.
 const DISPLAYS: [(&str, &str, &str); 11] = [
-    (DIAGNOSES_SYSTEM, DIAGNOSIS, "Synthetic diagnosis"),
-    (
-        DIAGNOSES_SYSTEM,
-        "SYN-DIAGNOSIS-0002",
-        "Synthetic diagnosis",
-    ),
+    (ICD10, DIAGNOSIS, DIAGNOSIS_DISPLAY),
+    (ICD10, "J18.9", "Pneumonia, unspecified"),
     (PROCEDURES_SYSTEM, PROCEDURE, "Synthetic procedure"),
     (
         PROCEDURES_SYSTEM,
