@@ -24,6 +24,6 @@ core	ferrofed-server-summary-beside-native-member.json	valid
 core	ferrofed-server-summary-partial.json	valid
 core	ferrofed-server-summary-supplier-header.json	valid
 core	ferrofed-server-summary-two-members.json	valid
-discharge	ferrofed-eehrxf-discharge-report.json	invalid
+discharge	ferrofed-eehrxf-discharge-report.json	valid
 laboratory	ferrofed-eehrxf-laboratory-report.json	valid
 vaccination	ferrofed-eehrxf-vaccination-history.json	valid
