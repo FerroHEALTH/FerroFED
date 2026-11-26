@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: Cadasto B.V.
+# SPDX-License-Identifier: BUSL-1.1
+# The most CPU instructions each hot path's in-process work may execute,
+# counted by callgrind (scripts/perf/instructions.sh, #2003): one line per
+# path, as `<path> <ceiling>`, each the Linux CI count plus 2%. A ceiling is
+# lowered in a normal change and raised only with its cause stated in the
+# pull request; `report` measures a path without judging it.
+aql_rewrite 411000
+merge 10030000

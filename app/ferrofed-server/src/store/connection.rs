@@ -37,6 +37,10 @@ use ferrofed_registry::definition::store::StoreError;
 // answer fails the one request loudly rather than holding a blocking thread.
 pub const BUDGET: Duration = Duration::from_secs(10);
 
+/// The target of the trace event every store call sends from the caller's
+/// task, which the hot-path budget counts per request (#2003).
+pub const CALL_TARGET: &str = "ferrofed_server::store::call";
+
 /// A failure of a connection's own, beside the client's errors.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -244,6 +248,7 @@ impl Connection {
 
     /// Queues `job` for the next free connection.
     fn send(&self, job: Job) -> Result<(), StoreError> {
+        tracing::trace!(target: CALL_TARGET, "a store call");
         self.jobs
             .send(job)
             .map_err(|_stopped| backend(ConnectionError::Stopped))

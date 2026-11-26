@@ -94,6 +94,8 @@ use crate::support::settings;
 mod admission;
 mod aggregate;
 mod attributes;
+#[cfg(feature = "binding-ihe")]
+mod budget;
 mod commit;
 mod conformance_run;
 mod crossref;

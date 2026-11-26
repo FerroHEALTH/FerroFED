@@ -192,6 +192,9 @@ tower = "0.5.3"
 tower-http = { version = "0.7.1", default-features = false }
 tokio = { version = "1.53.1", default-features = false }
 tracing = "0.1.44"
+# The hot-path budget counts each request's allocations (#2003); the crate
+# installs its counting allocator as the test binary's global allocator.
+allocation-counter = "0.8.1"
 # The console: the env filter, the JSON line format and the pretty one.
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["std", "fmt", "env-filter", "json", "ansi"] }
 # The instruments the gateway records through and the trace context its node
