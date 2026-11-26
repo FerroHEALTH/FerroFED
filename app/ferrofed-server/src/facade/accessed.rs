@@ -300,22 +300,7 @@ fn subject(
                 namespace: Some(query.subject().namespace().to_owned()),
                 value: SecretString::from(query.subject().value().to_owned()),
             }),
-            ehrs: answered
-                .resolved
-                .iter()
-                .filter_map(|(node, ehr_id)| {
-                    let sent = answered.sent.iter().find(|sent| {
-                        snapshot
-                            .endpoint(sent)
-                            .is_some_and(|endpoint| endpoint.node() == node)
-                    })?;
-                    Some(EhrAt {
-                        endpoint: sent.as_str().to_owned(),
-                        ehr_id: ehr_id.as_str().to_owned(),
-                        patient: PatientLookup::RequestNamed,
-                    })
-                })
-                .collect(),
+            ehrs: crate::access::reached(snapshot, answered.resolved, answered.sent).collect(),
             population: None,
         },
         Analysis::Unscoped(query) => DataSubject {

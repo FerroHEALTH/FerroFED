@@ -28,10 +28,10 @@ use crate::auth::contact_point;
 pub(super) fn accessor(caller: &Caller) -> Accessor {
     let requester = caller.requester();
     Accessor {
-        issuer: Some(caller.issuer().to_owned()),
-        subject: caller.subject().to_owned(),
-        client_id: Some(caller.client_id().to_owned()),
-        audience: caller.audience().map(str::to_owned),
+        issuer: Some(caller.identity().issuer().to_owned()),
+        subject: caller.identity().subject().to_owned(),
+        client_id: Some(caller.identity().client_id().to_owned()),
+        audience: caller.identity().audience().map(str::to_owned),
         provider: requester
             .map(|requester| requester.organisation().to_owned())
             .or_else(|| caller.organisation().map(str::to_owned)),
@@ -58,6 +58,7 @@ pub(super) fn accessor(caller: &Caller) -> Accessor {
         },
         alt_id: requester.map(|requester| requester.professional().to_owned()),
         purposes: caller
+            .identity()
             .purposes()
             .iter()
             .map(|purpose| Purpose {

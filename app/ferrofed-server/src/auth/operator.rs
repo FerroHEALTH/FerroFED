@@ -24,7 +24,7 @@ impl Operator {
     #[must_use]
     pub fn issuer(&self) -> Option<&str> {
         match self {
-            Self::Verified(caller) => Some(caller.issuer()),
+            Self::Verified(caller) => Some(caller.identity().issuer()),
             Self::DevelopmentLoopback => None,
         }
     }
@@ -33,7 +33,7 @@ impl Operator {
     #[must_use]
     pub fn subject(&self) -> Option<&str> {
         match self {
-            Self::Verified(caller) => Some(caller.subject()),
+            Self::Verified(caller) => Some(caller.identity().subject()),
             Self::DevelopmentLoopback => None,
         }
     }

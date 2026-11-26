@@ -108,10 +108,11 @@ pub fn gateway(signer: Option<&Arc<Signer>>) -> Result<Conveyance, Unconveyed> {
 /// patient are not among it (§5.4.1, N33).
 fn conveyed(caller: &Caller) -> conveyance::caller::Caller {
     conveyance::caller::Caller {
-        issuer: caller.issuer().to_owned(),
-        subject: caller.subject().to_owned(),
+        issuer: caller.identity().issuer().to_owned(),
+        subject: caller.identity().subject().to_owned(),
         organisation: caller.organisation().map(str::to_owned),
         purposes: caller
+            .identity()
             .purposes()
             .iter()
             .map(|purpose| Purpose {

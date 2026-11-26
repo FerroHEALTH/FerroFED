@@ -365,7 +365,7 @@ impl Gate {
         }
         // NOTE: §13.4 authn-purpose-of-use, a node must never be left to infer
         // the purpose, so a request that reaches past the gate carries one.
-        if self.purpose_required && caller.purposes().is_empty() {
+        if self.purpose_required && caller.identity().purposes().is_empty() {
             return Err(Refusal::PurposeOfUse.into());
         }
         Ok(caller)
@@ -641,7 +641,9 @@ fn scoped(
     resources: &[Option<String>],
 ) -> Result<Caller, Refusal> {
     let honoured = Honoured {
-        backend: trusted.backend_clients.contains(caller.client_id()),
+        backend: trusted
+            .backend_clients
+            .contains(caller.identity().client_id()),
         patient: trusted.patient.is_some(),
     };
     let met = resources.iter().all(|name| {

@@ -33,7 +33,7 @@ use ferrofed_engine::conveyance::relayed::{Relayed, Role};
 use ferrohealth_smart::assurance::AssuranceLevel;
 
 use crate::auth::contact_point::TrcPatient;
-use ferrofed_identity::role::behalf::{self, OnBehalfOf};
+use ferrofed_identity::role::behalf::{self, OnBehalfOf, Purpose};
 use ferrofed_identity::role::consent::Requester;
 use ferrofed_identity::role::patient::IdentifierNamespace;
 use ferrofed_identity::session::SessionKey;
@@ -50,15 +50,11 @@ use secrecy::SecretString;
 /// none of its issuer, subject, client or token.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Caller {
-    /// The issuer that vouched for the caller (`iss`).
-    issuer: String,
-    /// The caller (`sub`).
-    subject: String,
-    /// The client the caller used (`client_id`).
-    client_id: String,
-    /// The audience the caller's token was admitted under: the one this
-    /// gateway is known by, which every admitted token names in `aud`.
-    audience: Option<String>,
+    /// Who the caller is, as an audit record names them: the issuer that
+    /// vouched for them (`iss`), the caller (`sub`), the client (`client_id`),
+    /// the audience the token was admitted under and every purpose of use it
+    /// declares (§13.4).
+    identity: behalf::Caller,
     /// The caller's organisation: the IHE IUA `subject_organization_id`,
     /// when the token carries one.
     organisation: Option<String>,
@@ -66,8 +62,6 @@ pub struct Caller {
     granted: String,
     /// The granted scopes, read in the SMART on openEHR grammar.
     scopes: Vec<SmartScope>,
-    /// Every purpose of use the token declares (§13.4).
-    purposes: Vec<PurposeOfUse>,
     /// How the gateway verified the caller.
     verified_by: VerifiedBy,
     /// The caller's verified access token, kept for a node whose grant
@@ -114,11 +108,9 @@ impl fmt::Debug for Caller {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         const REDACTED: &str = "<redacted>";
         f.debug_struct("Caller")
-            .field("issuer", &REDACTED)
-            .field("subject", &REDACTED)
-            .field("client_id", &REDACTED)
+            .field("identity", &REDACTED)
             .field("granted", &self.granted)
-            .field("purposes", &self.purposes)
+            .field("purposes", &self.identity.purposes())
             .field("verified_by", &self.verified_by)
             .field("token", &self.token)
             .field("covering", &self.covering)
@@ -275,7 +267,7 @@ pub struct Stated {
     /// The `scope` claim, or empty.
     pub granted: String,
     /// The purposes of use.
-    pub purposes: Vec<PurposeOfUse>,
+    pub purposes: Vec<Purpose>,
 }
 
 /// The current actor a token's RFC 8693 §4.1 `act` claim names: "the acting
@@ -321,14 +313,11 @@ impl Caller {
     pub fn new(stated: Stated, verified_by: VerifiedBy) -> Self {
         let scopes = SmartScope::parse_all(&stated.granted);
         Self {
-            issuer: stated.issuer,
-            subject: stated.subject,
-            client_id: stated.client_id,
-            audience: None,
+            identity: behalf::Caller::new(stated.issuer, stated.subject, stated.client_id)
+                .with_purposes(stated.purposes),
             organisation: stated.organisation,
             granted: stated.granted,
             scopes,
-            purposes: stated.purposes,
             verified_by,
             token: None,
             covering: String::new(),
@@ -466,15 +455,15 @@ impl Caller {
     /// token names this gateway by.
     #[must_use]
     pub fn with_audience(mut self, audience: Option<String>) -> Self {
-        self.audience = audience;
+        self.identity = self.identity.with_audience(audience);
         self
     }
 
-    /// Returns the audience the caller's token names this gateway by, when
-    /// the gate checked one.
+    /// Returns who the caller is, as an audit record names them: issuer,
+    /// subject, client, audience and purposes of use.
     #[must_use]
-    pub fn audience(&self) -> Option<&str> {
-        self.audience.as_deref()
+    pub const fn identity(&self) -> &behalf::Caller {
+        &self.identity
     }
 
     /// Returns whom an identity exchange made for this caller's request is
@@ -482,23 +471,7 @@ impl Caller {
     /// the token (PIXm §2:3.83.5.2.1, BALP 1.1.4 §3:5.7.5.4).
     #[must_use]
     pub fn on_behalf(&self) -> OnBehalfOf {
-        OnBehalfOf::Caller(
-            behalf::Caller::new(
-                self.issuer.clone(),
-                self.subject.clone(),
-                self.client_id.clone(),
-            )
-            .with_audience(self.audience.clone())
-            .with_purposes(
-                self.purposes
-                    .iter()
-                    .map(|purpose| behalf::Purpose {
-                        system: purpose.system.clone(),
-                        code: purpose.code.clone(),
-                    })
-                    .collect(),
-            ),
-        )
+        OnBehalfOf::Caller(self.identity.clone())
     }
 
     /// Returns this caller, asking for the data as `requester` states.
@@ -542,24 +515,6 @@ impl Caller {
         self.patient.as_ref()
     }
 
-    /// Returns the issuer that vouched for the caller.
-    #[must_use]
-    pub fn issuer(&self) -> &str {
-        &self.issuer
-    }
-
-    /// Returns the caller's subject.
-    #[must_use]
-    pub fn subject(&self) -> &str {
-        &self.subject
-    }
-
-    /// Returns the client the caller used.
-    #[must_use]
-    pub fn client_id(&self) -> &str {
-        &self.client_id
-    }
-
     /// Returns the caller's organisation, when the token names one.
     #[must_use]
     pub fn organisation(&self) -> Option<&str> {
@@ -576,12 +531,6 @@ impl Caller {
     #[must_use]
     pub fn scopes(&self) -> &[SmartScope] {
         &self.scopes
-    }
-
-    /// Returns every purpose of use the token declares.
-    #[must_use]
-    pub fn purposes(&self) -> &[PurposeOfUse] {
-        &self.purposes
     }
 
     /// Returns how the gateway verified the caller.
@@ -653,7 +602,11 @@ impl Caller {
         // NOTE: no specification governs this: our own design; each part is
         // length-prefixed, so no two callers' parts run together into one key.
         let mut key = String::new();
-        for part in [&self.issuer, &self.subject, &self.client_id] {
+        for part in [
+            self.identity.issuer(),
+            self.identity.subject(),
+            self.identity.client_id(),
+        ] {
             key.push_str(&part.len().to_string());
             key.push(':');
             key.push_str(part);
@@ -686,16 +639,6 @@ impl VerifiedBy {
             Self::Edge => "edge",
         }
     }
-}
-
-/// One purpose of use: a code and the system that defines it, the HL7 v3
-/// `PurposeOfUse` coding of IHE IUA (§13.4).
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct PurposeOfUse {
-    /// The code system, when the token names one.
-    pub system: Option<String>,
-    /// The code.
-    pub code: String,
 }
 
 #[cfg(test)]

@@ -228,8 +228,8 @@ fn signed(
         iat,
         exp: iat.saturating_add(lifetime),
         jti: uuid::Uuid::new_v4().to_string(),
-        sub: caller.subject().to_owned(),
-        caller_iss: caller.issuer().to_owned(),
+        sub: caller.identity().subject().to_owned(),
+        caller_iss: caller.identity().issuer().to_owned(),
         endpoint: endpoint.as_str().to_owned(),
         via: chosen.via.as_str().to_owned(),
         ehr_id: chosen.ehr_id.as_str().to_owned(),
@@ -421,7 +421,9 @@ fn taken(admitted: &admission::Admitted<'_>, token: &str) -> Result<(Chosen, Nam
         return Err(conveyed::Unconveyed::Unsigned.respond(request_id, logged));
     };
     let claims = verified(signer, fhir, token).map_err(|refused| untaken(&refused, logged))?;
-    if claims.sub != admitted.caller.subject() || claims.caller_iss != admitted.caller.issuer() {
+    if claims.sub != admitted.caller.identity().subject()
+        || claims.caller_iss != admitted.caller.identity().issuer()
+    {
         return Err(untaken(&Untaken::OtherCaller, logged));
     }
     let member = chosen(federation, &claims).map_err(|refused| untaken(&refused, logged))?;

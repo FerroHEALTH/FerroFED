@@ -60,14 +60,16 @@ use ehds_logging::emergency::EmergencyPurposes;
 use ehds_logging::label::LabelPolicy;
 use ehds_logging::map::CategoryMap;
 use ehds_logging::record::{
-    AccessRecord, Action, Correlation, CorrelationSource, CreatedEhr, DataSubject, Insertion,
-    Origin, Outcome, WrittenVersion,
+    AccessRecord, Action, Correlation, CorrelationSource, CreatedEhr, DataSubject, EhrAt,
+    Insertion, Origin, Outcome, PatientLookup, WrittenVersion,
 };
 use ehds_logging::retention::RetentionPolicy;
 use ehds_logging::sink::{AccessSink, Reservation, SinkError};
 use ehds_logging::transformation::Transformation;
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_identity::role::patient::IdentifierNamespace;
+use ferrofed_registry::id::{EhrId, EndpointId, NodeId};
+use ferrofed_registry::snapshot::RegistrySnapshot;
 use http::{Method, StatusCode};
 use openehr_federation::headers;
 use openehr_federation::status::EndpointStatus;
@@ -743,4 +745,29 @@ pub async fn record(State(gate): State<Arc<Gate>>, request: Request, next: Next)
             response
         }
     }
+}
+
+/// Each `ehr_id` of `resolved` a request reached, at the endpoint of `sent`
+/// it was sent through to that member; one at a member no request left the
+/// gateway for is not reached, so the record names it at no endpoint.
+pub(crate) fn reached<'a, S>(
+    snapshot: &'a RegistrySnapshot,
+    resolved: &'a [(NodeId, EhrId)],
+    sent: S,
+) -> impl Iterator<Item = EhrAt> + 'a
+where
+    S: IntoIterator<Item = &'a EndpointId> + Copy + 'a,
+{
+    resolved.iter().filter_map(move |(node, ehr_id)| {
+        let sent = sent.into_iter().find(|sent| {
+            snapshot
+                .endpoint(sent)
+                .is_some_and(|endpoint| endpoint.node() == node)
+        })?;
+        Some(EhrAt {
+            endpoint: sent.as_str().to_owned(),
+            ehr_id: ehr_id.as_str().to_owned(),
+            patient: PatientLookup::RequestNamed,
+        })
+    })
 }

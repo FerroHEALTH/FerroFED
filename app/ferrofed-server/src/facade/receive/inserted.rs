@@ -110,18 +110,18 @@ fn representative(
             actor
                 .issuer
                 .clone()
-                .unwrap_or_else(|| caller.issuer().to_owned()),
+                .unwrap_or_else(|| caller.identity().issuer().to_owned()),
             actor.subject.clone(),
             true,
         ),
         Representation::RelatedPerson => (
-            caller.issuer().to_owned(),
-            Some(caller.subject().to_owned()),
+            caller.identity().issuer().to_owned(),
+            Some(caller.identity().subject().to_owned()),
             false,
         ),
     };
     let names_patient = subject.as_deref().is_some_and(|subject| {
-        (own_sub && subject == caller.subject())
+        (own_sub && subject == caller.identity().subject())
             || withheld
                 .iter()
                 .any(|identifier| identifier.expose_secret() == subject)

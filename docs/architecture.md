@@ -2675,6 +2675,30 @@ placeholders published on 2026-10-01, and each crate's line starts at 0.0.1.
 `openehr-federation` would be the first to publish, because any client of any
 federation gateway reads `meta.federation`.
 
+### The concerns and their one owner
+
+Each concern of the gateway has exactly one owning module; every other module
+calls it and keeps no copy (#2001). No specification governs the layout: our
+own design.
+
+| Concern | Owner | What it may call |
+|---|---|---|
+| The HTTP stack: request id, panic catch, timeout, body ceiling, health routes | `ferrohealth-server`, wired by `ferrofed-server::edge` | the handlers below |
+| Requests on the ITS-REST surface | `ferrofed-server::facade` | `auth`, `access`, the engine, `store`, `stored` |
+| Requests on the FHIR face | `ferrofed-server::fhir`, over `facade` for the federation and `ferrofed-eehrxf` for the documents | the same, and `ferrofed-eehrxf` |
+| The operator and admin surfaces | `ferrofed-server::operator`, `admin`, `running` | `state`, `config` |
+| Who the caller is | `ferrofed-server::auth::caller::Caller`, whose audit identity (issuer, subject, client, audience, purposes of use) is the one `ferrofed_identity::role::behalf::Caller` it holds and every exchange made on the caller's behalf names | `ferrohealth-smart` |
+| Shared state: the phase, the registry snapshot, the stores | `ferrofed-server::state::AppState` | `reload`, `store` |
+| Outbound calls to members: dispatch, fan-out, budgets, onward grants, DPoP | `ferrofed-engine` (`dispatch`, `fanout`, `single_node`, `onward`); the server's `onward` only builds the clients from configuration | `openehr-its` (`rest-client`), `ferrohealth-smart` |
+| The §11.1 status of a member a failed forward reached | `ferrofed-engine::single_node::forward::ForwardError::status` | none |
+| Outbound calls to identity services and bindings | `ferrofed-identity` (`role` seams, `ihe` and `nl` adapters) | `ihe-iti`, `nl-generic-functions` |
+| Configuration: read, resolve, check, reload | `ferrofed-server::config`; a reload by `reload`, a managed revision by `revision` | `ferrohealth-config` |
+| Background work | each loop's body in its concern's module: the store sweep (`store::sweeping`) and the registry reload on `SIGHUP` (`reload::on_hangup`), both started by `command::serve`; the managed revision watch (`revision::watch`); the mCSD directory (`binding::ihe::process`); the PMIR subscription (`binding::ihe::pmir::subscription`) | its own module |
+| FerroFED's own PostgreSQL store, its session settings and pool | `ferrofed-server::store` (`store::connection`) | `tokio-postgres` |
+| The access record of Annex II 3.2, the `ehr_id`s an access reached included | `ferrofed-server::access` (`access::reached`) | `ehds-logging` |
+| The audit trail and the security events | `ferrofed-server::audit`, `security` | `ihe-atna` |
+| The OperationOutcome issue a received document is refused with | `ferrofed-eehrxf::receive::issue` | `fhir-types` |
+
 ## 12. The conformance instrument
 
 Research: #25. Conformance is measured from the first test (#41).
