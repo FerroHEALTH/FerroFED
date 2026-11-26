@@ -1747,9 +1747,9 @@ dependencies = [
 
 [[package]]
 name = "ferrohealth-session"
-version = "0.30.0"
+version = "0.30.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47fd4ed091afd320036146bea3048691a24bafef58af70f4a2d9d8211772c5cd"
+checksum = "289d6401c6884756c041b3904592b2916ecf02151e103bd7b1629d02a8bb7b7a"
 dependencies = [
  "aws-lc-rs",
  "axum",
@@ -2650,9 +2650,9 @@ dependencies = [
 
 [[package]]
 name = "ihe-iti"
-version = "0.25.0"
+version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7136caa6c87ba1ea1ad8e48d0dc31faf5976cf1d4c5d7f02edce4645bb6ece77"
+checksum = "deaa150e4d790b0e184565c928efabba6f1549192fd46a5a8a64c413629e4f8d"
 dependencies = [
  "async-trait",
  "ferrohealth-smart",
@@ -3237,9 +3237,9 @@ checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
 
 [[package]]
 name = "nl-generic-functions"
-version = "0.25.0"
+version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39b2652ab9c4a81fc9dcd9772ce4c0b99edad7b703a5db06e119f053e29d5cf4"
+checksum = "66af025b405cd66819ea634673338235827c6b3c4bce4fd6a02d02b98f3e5a73"
 dependencies = [
  "base64 0.23.1",
  "ferrohealth-smart",
@@ -3427,9 +3427,9 @@ checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 
 [[package]]
 name = "openehr-adl"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33630e4c07d9d4e12ef6558775e9c4ef9c56d38b1090962433a359271d48ec67"
+checksum = "809018872956d0c99d69cd4960703abecfd76b15fcce1d289667f328d504a28a"
 dependencies = [
  "indexmap 2.14.2",
  "jiff 0.2.46",
@@ -3553,9 +3553,9 @@ dependencies = [
 
 [[package]]
 name = "openehr-query"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5bfc2d14927d1f5c547d2fa4788e3df7c992fcacfd7dc0d2ca7bbf5c576e272"
+checksum = "c5fd9d76db5f4338bdc121ad4aacb62bc9231c161d9d0e3c712e1477b1c4091f"
 dependencies = [
  "chumsky",
  "logos",
