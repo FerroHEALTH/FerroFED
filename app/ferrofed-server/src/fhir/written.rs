@@ -394,24 +394,10 @@ async fn document(
         member: &custodian,
         attesters: &[],
     };
-    let body = String::from_utf8_lossy(body);
-    let (body, attesters) = match written {
-        Written::Vaccination => match vaccination::original_version(&body) {
-            Ok(versioned) => versioned,
-            Err(unversioned) => {
-                tracing::warn!(
-                    request_id = %admitted.outbound,
-                    error = %crate::chain(&unversioned),
-                    "a member's version was not written as a vaccination history"
-                );
-                return outcome(
-                    StatusCode::FAILED_DEPENDENCY,
-                    "processing",
-                    &format!("the vaccination history could not be written: {unversioned}"),
-                );
-            }
-        },
-        _ => (body.into_owned(), Vec::new()),
+    let body = String::from_utf8_lossy(body).into_owned();
+    let (body, attesters) = match versioned(admitted, written, body) {
+        Ok(versioned) => versioned,
+        Err(refused) => return refused,
     };
     let report = Report {
         attesters: &attesters,
@@ -448,6 +434,36 @@ async fn document(
             )
         }
     }
+}
+
+/// The composition `body` holds and the persons who attested it: for a
+/// vaccination history, `body` is the version's `ORIGINAL_VERSION`, and a
+/// version that gives none is the `424` that says why; for every other
+/// report, `body` is the composition, attested by no one the report names.
+#[expect(
+    clippy::result_large_err,
+    reason = "the refusal is the handler's answer, returned at most once per request"
+)]
+fn versioned(
+    admitted: &Admitted<'_>,
+    written: Written,
+    body: String,
+) -> Result<(String, Vec<vaccination::Attester>), Response> {
+    if written != Written::Vaccination {
+        return Ok((body, Vec::new()));
+    }
+    vaccination::original_version(&body).map_err(|unversioned| {
+        tracing::warn!(
+            request_id = %admitted.outbound,
+            error = %crate::chain(&unversioned),
+            "a member's version was not written as a vaccination history"
+        );
+        outcome(
+            StatusCode::FAILED_DEPENDENCY,
+            "processing",
+            &format!("the vaccination history could not be written: {unversioned}"),
+        )
+    })
 }
 
 /// The header the demographics binding holds of the patient

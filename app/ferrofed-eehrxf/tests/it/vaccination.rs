@@ -3,7 +3,7 @@
 
 //! The vaccination history's stored query, under its reserved name, and the
 //! document the gateway writes from one member's immunisation list through
-//! the shipped EuVAC project, compiled against FerroBRIDGE's vendored
+//! the shipped `euvac` project, compiled against FerroBRIDGE's vendored
 //! patient summary template, legally authenticated by the person who
 //! attested the record, and held to the vendored MyHealth@EU Vaccination
 //! 10.0.0-preview profiles.
@@ -47,7 +47,7 @@ fn profile(url: &str) -> Result<ResourceProfile, Box<dyn Error>> {
     Ok(ResourceProfile::read(std::fs::File::open(package())?, url)?)
 }
 
-/// The shipped EuVAC project compiled against FerroBRIDGE's patient summary
+/// The shipped `euvac` project compiled against FerroBRIDGE's patient summary
 /// template.
 fn served() -> Result<Served, Box<dyn Error>> {
     let written = medication::patient_summary_template()?;
@@ -75,7 +75,7 @@ fn header() -> PatientHeader {
 fn version() -> Result<(String, Vec<vaccination::Attester>), Unversioned> {
     vaccination::original_version(&fixture::original_version(
         UID,
-        &format!("[{}]", fixture::attestation(false)),
+        Some(&format!("[{}]", fixture::attestation(false))),
     ))
 }
 
@@ -198,12 +198,10 @@ async fn an_attested_immunisation_list_is_written_as_a_legally_authenticated_his
 
 #[test]
 fn a_version_no_one_attested_or_only_pending_names_no_attester() {
-    for attestations in [
-        String::from("[]"),
-        format!("[{}]", fixture::attestation(true)),
-    ] {
+    let pending = format!("[{}]", fixture::attestation(true));
+    for attestations in [None, Some(pending.as_str())] {
         assert!(matches!(
-            vaccination::original_version(&fixture::original_version(UID, &attestations)),
+            vaccination::original_version(&fixture::original_version(UID, attestations)),
             Err(Unversioned::Unattested(Unattested::None))
         ));
     }

@@ -28,7 +28,7 @@ use async_trait::async_trait;
 use eehrxf::document::Document;
 use eehrxf::document::authored::MYHEALTHEU_PRACTITIONER;
 use eehrxf::document::language::DocumentLanguage;
-use eehrxf::document::metadata::{Attestation, DocumentMetadata};
+use eehrxf::document::metadata::{Attestation as Authentication, DocumentMetadata};
 use eehrxf::document::vaccination::{IMMUNIZATION_HISTORY, VACCINATION_HISTORY_FORM};
 use eehrxf::mapping::Mapping;
 use eehrxf::mappings::EUVAC;
@@ -375,8 +375,8 @@ impl Writes for Served {
                 .into_iter()
                 .next()
                 .ok_or(ServedError::Unattested(Unattested::Impersonal))?;
-            metadata =
-                metadata.with_legal_authentication(Attestation::new(party, attester.time.clone()));
+            metadata = metadata
+                .with_legal_authentication(Authentication::new(party, attester.time.clone()));
         }
         document.with_metadata(metadata);
         document.into_bundle().map_err(ServedError::Document)

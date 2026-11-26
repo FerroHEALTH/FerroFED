@@ -54,9 +54,9 @@ members would have no one legal authenticator.
 
 Each history is a `DocumentReference` typed LOINC `11369-6` (History of
 Immunization note), the type `composition-euvac-myhealtheu` fixes, with no
-priority category, since vaccination is none of the Art 14(1) categories.
-Its format is `bundle-euvac-myhealtheu`, and its version, language and
-period are the composition's. A `type` of `11369-6`, alone or in the LOINC
+priority category, since vaccination is none of the Art 14(1) categories,
+and its version, language and period are the composition's. The document
+it names is a `bundle-euvac-myhealtheu`. A `type` of `11369-6`, alone or in the LOINC
 system, or `http://loinc.org|`, admits it.
 
 The list names a history unavailable, in an `outcome` entry with the

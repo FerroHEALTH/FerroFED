@@ -13,7 +13,6 @@
 use std::error::Error;
 use std::path::Path;
 
-use eehrxf::document::vaccination::EUVAC_BUNDLE;
 use ferrofed_testkit::ehdsi_language;
 use ferrofed_testkit::medication;
 use ferrofed_testkit::mock::Server;
@@ -131,7 +130,7 @@ async fn supplier(birth_date: Option<&str>) -> Server {
 #[tokio::test]
 async fn an_attested_immunisation_list_is_listed_and_read_as_a_vaccination_history() -> TestResult {
     let attested = format!("[{}]", vaccination::attestation(false));
-    let version = vaccination::original_version(VERSION, &attested);
+    let version = vaccination::original_version(VERSION, Some(&attested));
     let (a, b) = (
         holding(&row(&attested), Some(&version)).await,
         holding("", None).await,
@@ -150,9 +149,14 @@ async fn an_attested_immunisation_list_is_listed_and_read_as_a_vaccination_histo
         reference.pointer("/type/coding/0/code"),
         Some(&Value::from("11369-6"))
     );
+    let codings = reference
+        .pointer("/category/0/coding")
+        .and_then(Value::as_array)
+        .ok_or("the category's codings")?;
     assert_eq!(
-        reference.pointer("/content/0/format/code"),
-        Some(&Value::from(EUVAC_BUNDLE))
+        codings.len(),
+        1,
+        "the document category alone, no priority category: {codings:?}"
     );
     let url = reference
         .pointer("/content/0/attachment/url")

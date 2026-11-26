@@ -155,19 +155,16 @@ async fn answered(asked: Asked, read: Result<ListRequest, ListRefusal>, mode: Mo
 
 /// The documents the list names beside the summaries, as the deployment
 /// declares them.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct Lists {
     /// Whether it lists laboratory reports.
     laboratory: bool,
-    /// Whether the gateway writes laboratory, discharge and imaging reports
-    /// from the members' compositions.
-    written: (bool, bool, bool),
     /// Whether it lists discharge reports.
     discharge: bool,
     /// Whether it lists imaging documents.
     imaging: bool,
-    /// Whether the gateway writes the vaccination history.
-    vaccination: bool,
+    /// The categories the gateway writes from the members' compositions.
+    written: BTreeSet<Written>,
 }
 
 impl Lists {
@@ -184,45 +181,44 @@ impl Lists {
                     .any(|native| native.serves(category.code()))
             })
         };
-        let laboratory = fhir.is_some_and(|fhir| fhir.laboratory.is_some());
-        let discharge = fhir.is_some_and(|fhir| fhir.discharge.is_some());
-        let imaging = fhir.is_some_and(|fhir| fhir.imaging.is_some());
+        let written: BTreeSet<Written> = Written::ALL
+            .into_iter()
+            .filter(|written| fhir.is_some_and(|fhir| fhir.writes(*written).is_some()))
+            .collect();
         Self {
-            laboratory: laboratory || serves(Category::MedicalTestResult),
-            written: (laboratory, discharge, imaging),
-            discharge: discharge || serves(Category::DischargeReport),
-            imaging: imaging || serves(Category::MedicalImaging),
-            vaccination: fhir.is_some_and(|fhir| fhir.vaccination.is_some()),
+            laboratory: written.contains(&Written::Laboratory)
+                || serves(Category::MedicalTestResult),
+            discharge: written.contains(&Written::Discharge) || serves(Category::DischargeReport),
+            imaging: written.contains(&Written::Imaging) || serves(Category::MedicalImaging),
+            written,
         }
     }
 
     /// The documents the search `read` asks the members for beside the
     /// summaries: of each kind the list names, the types it admits.
-    fn wanted(self, read: &ListRequest) -> Wanted {
+    fn wanted(&self, read: &ListRequest) -> Wanted {
         let types = |listed: bool, codes: &[&'static str]| {
             if listed { codes.to_vec() } else { Vec::new() }
         };
         let laboratory = self.laboratory && read.admits_laboratory();
-        let mut written = BTreeSet::new();
-        if self.written.0 && laboratory {
-            written.insert(Written::Laboratory);
-        }
         // NOTE: MyHealth@EU NCPeH API 9.1.1-ci DocumentReference-minimal binds type to
         // eHDSIDocumentTypes (required), so each written report is listed under its one code.
-        if self.written.1 && read.admits_hospital_discharge() {
-            written.insert(Written::Discharge);
-        }
-        if self.written.2 && read.imaging().contains(&IMAGING_STUDY) {
-            written.insert(Written::Imaging);
-        }
-        if self.vaccination && read.admits_vaccination() {
-            written.insert(Written::Vaccination);
-        }
+        let admits = |written: Written| match written {
+            Written::Laboratory => laboratory,
+            Written::Discharge => read.admits_hospital_discharge(),
+            Written::Imaging => read.imaging().contains(&IMAGING_STUDY),
+            Written::Vaccination => read.admits_vaccination(),
+        };
         Wanted {
             laboratory,
             discharge: types(self.discharge, read.discharge()),
             imaging: types(self.imaging, read.imaging()),
-            written,
+            written: self
+                .written
+                .iter()
+                .copied()
+                .filter(|written| admits(*written))
+                .collect(),
         }
     }
 }

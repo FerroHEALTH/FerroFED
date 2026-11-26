@@ -99,9 +99,10 @@ pub fn composed(composition: &str) -> SelectQuery {
 }
 
 /// Returns the query that selects every composition holding the `SECTION`
-/// archetype `section`, in the shape [`query`] gives, with the
-/// attestations of the composition's version as a fourth column,
-/// `attestations` (openEHR RM Common `ORIGINAL_VERSION.attestations`).
+/// archetype `section`, with the attestations of its version.
+///
+/// It is in the shape [`query`] gives, with a fourth column, `attestations`
+/// (openEHR RM Common `ORIGINAL_VERSION.attestations`).
 #[must_use]
 pub fn attested(section: &str) -> SelectQuery {
     let predicate = PathPredicate::Archetype(ArchetypePredicate::Hrid(section.to_owned()));

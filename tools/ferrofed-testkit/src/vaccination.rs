@@ -100,9 +100,13 @@ pub fn attestation(pending: bool) -> String {
 }
 
 /// Returns the `ORIGINAL_VERSION` of the version `uid` of [`composition`],
-/// in canonical JSON, with `attestations`, a JSON array of `ATTESTATION`s.
+/// in canonical JSON, with `attestations`, a JSON array of `ATTESTATION`s,
+/// or with none.
 #[must_use]
-pub fn original_version(uid: &str, attestations: &str) -> String {
+pub fn original_version(uid: &str, attestations: Option<&str>) -> String {
+    let attestations = attestations
+        .map(|attestations| format!(r#""attestations": {attestations},"#))
+        .unwrap_or_default();
     format!(
         r#"{{
   "_type": "ORIGINAL_VERSION",
@@ -116,7 +120,7 @@ pub fn original_version(uid: &str, attestations: &str) -> String {
     "committer": {{ "_type": "PARTY_IDENTIFIED", "name": "Synthetic composer" }}
   }},
   "lifecycle_state": {{ "_type": "DV_CODED_TEXT", "value": "complete", "defining_code": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "openehr" }}, "code_string": "532" }} }},
-  "attestations": {attestations},
+  {attestations}
   "data": {data}
 }}"#,
         data = composition(uid),

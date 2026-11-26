@@ -140,7 +140,8 @@ hl7.fhir.uv.extensions.r5	5.2.0	e02fc6eff0f37c1611a35aa93ef9aaa3b55ab7371a5c96f4
 hl7.fhir.uv.extensions.r5	5.3.0	f1039cac888d79ebd29878d7debe5e647ffe7ed962a9033da095258a03a06105
 hl7.terminology.r5	7.1.0	473303108b5607aad7b910581739e8bbf3e61a625ed9e739c66e0ca597d4aefe
 myhealth.eu.fhir.core	1.0.0	d40b9979dd971a76fc39452aee4091a5f79a9d46192ece7c28e70b4d429a9270
-xtehr.eu.ehds.models	0.3.0	f2cb6b0b5b35cab33e9b618b38c54797ece61f5e2dda59982c952ecd9398865b"
+xtehr.eu.ehds.models	0.3.0	f2cb6b0b5b35cab33e9b618b38c54797ece61f5e2dda59982c952ecd9398865b
+hl7.terminology.r5	7.0.1	f2de7264bd4a9c6771f211ee96b9952d32ab866e8b5d657884f8c375a34ffb87"
 
 fail=0
 bad() {
