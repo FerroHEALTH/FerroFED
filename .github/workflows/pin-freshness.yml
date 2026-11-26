@@ -221,7 +221,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          REGISTER_TITLE: An EHDS initiative moved in the Commission's Have your say register
+          REGISTER_TITLE: An EHDS initiative moved or published in the Commission's Have your say register
         run: |
           set -euo pipefail
           # One issue per CELEX number, never a second for the same act: the
@@ -269,7 +269,7 @@ jobs:
               --title "$title" --body-file act.md --label chore
           done
 
-          if grep -qE '^(MOVED|NEW-INITIATIVE) ' ehds-acts.txt; then
+          if grep -qE '^(MOVED|NEW-INITIATIVE|NEW-PUBLICATION|CHANGED|GONE) ' ehds-acts.txt; then
             open="$(gh issue list --state open --limit 500 --json number,title \
               --jq "[.[] | select(.title == \"$REGISTER_TITLE\")] | length")"
             if [ "$open" -ne 0 ]; then
@@ -277,14 +277,15 @@ jobs:
               exit 0
             fi
             {
-              echo "\`scripts/checks/ehds-acts.sh\` found an initiative on Regulation (EU) 2025/327 the repository has not recorded, or a watched one at a new stage."
+              echo "\`scripts/checks/ehds-acts.sh\` found an initiative on Regulation (EU) 2025/327 the repository has not recorded, a watched one at a new stage, or a publication of a watched one that is new, changed its feedback status or is gone. A draft open for feedback has a deadline: read it now."
               echo
               echo '```text'
-              grep -E '^(MOVED|NEW-INITIATIVE) ' ehds-acts.txt
+              grep -E '^(MOVED|NEW-INITIATIVE|NEW-PUBLICATION|CHANGED|GONE) ' ehds-acts.txt
               echo '```'
               echo
               echo "Read the initiative at https://ec.europa.eu/info/law/better-regulation/have-your-say/initiatives_en,"
-              echo "then record its id in \`KNOWN_INITIATIVES\` and its stage in \`WATCHED_INITIATIVES\`."
+              echo "then record its id in \`KNOWN_INITIATIVES\`, its stage in \`WATCHED_INITIATIVES\` and its published"
+              echo "publications with their feedback status in \`WATCHED_PUBLICATIONS\`."
               echo
               echo "Reported by [this run]($RUN_URL)."
             } > register.md

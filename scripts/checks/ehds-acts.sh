@@ -24,16 +24,23 @@
 # `watched` when it rests on one of the WATCHED_ARTICLES.
 #
 # Have your say: every initiative the register finds for "European Health
-# Data Space", and the stage of each one WATCHED_INITIATIVES records. An
-# initiative the register lists that KNOWN_INITIATIVES does not prints a
-# NEW-INITIATIVE line, and a watched one at another stage a MOVED line.
+# Data Space", and the stage and the published publications of each one
+# WATCHED_INITIATIVES records. An initiative the register lists that
+# KNOWN_INITIATIVES does not prints a NEW-INITIATIVE line, and a watched one
+# at another stage a MOVED line. A stage does not move when a draft opens
+# for feedback (a draft implementing act stays at `ISC_WORKFLOW` before and
+# after), so each published publication is compared with
+# WATCHED_PUBLICATIONS too: one it does not record prints a NEW-PUBLICATION
+# line with its type, its feedback status and the end of its feedback
+# period, one whose feedback status changed a CHANGED line, and one the
+# register no longer publishes a GONE line.
 #
 #   scripts/checks/ehds-acts.sh --self-test
 #
 # Runs the classification over fixtures, offline.
 #
-# Exit 0 when nothing changed, 1 when an act or an initiative is new or a
-# watched initiative moved, 2 when a source could not be read, so a source
+# Exit 0 when nothing changed, 1 when an act, an initiative or a publication
+# is new, or a watched initiative moved or a publication changed, 2 when a source could not be read, so a source
 # that does not answer never reads as nothing new. Needs awk, curl, grep and
 # jq.
 set -euo pipefail
@@ -86,6 +93,18 @@ readonly WATCHED_INITIATIVES="\
 17512	ISC_WORKFLOW	Art 15(1), the exchange format
 18579	PLANNING_WORKFLOW	Art 36(1), the common specifications for the harmonised components
 17513	ISC_WORKFLOW	Art 40(4), the European digital testing environment"
+
+# One "initiative<TAB>publication<TAB>type<TAB>feedback status" record per
+# line: a publication of a watched initiative the register had published,
+# with the `receivingFeedbackStatus` it showed on 2026-11-26. The drafts of
+# 17513 (published 2026-11-19, feedback until 2026-12-17) and of 17512
+# (published 2026-11-23, feedback until 2026-12-21) are open (#2017).
+readonly WATCHED_PUBLICATIONS="\
+17512	22660	INIT_PLANNED	DISABLED
+17512	26799	REG_IMPL_DRAFT	OPEN
+17513	22663	INIT_PLANNED	DISABLED
+17513	26762	REG_IMPL_DRAFT	OPEN
+18579	24892	INIT_PLANNED	DISABLED"
 
 # basis_text CODE: a Cellar legal-basis code (`A23P4`, `A92P11FR1`) as
 # `Art 23(4)`, a zero-padded number (`A07P4`) without its zeros, with any
@@ -169,6 +188,46 @@ classify_initiatives() {
   return "$changed"
 }
 
+# classify_publications RECORDED: reads "initiative<TAB>publication<TAB>type<TAB>
+# status<TAB>published<TAB>end" records on stdin, one per published
+# publication of every watched initiative, `-` for an end the register does
+# not give, and prints one line per publication, then a GONE line for each
+# one RECORDED, records in the form of WATCHED_PUBLICATIONS, holds that the
+# input lacks; returns 1 when one is new, changed or gone.
+classify_publications() {
+  local recorded="$1" initiative publication type status published end want seen="" changed=0
+  while IFS=$'\t' read -r initiative publication type status published end; do
+    [[ -n "$publication" ]] || continue
+    seen="$seen$initiative"$'\t'"$publication"$'\n'
+    want="$(awk -F'\t' -v i="$initiative" -v p="$publication" '$1 == i && $2 == p { print $4; exit }' <<< "$recorded")"
+    if [[ -z "$want" ]]; then
+      printf 'NEW-PUBLICATION %s/%s: %s published %s, feedback %s until %s\n' \
+        "$initiative" "$publication" "$type" "$published" "$status" "$end"
+      changed=1
+    elif [[ "$status" != "$want" ]]; then
+      printf 'CHANGED    %s/%s: %s feedback %s, recorded %s, until %s\n' \
+        "$initiative" "$publication" "$type" "$status" "$want" "$end"
+      changed=1
+    else
+      printf 'publication %s/%s %s feedback %s\n' "$initiative" "$publication" "$type" "$status"
+    fi
+  done
+  while IFS=$'\t' read -r initiative publication type _; do
+    if ! grep -qxF "$initiative"$'\t'"$publication" <<< "$seen"; then
+      printf 'GONE       %s/%s: %s, recorded as published, is no longer published\n' \
+        "$initiative" "$publication" "$type"
+      changed=1
+    fi
+  done <<< "$recorded"
+  return "$changed"
+}
+
+# recorded_publications: every WATCHED_PUBLICATIONS record as the register
+# would answer it, for the self-test.
+recorded_publications() {
+  awk -F'\t' '{ printf "%s\t%s\t%s\t%s\t2026/11/19 16:17:10\t-\n", $1, $2, $3, $4 }' <<< "$WATCHED_PUBLICATIONS"
+}
+
 self_test() {
   local failed=0 got status
   # expect WANT GOT WHAT: one comparison of the self-test.
@@ -230,6 +289,38 @@ NEW-ACT    32024R2847R(08) CRA corrigendum 2027-05-01 (no article recorded): Cor
   status=0
   got="$(printf '19999\t-\tA new one\n' | classify_initiatives)" || status=$?
   expect "1 NEW-INITIATIVE 19999: A new one" "$status $got" "a new initiative"
+
+  # changes FEED [RECORDED]: the lines classify_publications prints for FEED
+  # against RECORDED, WATCHED_PUBLICATIONS by default, other than an
+  # unchanged publication, after its exit status.
+  changes() {
+    local out code=0
+    out="$(classify_publications "${2:-$WATCHED_PUBLICATIONS}" <<< "$1")" || code=$?
+    printf '%s %s' "$code" "$(grep -v '^publication ' <<< "$out" || true)"
+  }
+  expect "0 " "$(changes "$(recorded_publications)")" "the recorded publications, unchanged"
+  expect "1 CHANGED    17513/26762: REG_IMPL_DRAFT feedback CLOSED, recorded OPEN, until 2026/12/17 23:59:59" \
+    "$(changes "$(recorded_publications | grep -v $'\t26762\t'
+      printf '17513\t26762\tREG_IMPL_DRAFT\tCLOSED\t2026/11/19 16:17:10\t2026/12/17 23:59:59\n')")" \
+    "a draft whose feedback closed"
+  expect "1 NEW-PUBLICATION 18579/24893: REG_IMPL_DRAFT published 2027/02/01 10:00:00, feedback OPEN until 2027/03/01 23:59:59" \
+    "$(changes "$(recorded_publications
+      printf '18579\t24893\tREG_IMPL_DRAFT\tOPEN\t2027/02/01 10:00:00\t2027/03/01 23:59:59\n')")" \
+    "a draft that opens while the stage stays ISC_WORKFLOW"
+  expect "1 GONE       17512/26799: REG_IMPL_DRAFT, recorded as published, is no longer published" \
+    "$(changes "$(recorded_publications | grep -v $'\t26799\t')")" \
+    "a recorded draft the register no longer publishes"
+  # The two drafts as the register published them (read 2026-11-26), against the record the
+  # watcher kept by stage alone: both open while the stage stays ISC_WORKFLOW.
+  expect "1 NEW-PUBLICATION 17512/26799: REG_IMPL_DRAFT published 2026/11/23 09:17:20, feedback OPEN until 2026/12/21 23:59:59
+NEW-PUBLICATION 17513/26762: REG_IMPL_DRAFT published 2026/11/19 16:17:10, feedback OPEN until 2026/12/17 23:59:59" \
+    "$(changes "$(printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+      17512 22660 INIT_PLANNED DISABLED '2026/03/30 18:08:00' - \
+      17512 26799 REG_IMPL_DRAFT OPEN '2026/11/23 09:17:20' '2026/12/21 23:59:59' \
+      17513 22663 INIT_PLANNED DISABLED '2026/03/30 18:08:17' - \
+      17513 26762 REG_IMPL_DRAFT OPEN '2026/11/19 16:17:10' '2026/12/17 23:59:59')" \
+      "$(grep -v REG_IMPL_DRAFT <<< "$WATCHED_PUBLICATIONS" | grep -v '^18579')")" \
+    "the drafts of 17512 and 17513 against a record of their planning publications alone"
 
   [[ "$failed" -eq 0 ]] || exit 1
   echo "ehds-acts: self-test OK."
@@ -328,15 +419,21 @@ if ! search="$(curl --fail --silent --show-error --max-time 120 --get --user-age
   unreadable=1
 else
   records=""
+  publications=""
   while IFS=$'\t' read -r id title; do
     [[ -n "$id" ]] || continue
     stage="-"
-    if grep -qE "^$id"$'\t' <<< "$WATCHED_INITIATIVES" &&
-      ! stage="$(curl --fail --silent --show-error --max-time 60 --user-agent "$UA" \
-        "$REGISTER/groupInitiatives/$id" | jq --raw-output --exit-status '.stage' 2>&1)"; then
-      printf 'UNREADABLE Have your say: the stage of initiative %s could not be read (%s)\n' "$id" "$stage"
-      unreadable=1
-      continue
+    if grep -qE "^$id"$'\t' <<< "$WATCHED_INITIATIVES"; then
+      if ! group="$(curl --fail --silent --show-error --max-time 60 --user-agent "$UA" \
+        "$REGISTER/groupInitiatives/$id" | jq --compact-output --exit-status \
+        '{stage: (.stage // error("no stage")), publications: [.publications[]? | select(.publishedDate != null)
+          | [(.id | floor | tostring), .type, .receivingFeedbackStatus, .publishedDate, (.endDate // "-")]]}' 2>&1)"; then
+        printf 'UNREADABLE Have your say: initiative %s could not be read (%s)\n' "$id" "$group"
+        unreadable=1
+        continue
+      fi
+      stage="$(jq --raw-output '.stage' <<< "$group")"
+      publications="$publications$(jq --raw-output --arg id "$id" '.publications[] | [$id] + . | @tsv' <<< "$group")"$'\n'
     fi
     records="$records$id"$'\t'"$stage"$'\t'"$title"$'\n'
   done <<< "$search"
@@ -349,6 +446,7 @@ else
     fi
   done <<< "$WATCHED_INITIATIVES"
   classify_initiatives <<< "$records" || status=1
+  classify_publications "$WATCHED_PUBLICATIONS" <<< "$publications" || status=1
 fi
 
 [[ "$unreadable" -eq 0 ]] || exit 2
