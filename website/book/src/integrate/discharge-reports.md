@@ -75,19 +75,33 @@ this query. A composition two members hold under
 one version id is listed once, from the member that created it.
 
 Reading the URL asks that member alone for the composition and writes it
-as an HL7 Europe Hospital Discharge Report 1.0.0 `bundle-eu-hdr` in the
-composition's language: a `composition-eu-hdr` authored by the gateway's
-`Device` and the operator, its custodian the member's organisation, about
-a `Patient` named by the
-identifier the identity binding holds behind the member's `ehr_id` and
-described by the demographics binding's header as the laboratory report's
-is, with the stay as its
-`encounter-eu-hdr` and each diagnosis, procedure and discharge medicine in
-its section. A hospital course section says the member's record holds none
-the gateway writes, since `composition-eu-hdr` requires a discharge
-summary or a hospital course. One `Provenance` names the member for every
-mapped entry. A composition that does not map answers `424`, and a member
-whose binding names no patient in `fhir.receive_namespaces` answers `424`.
+in the form a national contact point sends, MyHealth@EU Hospital Discharge
+Report 9.2.0 `bundle-hdr-myhealtheu`, derived from HL7 Europe Hospital
+Discharge Report 1.0.0 `bundle-eu-hdr`:
+
+- its `composition-hdr-myhealtheu` is authored by the author the record
+  names: the composer as a `Practitioner` when it is an identified party
+  with a name, else the context's health care facility as an
+  `Organization`. MyHealth@EU allows no `Device` author;
+- it is written in the record's language-region tag, the composition's
+  language (ISO 639-1) and territory (ISO 3166-1), such as `nl-NL`, once the
+  terminology server of `[eehrxf.terminology]` answers that `eHDSILanguage`
+  holds it, since `composition-hdr-myhealtheu` binds `Composition.language`
+  required to that value set;
+- its custodian is the member's organisation, its subject a `Patient` named
+  by the identifier the identity binding holds behind the member's `ehr_id`
+  and described by the demographics binding's header as the laboratory
+  report's is, with the stay as its encounter and each diagnosis, procedure
+  and discharge medicine in its section;
+- a hospital course section says the member's record holds none the
+  gateway writes, since `composition-eu-hdr` requires a discharge summary
+  or a hospital course, and one `Provenance` names the member for every
+  mapped entry.
+
+A composition that names no author, no language and territory, or a tag
+`eHDSILanguage` does not hold, answers `424`, and so does a deployment with
+no terminology server, a composition that does not map, and a member whose
+binding names no patient in `fhir.receive_namespaces`.
 Completeness and the access record follow the laboratory report's
 ([Laboratory reports the gateway writes](laboratory-reports.md)).
 
