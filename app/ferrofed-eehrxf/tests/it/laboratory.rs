@@ -13,6 +13,7 @@ use std::error::Error;
 
 use eehrxf::crosswalk::laboratory::LABORATORY;
 use eehrxf::document::laboratory::LAB_BUNDLE;
+use eehrxf::terminology::Terminology;
 use ferrofed_eehrxf::laboratory::{self, ARCHETYPES, ELEMENT, SLUG, Served};
 use ferrofed_eehrxf::prescriptions::mapped::Template;
 use ferrofed_eehrxf::reserved::{self, NAMESPACE, SAVED, VERSION};
@@ -131,8 +132,8 @@ fn the_query_feeds_a_row_of_the_laboratory_report_crosswalk() {
     assert!(LABORATORY.row(ELEMENT).is_some(), "{ELEMENT}");
 }
 
-#[test]
-fn the_gateway_and_the_testkit_name_one_result_context() {
+#[tokio::test]
+async fn the_gateway_and_the_testkit_name_one_result_context() {
     assert_eq!(
         laboratory::RESULT_CONTEXT,
         ferrofed_testkit::laboratory::RESULT_CONTEXT
@@ -148,7 +149,7 @@ fn the_gateway_and_the_testkit_name_one_result_context() {
 /// The laboratory report the gateway writes from the testkit's synthetic
 /// composition, about the patient the identity binding describes with
 /// `header`, as JSON text.
-fn written(header: &PatientHeader) -> Result<String, Box<dyn Error>> {
+async fn written(header: &PatientHeader) -> Result<String, Box<dyn Error>> {
     let dir = tempfile::tempdir()?;
     let composition = fixture::composition(
         dir.path(),
@@ -166,7 +167,9 @@ fn written(header: &PatientHeader) -> Result<String, Box<dyn Error>> {
             "urn:uuid:7c4e1d20-0000-4000-8000-0000000008b1",
         ),
         header,
-    )?;
+        &Terminology::none(),
+    )
+    .await?;
     Ok(serde_json::to_string(&bundle)?)
 }
 
@@ -192,7 +195,7 @@ async fn a_written_laboratory_report_conforms_to_bundle_eu_lab() -> TestResult {
         birth_date: Some(String::from("1970-01-01")),
         ..PatientHeader::default()
     };
-    let text = written(&header)?;
+    let text = written(&header).await?;
     let breaks = breaks(&text).await?;
     assert!(breaks.is_empty(), "{breaks:#?}");
     ferrofed_testkit::emit::document(
@@ -205,14 +208,15 @@ async fn a_written_laboratory_report_conforms_to_bundle_eu_lab() -> TestResult {
 
 #[tokio::test]
 async fn a_laboratory_report_of_a_patient_the_binding_holds_nothing_of_conforms() -> TestResult {
-    let breaks = breaks(&written(&PatientHeader::default())?).await?;
+    let breaks = breaks(&written(&PatientHeader::default()).await?).await?;
     assert!(breaks.is_empty(), "{breaks:#?}");
     Ok(())
 }
 
-#[test]
-fn the_composition_names_the_member_its_custodian() -> TestResult {
-    let bundle: serde_json::Value = serde_json::from_str(&written(&PatientHeader::default())?)?;
+#[tokio::test]
+async fn the_composition_names_the_member_its_custodian() -> TestResult {
+    let bundle: serde_json::Value =
+        serde_json::from_str(&written(&PatientHeader::default()).await?)?;
     let custodian = conforming::custodian(&bundle)?;
     assert_eq!(custodian["resourceType"], "Organization", "{custodian}");
     assert_eq!(custodian["name"], conforming::MEMBER, "{custodian}");

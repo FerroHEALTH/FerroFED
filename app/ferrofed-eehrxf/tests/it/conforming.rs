@@ -12,19 +12,39 @@ use std::path::PathBuf;
 use eehrxf::receive::ReceivedDocument;
 use eehrxf::receive::validation::ValidationError;
 use ferrobridge_validator::set::PackageSet;
+use std::sync::Arc;
+
+use eehrxf::terminology::Terminology;
 use ferrofed_eehrxf::report::{Report, Writes};
 use ferrofed_eehrxf::summary::Organisation;
+use ferrofed_eehrxf::terminology::BridgeTerminology;
 use ferrofed_identity::role::header::PatientHeader;
+use ferrofed_testkit::ehdsi_language;
+use ferrofed_testkit::mock::Server;
 use fhir_types::r4::bundle::Bundle;
 use serde_json::Value;
 
+/// The terminology the stub server of [`ehdsi_language::start`] answers
+/// eHDSILanguage from; the server lives as long as the returned handle.
+pub(crate) async fn language_terminology() -> Result<(Server, Terminology), Box<dyn Error>> {
+    let server = ehdsi_language::start().await;
+    let endpoint = serde_json::from_value(serde_json::json!({
+        "url": format!("{}{}", server.uri(), ehdsi_language::BASE),
+        "retry": { "max_attempts": 1 },
+    }))?;
+    let client = BridgeTerminology::from_endpoint(&endpoint, "eehrxf.terminology.endpoint")?;
+    Ok((server, Terminology::server(Arc::new(client))))
+}
+
 /// The report `served` writes from `composition`, named `identifier`, read
 /// at a synthetic member for a synthetic operator, about the synthetic
-/// patient the identity binding describes with `header`.
-pub(crate) fn written(
+/// patient the identity binding describes with `header`, asking
+/// `terminology` whether a value set the form binds holds what it writes.
+pub(crate) async fn written(
     served: &dyn Writes,
     (composition, identifier): (&str, &str),
     header: &PatientHeader,
+    terminology: &Terminology,
 ) -> Result<Bundle, Box<dyn Error>> {
     let organisation = |name: &str| Organisation {
         id: name.to_lowercase().replace(' ', "-"),
@@ -32,18 +52,21 @@ pub(crate) fn written(
         identifiers: Vec::new(),
     };
     let (operator, member) = (organisation("Synthetic operator"), organisation(MEMBER));
-    Ok(served.document(
-        composition,
-        Report {
-            base: "https://gateway.example.org/fhir",
-            identifier,
-            timestamp: "2026-10-21T08:00:00Z",
-            patient: ("urn:oid:2.999.1", "synthetic-patient-0001"),
-            header,
-            operator: &operator,
-            member: &member,
-        },
-    )?)
+    Ok(served
+        .document(
+            composition,
+            Report {
+                base: "https://gateway.example.org/fhir",
+                identifier,
+                timestamp: "2026-10-21T08:00:00Z",
+                patient: ("urn:oid:2.999.1", "synthetic-patient-0001"),
+                header,
+                operator: &operator,
+                member: &member,
+            },
+            terminology,
+        )
+        .await?)
 }
 
 /// The name of the member [`written`] reads the report at.

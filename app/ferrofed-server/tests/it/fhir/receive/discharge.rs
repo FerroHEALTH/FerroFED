@@ -15,6 +15,7 @@ use eehrxf::category::Category;
 use eehrxf::document::discharge::HDR_BUNDLE;
 use eehrxf::receive::ReceivedDocument;
 use ferrofed_testkit::discharge;
+use ferrofed_testkit::ehdsi_language;
 use ferrofed_testkit::mock::Server;
 use ferrofed_testkit::pdqm_stub;
 use http::StatusCode;
@@ -39,12 +40,13 @@ const OBJECT: &str = "5b0c3f7e-0000-4000-8000-00000000d1a1";
 
 /// The `[fhir]` tables of a face that writes discharge reports with
 /// `report`, the `[[fhir.report]]` entry, the header asked of the PDQm
-/// Supplier at `pdq`.
-fn writing(pdq: &str, report: &str) -> String {
+/// Supplier at `pdq`, and the terminology server `terminology` answers
+/// eHDSILanguage at.
+fn writing(pdq: &str, report: &str, terminology: &Server) -> String {
     fhir_tables_with(
         pdq,
         &format!("receive_namespaces = [\"{NAMESPACE}\"]"),
-        report,
+        &format!("{report}{}", ehdsi_language::table(terminology)),
     )
 }
 
@@ -67,7 +69,7 @@ fn declared() -> String {
 fn gateway(
     dir: &Path,
     (a, b): (&Server, &Server),
-    pdq: &Server,
+    (pdq, terminology): (&Server, &Server),
 ) -> Result<axum::Router, Box<dyn Error>> {
     let crossref = rows(&[
         (NAMESPACE, PATIENT, "node-a", EHR_A),
@@ -76,7 +78,10 @@ fn gateway(
     gateway_with(
         dir,
         (a, b),
-        (&crossref, &writing(&pdqm_stub::base_url(pdq), &declared())),
+        (
+            &crossref,
+            &writing(&pdqm_stub::base_url(pdq), &declared(), terminology),
+        ),
         &settings_with_room(),
     )
 }
@@ -129,7 +134,8 @@ async fn a_members_discharge_composition_is_listed_and_read_as_a_discharge_repor
     );
     let dir = tempfile::tempdir()?;
     let pdq = supplier().await;
-    let app = gateway(dir.path(), (&a, &b), &pdq)?;
+    let terminology = ehdsi_language::start().await;
+    let app = gateway(dir.path(), (&a, &b), (&pdq, &terminology))?;
     let (status, text) = call(app.clone(), list("&type=34105-7")?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let bundle: Value = serde_json::from_str(&text)?;
@@ -212,10 +218,11 @@ async fn read_with(
         (NAMESPACE, PATIENT, "node-a", EHR_A),
         (NAMESPACE, PATIENT, "node-b", EHR_B),
     ]);
+    let terminology = ehdsi_language::start().await;
     let app = gateway_with(
         dir,
         (&a, &b),
-        (&crossref, &writing(pdq, &declared())),
+        (&crossref, &writing(pdq, &declared(), &terminology)),
         &settings_with_room(),
     )?;
     let (status, text) = call(app.clone(), list("&type=34105-7")?).await?;
@@ -412,7 +419,8 @@ async fn a_member_silent_at_the_discharge_query_fails_the_list_and_is_named() ->
     let b = holding("", None).await;
     let dir = tempfile::tempdir()?;
     let pdq = supplier().await;
-    let app = gateway(dir.path(), (&a, &b), &pdq)?;
+    let terminology = ehdsi_language::start().await;
+    let app = gateway(dir.path(), (&a, &b), (&pdq, &terminology))?;
     let (status, text) = call(app, list("&type=34105-7")?).await?;
     assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "§11.3: {text}");
     assert!(text.contains("node-a-pub"), "§11.4: {text}");
@@ -424,7 +432,8 @@ async fn a_list_of_another_type_asks_no_discharge_query() -> TestResult {
     let (a, b) = (holding("", None).await, holding("", None).await);
     let dir = tempfile::tempdir()?;
     let pdq = supplier().await;
-    let app = gateway(dir.path(), (&a, &b), &pdq)?;
+    let terminology = ehdsi_language::start().await;
+    let app = gateway(dir.path(), (&a, &b), (&pdq, &terminology))?;
     let (status, text) = call(app, list("&type=100719-4")?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let queried = received(&a)
@@ -443,12 +452,16 @@ async fn a_list_of_another_type_asks_no_discharge_query() -> TestResult {
 /// `report`.
 async fn refused(report: &str) -> Result<String, Box<dyn Error>> {
     let (a, b) = (holding("", None).await, holding("", None).await);
+    let terminology = ehdsi_language::start().await;
     let dir = tempfile::tempdir()?;
     let crossref = rows(&[(NAMESPACE, PATIENT, "node-a", EHR_A)]);
     match gateway_with(
         dir.path(),
         (&a, &b),
-        (&crossref, &writing(UNREACHED_SUPPLIER, report)),
+        (
+            &crossref,
+            &writing(UNREACHED_SUPPLIER, report, &terminology),
+        ),
         &settings_with_room(),
     ) {
         Ok(_) => Err(format!("accepted: {report}").into()),
@@ -493,9 +506,10 @@ async fn the_written_discharge_list_and_read_are_recorded_under_the_category() -
         (NAMESPACE, PATIENT, "node-b", EHR_B),
     ]);
     let pdq = supplier().await;
+    let terminology = ehdsi_language::start().await;
     let tables = format!(
         "{}\n{}",
-        writing(&pdqm_stub::base_url(&pdq), &declared()),
+        writing(&pdqm_stub::base_url(&pdq), &declared(), &terminology),
         audit_tables(&repository, "")
     );
     let app = gateway_with(

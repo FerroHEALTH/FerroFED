@@ -17,13 +17,17 @@
 
 use std::collections::BTreeSet;
 
+use async_trait::async_trait;
 use eehrxf::category::Category;
+use eehrxf::document::authored::recorded_author;
 use eehrxf::document::discharge::HDR_BUNDLE;
 use eehrxf::document::imaging::IMAGING_BUNDLE;
 use eehrxf::document::laboratory::LAB_BUNDLE;
+use eehrxf::document::language::LanguageError;
 use eehrxf::document::{Document, DocumentError};
 use eehrxf::mapping::{Mapping, MappingError};
 use eehrxf::mappings::{Project, UnknownContext};
+use eehrxf::terminology::Terminology;
 use ferrofed_identity::role::header::{PatientHeader, PersonName};
 use fhir_types::r4::bundle::Bundle;
 use fhir_types::r4::codeable_concept::CodeableConcept;
@@ -82,9 +86,16 @@ pub enum ServedError {
     /// The shipped mapping does not compile against the template.
     #[error("the shipped mapping does not compile against the template")]
     Compile(#[source] MappingError),
-    /// The composition is no canonical JSON composition with a language.
-    #[error("the composition names no language")]
-    Language(#[source] serde_json::Error),
+    /// The composition is no canonical JSON.
+    #[error("the composition is no canonical JSON")]
+    Composition(#[source] serde_json::Error),
+    /// The composition's language and territory give no language the
+    /// document's form takes.
+    #[error("the composition names no language the report's form takes")]
+    Language(#[source] LanguageError),
+    /// The composition names no author the report's form takes.
+    #[error("the composition names no author the report's form takes")]
+    Author(#[source] DocumentError),
     /// The composition does not map.
     #[error("the composition does not map")]
     Run(#[source] MappingError),
@@ -104,23 +115,62 @@ pub(crate) fn compiled(template: Template<'_>, project: &Project) -> Result<Mapp
     Mapping::compile_project(&source, project).map_err(ServedError::Compile)
 }
 
-/// Names in `document` the patient `report` names and the authors, the
-/// gateway's `Device`, described as `software`, and the operator's
-/// `Organization`, then runs `mapping` over `composition` for them.
+/// Who a written report names as its authors.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Author<'a> {
+    /// The gateway's `Device`, described as `software`, and the operator's
+    /// `Organization`, for a form whose profile allows a `Device` author.
+    Gateway(&'a str),
+    /// The author the member's composition records
+    /// (`eehrxf::document::authored::recorded_author`).
+    Record,
+}
+
+/// Names in `document` the patient `report` names and the authors `author`
+/// names, then runs `mapping` over `composition` for them.
 ///
 /// # Errors
 ///
 /// [`ServedError::Document`] for a resource the document does not take,
-/// and [`ServedError::Run`] when the composition does not map.
+/// [`ServedError::Composition`] for a composition that is no JSON,
+/// [`ServedError::Author`] for one that records no author, and
+/// [`ServedError::Run`] when the composition does not map.
 pub(crate) fn authored(
     document: &mut Document,
     report: Report<'_>,
-    software: &str,
+    author: Author<'_>,
     (mapping, composition): (&Mapping, &str),
 ) -> Result<ToFhirResponse, ServedError> {
     let subject = document
         .with_patient(patient(report))
         .map_err(ServedError::Document)?;
+    let who = match author {
+        Author::Gateway(software) => gateway(document, report, software)?,
+        Author::Record => {
+            let record = serde_json::from_str(composition).map_err(ServedError::Composition)?;
+            let recorded = recorded_author(&record).map_err(ServedError::Author)?;
+            document
+                .with_author(&recorded)
+                .map_err(ServedError::Document)?
+        }
+    };
+    let settings = Settings::new(who.clone(), report.timestamp);
+    let context = CallContext::new()
+        .with_patient(reference(&subject))
+        .with_who(reference(&who));
+    mapping
+        .to_fhir_with(composition, &settings, context)
+        .map_err(ServedError::Run)
+}
+
+/// Names in `document` the gateway's `Device`, described as `software`, and
+/// the operator's `Organization` as its authors, returning the `Device`'s
+/// `fullUrl`.
+fn gateway(
+    document: &mut Document,
+    report: Report<'_>,
+    software: &str,
+) -> Result<String, ServedError> {
     let operator = document.full_url("Organization", "operator");
     let device = document
         .with_author(&Resource::Device(Box::new(Device {
@@ -144,13 +194,7 @@ pub(crate) fn authored(
             report.operator,
         ))))
         .map_err(ServedError::Document)?;
-    let settings = Settings::new(device.clone(), report.timestamp);
-    let context = CallContext::new()
-        .with_patient(reference(&subject))
-        .with_who(reference(&device));
-    mapping
-        .to_fhir_with(composition, &settings, context)
-        .map_err(ServedError::Run)
+    Ok(device)
 }
 
 /// The `Patient` of `report`: the identifier it is named by and every
@@ -262,14 +306,21 @@ pub(crate) fn withheld(run: &Bundle) -> Option<String> {
 
 /// A shipped mapping compiled against a deployment's template, which writes
 /// a member's composition as the document of its category.
+#[async_trait]
 pub trait Writes: std::fmt::Debug + Send + Sync {
     /// Writes `composition`, a composition in canonical JSON, as the
-    /// document `report` names.
+    /// document `report` names, asking `terminology` whether a value set
+    /// the form binds holds what the document writes.
     ///
     /// # Errors
     ///
     /// The [`ServedError`] that says why no document is written.
-    fn document(&self, composition: &str, report: Report<'_>) -> Result<Bundle, ServedError>;
+    async fn document(
+        &self,
+        composition: &str,
+        report: Report<'_>,
+        terminology: &Terminology,
+    ) -> Result<Bundle, ServedError>;
 }
 
 /// A category of report the gateway writes from one member's composition.
@@ -333,7 +384,9 @@ impl Written {
         self.priority().code()
     }
 
-    /// Returns the document `Bundle` profile the report is written in.
+    /// Returns the category's document `Bundle` profile, the format a
+    /// listing names; the discharge report's MyHealth@EU `Bundle` profile is
+    /// derived from it.
     #[must_use]
     pub const fn bundle(self) -> &'static str {
         match self {
