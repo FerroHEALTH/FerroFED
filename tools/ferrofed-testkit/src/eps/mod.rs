@@ -63,26 +63,9 @@ pub fn mapping_files() -> [PathBuf; 2] {
 /// query in a test that uses it.
 #[must_use]
 pub fn allergy_composition(uid: &str, template: &str, substance: &str) -> String {
-    serde_json::json!({
-        "_type": "COMPOSITION",
-        "name": { "_type": "DV_TEXT", "value": "Synthetic allergy summary" },
-        "archetype_node_id": "openEHR-EHR-COMPOSITION.ferrofed_summary.v1",
-        "archetype_details": {
-            "_type": "ARCHETYPED",
-            "archetype_id": { "_type": "ARCHETYPE_ID", "value": "openEHR-EHR-COMPOSITION.ferrofed_summary.v1" },
-            "template_id": { "_type": "TEMPLATE_ID", "value": template },
-            "rm_version": "1.1.0"
-        },
-        "uid": { "_type": "OBJECT_VERSION_ID", "value": uid },
-        "language": { "_type": "CODE_PHRASE", "terminology_id": { "_type": "TERMINOLOGY_ID", "value": "ISO_639-1" }, "code_string": "en" },
-        "territory": { "_type": "CODE_PHRASE", "terminology_id": { "_type": "TERMINOLOGY_ID", "value": "ISO_3166-1" }, "code_string": "NL" },
-        "category": {
-            "_type": "DV_CODED_TEXT",
-            "value": "persistent",
-            "defining_code": { "_type": "CODE_PHRASE", "terminology_id": { "_type": "TERMINOLOGY_ID", "value": "openehr" }, "code_string": "431" }
-        },
-        "composer": { "_type": "PARTY_IDENTIFIED", "name": "Synthetic composer" },
-        "content": [{
+    summary(
+        ("Synthetic allergy summary", template, uid),
+        &serde_json::json!([{
             "_type": "EVALUATION",
             "name": { "_type": "DV_TEXT", "value": "Synthetic allergy" },
             "archetype_node_id": "openEHR-EHR-EVALUATION.ferrofed_allergy.v1",
@@ -119,9 +102,8 @@ pub fn allergy_composition(uid: &str, template: &str, substance: &str) -> String
                     }
                 }]
             }
-        }]
-    })
-    .to_string()
+        }]),
+    )
 }
 
 /// The synthetic medication template's id
@@ -267,14 +249,24 @@ pub fn medication_composition(
             }),
         )
     }));
+    summary(
+        ("Synthetic medication summary", MEDICATION_TEMPLATE, uid),
+        &Value::Array(content),
+    )
+}
+
+/// A synthetic persistent composition of the summary archetype named
+/// `name`, of `template`, under the version id `uid`, written in English in
+/// the Netherlands, holding `content`, a JSON array of entries.
+fn summary((name, template, uid): (&str, &str, &str), content: &Value) -> String {
     serde_json::json!({
         "_type": "COMPOSITION",
-        "name": { "_type": "DV_TEXT", "value": "Synthetic medication summary" },
+        "name": { "_type": "DV_TEXT", "value": name },
         "archetype_node_id": "openEHR-EHR-COMPOSITION.ferrofed_summary.v1",
         "archetype_details": {
             "_type": "ARCHETYPED",
             "archetype_id": { "_type": "ARCHETYPE_ID", "value": "openEHR-EHR-COMPOSITION.ferrofed_summary.v1" },
-            "template_id": { "_type": "TEMPLATE_ID", "value": MEDICATION_TEMPLATE },
+            "template_id": { "_type": "TEMPLATE_ID", "value": template },
             "rm_version": "1.1.0"
         },
         "uid": { "_type": "OBJECT_VERSION_ID", "value": uid },

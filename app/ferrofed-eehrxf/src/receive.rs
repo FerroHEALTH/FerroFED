@@ -542,7 +542,7 @@ pub fn nonconformant(findings: &[Finding]) -> OperationOutcome {
 
 /// One issue of `severity` and the FHIR R4 `issue-type` `kind`, with the
 /// text `diagnostics`, at the element path `at` when one is named.
-fn issue(
+pub(crate) fn issue(
     (severity, kind): (&str, &str),
     diagnostics: &str,
     at: Option<&str>,

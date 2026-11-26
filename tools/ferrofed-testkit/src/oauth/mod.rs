@@ -532,32 +532,7 @@ pub struct DpopBound {
 
 impl Match for DpopBound {
     fn matches(&self, request: &Request) -> bool {
-        let Some(token) = request
-            .headers
-            .get(http::header::AUTHORIZATION)
-            .and_then(|value| value.to_str().ok())
-            .and_then(|value| value.strip_prefix("DPoP "))
-        else {
-            return false;
-        };
-        let Some(proof) = request
-            .headers
-            .get(dpop::HEADER)
-            .and_then(|value| value.to_str().ok())
-        else {
-            return false;
-        };
-        // The mock server reads every request over plain HTTP and names its
-        // URL by `localhost`, so the URL the client sent is its Host and path.
-        let Some(host) = request
-            .headers
-            .get(http::header::HOST)
-            .and_then(|value| value.to_str().ok())
-        else {
-            return false;
-        };
-        let htu = format!("http://{host}{}", request.url.path());
-        let Ok(verified) = dpop::verify(proof, request.method.as_str(), &htu, Some(token)) else {
+        let Some((token, verified)) = dpop::proven(request) else {
             return false;
         };
         let ledger = self.issuance.lock();

@@ -118,6 +118,31 @@ pub fn verify(
     Ok(Verified { jkt, proof: claims })
 }
 
+/// The DPoP-bound access token of `request` and its verified proof.
+///
+/// The token is that of its `Authorization: DPoP` header, and the proof that
+/// of its `DPoP` header, verified for the request's method and URL; `None`
+/// when either is missing or the proof does not verify.
+///
+/// The mock server reads every request over plain HTTP and names its URL by
+/// `localhost`, so the URL the client sent is its `Host` and path.
+#[must_use]
+pub fn proven(request: &wiremock::Request) -> Option<(&str, Verified)> {
+    let header = |name: &str| {
+        request
+            .headers
+            .get(name)
+            .and_then(|value| value.to_str().ok())
+    };
+    let token = header(http::header::AUTHORIZATION.as_str())?.strip_prefix("DPoP ")?;
+    let proof = header(HEADER)?;
+    let host = header(http::header::HOST.as_str())?;
+    let htu = format!("http://{host}{}", request.url.path());
+    // NOTE: RFC 9449 §4.3: a proof that does not verify binds nothing, so the request is unbound.
+    let verified = verify(proof, request.method.as_str(), &htu, Some(token)).ok()?;
+    Some((token, verified))
+}
+
 /// The `401` a node answers a proof without its nonce with: a `DPoP`
 /// challenge naming `use_dpop_nonce`, and `nonce` in [`NONCE_HEADER`]
 /// (RFC 9449 §9).
