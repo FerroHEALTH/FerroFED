@@ -305,11 +305,11 @@ openehr-mapping-core = "0.9.1"
 # records behind `balp` and `atna`), owned and published by FerroHEALTH/FerroPIX
 # since #367 and required by a caret range, at the release on ferrohealth-smart
 # 0.34 (#1946).
-ihe-iti = "0.25.0"
+ihe-iti = "0.26.0"
 # The Dutch Generic Functions (NVI, Mitz, LRZa and the Nuts grant), owned and
 # published by FerroHEALTH/FerroPIX since #367 and required by a caret range, at
 # the release on ihe-iti 0.21 (#1946).
-nl-generic-functions = "0.25.0"
+nl-generic-functions = "0.26.0"
 # The FHIR package archive (an npm tarball, gzip over tar) the testkit reads
 # the vendored packages from (#684): flate2 on its pure-Rust backend, at the
 # version tower-http already locks, and tar without the extended attributes.
@@ -415,7 +415,7 @@ ferrohealth-secret = "=0.2.2"
 # session store, the four sign-in routes and the middleware every page sits
 # behind, over ferrohealth-smart's relying party. Pinned exactly, as a product
 # pins every family crate, at the release on ferrohealth-smart 0.34 (#1946).
-ferrohealth-session = { version = "=0.30.0", default-features = false }
+ferrohealth-session = { version = "=0.30.1", default-features = false }
 # The configuration loader of FerroHEALTH/FerroSYS (#1397, #1408): the
 # defaults, the file, the `FERROFED__` overrides and the `--set` pairs read
 # into one typed tree, with where each key came from and the merged table the
