@@ -121,9 +121,9 @@ pub(crate) enum Author<'a> {
     /// The gateway's `Device`, described as `software`, and the operator's
     /// `Organization`, for a form whose profile allows a `Device` author.
     Gateway(&'a str),
-    /// The author the member's composition, in canonical JSON, records
+    /// The author the member's composition records
     /// (`eehrxf::document::authored::recorded_author`).
-    Record(&'a serde_json::Value),
+    Record,
 }
 
 /// Names in `document` the patient `report` names and the authors `author`
@@ -132,7 +132,8 @@ pub(crate) enum Author<'a> {
 /// # Errors
 ///
 /// [`ServedError::Document`] for a resource the document does not take,
-/// [`ServedError::Author`] for a composition that records no author, and
+/// [`ServedError::Composition`] for a composition that is no JSON,
+/// [`ServedError::Author`] for one that records no author, and
 /// [`ServedError::Run`] when the composition does not map.
 pub(crate) fn authored(
     document: &mut Document,
@@ -145,8 +146,9 @@ pub(crate) fn authored(
         .map_err(ServedError::Document)?;
     let who = match author {
         Author::Gateway(software) => gateway(document, report, software)?,
-        Author::Record(record) => {
-            let recorded = recorded_author(record).map_err(ServedError::Author)?;
+        Author::Record => {
+            let record = serde_json::from_str(composition).map_err(ServedError::Composition)?;
+            let recorded = recorded_author(&record).map_err(ServedError::Author)?;
             document
                 .with_author(&recorded)
                 .map_err(ServedError::Document)?

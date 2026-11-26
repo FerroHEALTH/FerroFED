@@ -532,7 +532,7 @@ pub fn received_document(
     )?;
     let composition =
         full_composition("5b0c3f7e-0000-4000-8000-00000000d1c2::hospital.example.org::1");
-    let record: serde_json::Value = serde_json::from_str(&composition)?;
+    let record = serde_json::from_str(&composition)?;
     document.with_language(DocumentLanguage::of_composition(&record)?)?;
     let run = Mapping::compile_project(source, &HDR)?.to_fhir_with(
         &composition,

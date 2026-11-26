@@ -142,8 +142,7 @@ impl Writes for Served {
         report: Report<'_>,
         terminology: &Terminology,
     ) -> Result<Bundle, ServedError> {
-        let record: serde_json::Value =
-            serde_json::from_str(composition).map_err(ServedError::Composition)?;
+        let record = serde_json::from_str(composition).map_err(ServedError::Composition)?;
         let mut document = Document::of(
             &MYHEALTHEU_DISCHARGE_REPORT_FORM,
             report.base,
@@ -165,7 +164,7 @@ impl Writes for Served {
         let mapped = report::authored(
             &mut document,
             report,
-            Author::Record(&record),
+            Author::Record,
             (&self.mapping, composition),
         )?;
         let withheld = report::withheld(mapped.bundle());
