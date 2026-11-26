@@ -53,11 +53,12 @@ use crate::fhir::list::patient::SUMMARY_TYPE;
 use crate::fhir::list::{DOCUMENT_A, DOCUMENT_B, Members, fhir_document, list};
 use crate::support::call;
 
-/// The requests of each path sent before the measured ones.
-const WARM: usize = 2;
+/// The requests of each path, or the runs of each loop, before the measured
+/// ones.
+pub(super) const WARM: usize = 2;
 
-/// The measured requests of each path.
-const MEASURED: usize = 5;
+/// The measured requests of each path, or runs of each loop.
+pub(super) const MEASURED: usize = 5;
 
 /// The stored query the stored-query paths read and run.
 const NAME: &str = "org.example::budget_compositions";
@@ -109,16 +110,37 @@ const BUDGETS: [Budget; 4] = [
     },
 ];
 
-/// What one request cost.
+/// What one request, or one iteration of a loop, cost.
 #[derive(Clone, Copy, Debug, Default)]
-struct Cost {
-    allocations: u64,
-    store_calls: u64,
+pub(super) struct Cost {
+    /// The allocations of the thread that polled it.
+    pub(super) allocations: u64,
+    /// The calls it made into the store.
+    pub(super) store_calls: u64,
 }
 
 /// Counts the store-call events, sent on any thread.
 #[derive(Clone, Default)]
-struct StoreCalls(Arc<AtomicU64>);
+pub(super) struct StoreCalls(Arc<AtomicU64>);
+
+impl StoreCalls {
+    /// Installs a counter as the process's subscriber and returns it.
+    ///
+    /// nextest runs each test in a process of its own, so the global subscriber sees that test's
+    /// store calls alone.
+    pub(super) fn installed() -> Result<Self, Box<dyn Error>> {
+        let calls = Self::default();
+        tracing::subscriber::set_global_default(
+            tracing_subscriber::registry().with(calls.clone()),
+        )?;
+        Ok(calls)
+    }
+
+    /// The store calls counted so far.
+    pub(super) fn counted(&self) -> u64 {
+        self.0.load(Ordering::Relaxed)
+    }
+}
 
 impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for StoreCalls {
     fn on_event(&self, event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
@@ -147,6 +169,23 @@ impl<F: Future> Future for Counted<F> {
     }
 }
 
+/// Runs `work` and returns its output with what it cost: the allocations of
+/// the thread that polled it, and the store calls `calls` counted meanwhile.
+pub(super) async fn counting<F: Future>(calls: &StoreCalls, work: F) -> (F::Output, Cost) {
+    let allocations = Rc::new(Cell::new(0));
+    let before = calls.counted();
+    let output = Counted {
+        inner: Box::pin(work),
+        allocations: Rc::clone(&allocations),
+    }
+    .await;
+    let cost = Cost {
+        allocations: allocations.get(),
+        store_calls: calls.counted().saturating_sub(before),
+    };
+    (output, cost)
+}
+
 /// Sends `request` to `app`, refusing an answer other than `200`, and
 /// returns what it cost.
 async fn costed(
@@ -154,19 +193,10 @@ async fn costed(
     app: &Router,
     request: Request<Body>,
 ) -> Result<Cost, Box<dyn Error>> {
-    let allocations = Rc::new(Cell::new(0));
-    let before = calls.0.load(Ordering::Relaxed);
-    let answer = Counted {
-        inner: Box::pin(call(app.clone(), request)),
-        allocations: Rc::clone(&allocations),
-    }
-    .await;
+    let (answer, cost) = counting(calls, call(app.clone(), request)).await;
     let (status, text) = answer?;
     assert_eq!(StatusCode::OK, status, "{text}");
-    Ok(Cost {
-        allocations: allocations.get(),
-        store_calls: calls.0.load(Ordering::Relaxed).saturating_sub(before),
-    })
+    Ok(cost)
 }
 
 /// A gateway over the members at `a` and `b`, the patient resolved at both,
@@ -228,23 +258,50 @@ async fn measure(
         } else {
             federation
         };
-        let mut least: Option<Cost> = None;
-        for attempt in 0..WARM + MEASURED {
-            let cost = costed(calls, app, request(path)?).await?;
-            if attempt < WARM {
-                continue;
-            }
-            least = Some(match least {
-                Some(seen) => Cost {
-                    allocations: seen.allocations.min(cost.allocations),
-                    store_calls: seen.store_calls.max(cost.store_calls),
-                },
-                None => cost,
-            });
+        let mut seen = Vec::new();
+        for _ in 0..WARM + MEASURED {
+            seen.push(costed(calls, app, request(path)?).await?);
         }
-        costs.push((path, least.ok_or("each path is measured")?));
+        costs.push((path, warm(&seen)?));
     }
     Ok(costs)
+}
+
+/// The least allocations and the most store calls of `seen`, past its first
+/// [`WARM`] runs.
+pub(super) fn warm(seen: &[Cost]) -> Result<Cost, Box<dyn Error>> {
+    seen.iter()
+        .skip(WARM)
+        .copied()
+        .reduce(|least, cost| Cost {
+            allocations: least.allocations.min(cost.allocations),
+            store_calls: least.store_calls.max(cost.store_calls),
+        })
+        .ok_or_else(|| "a run past the warm ones is measured".into())
+}
+
+/// Prints each `(name, cost, budget)` of `rows` and fails when a cost
+/// exceeds its budget.
+#[expect(
+    clippy::print_stdout,
+    reason = "the report is what CI prints, and the budgets are set from it"
+)]
+pub(super) fn judge(rows: &[(String, Cost, Cost)]) -> TestResult {
+    let mut report = String::from("path         allocations (budget)   store calls (budget)\n");
+    let mut over = Vec::new();
+    for (name, cost, budget) in rows {
+        writeln!(
+            report,
+            "{name:<12} {:>12} ({:>8}) {:>12} ({:>6})",
+            cost.allocations, budget.allocations, cost.store_calls, budget.store_calls
+        )?;
+        if cost.allocations > budget.allocations || cost.store_calls > budget.store_calls {
+            over.push(name.as_str());
+        }
+    }
+    println!("{report}");
+    assert!(over.is_empty(), "over budget: {over:?}\n{report}");
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -269,29 +326,18 @@ async fn every_hot_path_holds_its_allocation_and_store_call_budget() -> TestResu
     let members = Members::start(fhir_document(DOCUMENT_A), fhir_document(DOCUMENT_B)).await?;
     let face_store = store_toml(&server, "budget_face", dir.path())?;
     let face = tokio::task::block_in_place(|| members.gateway(dir.path(), ("", &face_store)))?;
-    let calls = StoreCalls::default();
-    let subscriber = tracing_subscriber::registry().with(calls.clone());
-    // NOTE: nextest runs each test in a process of its own, so the global subscriber sees this
-    // test's store calls alone.
-    tracing::subscriber::set_global_default(subscriber)?;
-    let costs = measure(&calls, (&federation, &face)).await?;
-    let mut report = String::from("path        allocations (budget)   store calls (budget)\n");
-    let mut over = Vec::new();
-    for (path, cost) in &costs {
+    let calls = StoreCalls::installed()?;
+    let mut rows = Vec::new();
+    for (path, cost) in measure(&calls, (&federation, &face)).await? {
         let budget = BUDGETS
             .iter()
-            .find(|budget| budget.path == *path)
+            .find(|budget| budget.path == path)
             .ok_or("each path has a budget")?;
-        writeln!(
-            report,
-            "{path:<10?} {:>12} ({:>8}) {:>12} ({:>6})",
-            cost.allocations, budget.allocations, cost.store_calls, budget.store_calls
-        )?;
-        if cost.allocations > budget.allocations || cost.store_calls > budget.store_calls {
-            over.push(*path);
-        }
+        let ceiling = Cost {
+            allocations: budget.allocations,
+            store_calls: budget.store_calls,
+        };
+        rows.push((format!("{path:?}"), cost, ceiling));
     }
-    println!("{report}");
-    assert!(over.is_empty(), "over budget: {over:?}\n{report}");
-    Ok(())
+    judge(&rows)
 }
