@@ -129,7 +129,7 @@ async fn a_members_imaging_composition_is_listed_and_read_as_an_imaging_report()
     let dir = tempfile::tempdir()?;
     let pdq = supplier().await;
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
-    let (status, text) = call(app.clone(), list("&type=85430-7")?).await?;
+    let (status, text) = call(app.clone(), list("&type=18748-4")?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let bundle: Value = serde_json::from_str(&text)?;
     let matches = entries(&bundle, "match");
@@ -138,10 +138,10 @@ async fn a_members_imaging_composition_is_listed_and_read_as_an_imaging_report()
     };
     assert_eq!(
         reference.pointer("/type/coding/0/code"),
-        Some(&Value::from("85430-7"))
+        Some(&Value::from("18748-4"))
     );
     assert_eq!(
-        reference.pointer("/category/0/coding/0/code"),
+        reference.pointer("/category/0/coding/1/code"),
         Some(&Value::from("Medical-Imaging"))
     );
     assert_eq!(
@@ -195,7 +195,7 @@ async fn an_imaging_composition_is_served_with_the_report_its_study_and_impressi
     let dir = tempfile::tempdir()?;
     let pdq = supplier().await;
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
-    let (status, text) = call(app.clone(), list("&type=85430-7")?).await?;
+    let (status, text) = call(app.clone(), list("&type=18748-4")?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let bundle: Value = serde_json::from_str(&text)?;
     let url = entries(&bundle, "match")
@@ -288,7 +288,7 @@ async fn a_member_silent_at_the_imaging_query_fails_the_list_and_is_named() -> T
     let dir = tempfile::tempdir()?;
     let pdq = supplier().await;
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
-    let (status, text) = call(app, list("&type=85430-7")?).await?;
+    let (status, text) = call(app, list("&type=18748-4")?).await?;
     assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "§11.3: {text}");
     assert!(text.contains("node-a-pub"), "§11.4: {text}");
     Ok(())
@@ -300,7 +300,7 @@ async fn a_list_of_another_type_asks_no_imaging_query() -> TestResult {
     let dir = tempfile::tempdir()?;
     let pdq = supplier().await;
     let app = gateway(dir.path(), (&a, &b), &pdq)?;
-    let (status, text) = call(app, list("&type=18748-4")?).await?;
+    let (status, text) = call(app, list("&type=85430-7")?).await?;
     assert_eq!(StatusCode::OK, status, "{text}");
     let queried = received(&a)
         .await?
@@ -309,7 +309,7 @@ async fn a_list_of_another_type_asks_no_imaging_query() -> TestResult {
         .count();
     assert_eq!(
         0, queried,
-        "the gateway lists its report under 85430-7 alone"
+        "the gateway lists its report under 18748-4 alone"
     );
     Ok(())
 }
@@ -390,7 +390,7 @@ async fn the_written_imaging_list_and_read_are_recorded_under_the_category() -> 
         (&crossref, &tables),
         &settings_with_room(),
     )?;
-    let (_, text) = call(app.clone(), list("&type=85430-7")?).await?;
+    let (_, text) = call(app.clone(), list("&type=18748-4")?).await?;
     let bundle: Value = serde_json::from_str(&text)?;
     let url = entries(&bundle, "match")
         .first()

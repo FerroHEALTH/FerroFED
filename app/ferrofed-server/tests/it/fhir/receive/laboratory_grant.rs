@@ -87,8 +87,9 @@ async fn a_persons_own_grant_lists_and_reads_their_laboratory_report() -> TestRe
     let [reference] = matches.as_slice() else {
         return Err(format!("Art 3(1): the person's one laboratory report: {bundle}").into());
     };
+    // EehrxfMhdDocumentReference: the priority category beside the document category.
     assert_eq!(
-        reference.pointer("/category/0/coding/0/code"),
+        reference.pointer("/category/0/coding/1/code"),
         Some(&Value::from("Laboratory-Reports"))
     );
     let url = reference

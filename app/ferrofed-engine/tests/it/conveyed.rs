@@ -18,6 +18,7 @@ use ferrofed_testkit::oauth;
 use ferrohealth_smart::assurance::AssuranceLevel;
 use ferrohealth_smart::client::assertion::AssertionKey;
 use ferrohealth_smart::client::keys::KeyRing;
+use ferrohealth_smart::jws::algorithm::Algorithm as JwsAlgorithm;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use serde::Deserialize;
 
@@ -67,7 +68,7 @@ static SIGNER: LazyLock<Arc<Signer>> =
 pub(crate) fn signer() -> Result<Signer, Box<dyn Error>> {
     let key = AssertionKey::from_pem(
         oauth::Curve::P384.pem()?.as_bytes(),
-        Some(Algorithm::ES384),
+        Some(JwsAlgorithm::Es384),
         None,
     )?;
     let keys = KeyRing::new(key);

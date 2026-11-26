@@ -23,6 +23,7 @@ use ferrofed_testkit::oauth::{self, TokenEndpoint};
 use ferrohealth_smart::client::assertion::AssertionKey;
 use ferrohealth_smart::client::keys::KeyRing;
 use ferrohealth_smart::client::{ClientCredentials, Endpoint};
+use ferrohealth_smart::jws::algorithm::Algorithm as JwsAlgorithm;
 use jsonwebtoken::Algorithm;
 use openehr_its::rest::client::CredentialsProvider as _;
 use url::Url;
@@ -36,7 +37,7 @@ const CLIENT_ID: &str = "ferrofed-test-gateway";
 fn trusted_ring(endpoint: &TokenEndpoint) -> Result<Arc<KeyRing>, Box<dyn Error>> {
     let key = AssertionKey::from_pem(
         oauth::Curve::P384.pem()?.as_bytes(),
-        Some(Algorithm::ES384),
+        Some(JwsAlgorithm::Es384),
         None,
     )?;
     let keys = Arc::new(KeyRing::new(key));

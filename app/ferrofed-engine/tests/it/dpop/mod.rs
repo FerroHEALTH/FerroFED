@@ -31,8 +31,8 @@ use ferrohealth_smart::client::assertion::AssertionKey;
 use ferrohealth_smart::client::dpop::{DpopKey, DpopKeyError};
 use ferrohealth_smart::client::keys::KeyRing;
 use ferrohealth_smart::client::{ClientCredentials, Endpoint};
+use ferrohealth_smart::jws::algorithm::Algorithm;
 use ferrohealth_smart::kind::IssuerKind;
-use jsonwebtoken::Algorithm;
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::{Credentials, CredentialsProvider as _, ReqwestTransport};
 use url::Url;
@@ -62,7 +62,7 @@ const EMPTY_RESULT_SET: &str = r##"{"q":"SELECT c/uid/value FROM EHR e CONTAINS 
 fn keys() -> Result<Arc<KeyRing>, Box<dyn Error>> {
     let key = AssertionKey::from_pem(
         oauth::Curve::P384.pem()?.as_bytes(),
-        Some(Algorithm::ES384),
+        Some(Algorithm::Es384),
         None,
     )?;
     Ok(Arc::new(KeyRing::new(key)))
@@ -535,9 +535,9 @@ async fn a_request_without_a_bound_token_carries_no_proof() -> TestResult {
 #[test]
 fn a_dpop_key_signs_with_the_algorithm_of_its_curve() -> TestResult {
     let p256 = DpopKey::from_pem(oauth::Curve::P256.pem()?.as_bytes())?;
-    assert_eq!(Algorithm::ES256, p256.algorithm());
+    assert_eq!(Algorithm::Es256, p256.algorithm());
     let p384 = DpopKey::from_pem(oauth::Curve::P384.pem()?.as_bytes())?;
-    assert_eq!(Algorithm::ES384, p384.algorithm());
+    assert_eq!(Algorithm::Es384, p384.algorithm());
     let refused = DpopKey::from_pem(b"synthetic: no key");
     assert!(
         matches!(refused, Err(DpopKeyError::Key { .. })),

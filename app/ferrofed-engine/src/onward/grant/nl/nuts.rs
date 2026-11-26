@@ -107,11 +107,7 @@ struct Unsigned(#[source] dpop::DpopError);
 
 impl DpopProver for AuthorizationProver<'_> {
     fn algorithm(&self) -> &'static str {
-        if self.0.algorithm() == jsonwebtoken::Algorithm::ES256 {
-            "ES256"
-        } else {
-            "ES384"
-        }
+        self.0.algorithm().name()
     }
 
     fn proof(&self, method: &Method, url: &Url) -> Result<String, ProofError> {

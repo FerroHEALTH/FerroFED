@@ -132,7 +132,7 @@ ehds-logging = { version = "0.28.0", default-features = false }
 # (#1895), and 0.17.0 the release on ferrobridge-term 0.13, fhirconnect 0.5
 # and openehr-mapping-core 0.4 (#1899). Verified against crates.io on
 # 2026-11-17.
-eehrxf = { version = "0.35.0", default-features = false }
+eehrxf = { version = "0.40.0", default-features = false }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 # The operator and console wire documents, which the gateway writes and the
 # console reads (#1489).
@@ -284,7 +284,7 @@ fhirconnect = "0.13.0"
 # its terminology server through (#925), from FerroBRIDGE, with the `context`
 # form of `$validate-code`; required by a caret range, as eehrxf above (#1772),
 # at the release on ferrohealth-smart 0.34 (#1946).
-ferrobridge-term = "0.19.0"
+ferrobridge-term = "0.21.0"
 # The FHIR R4 profile validator a document received in the exchange format is
 # held to in full: every invariant, binding and entry profile (#808), from
 # FerroBRIDGE on the fhir-types and ferrobridge-term lines above.
@@ -296,17 +296,17 @@ ferrobridge-term = "0.19.0"
 # (#1891), 0.12.0 the release on ferrobridge-term 0.12 (#1895), and 0.13.0
 # the release on ferrobridge-term 0.13 (#1899). Verified against crates.io on
 # 2026-11-17.
-ferrobridge-validator = "0.20.0"
+ferrobridge-validator = "0.22.0"
 openehr-mapping-core = "0.9.0"
 # The IHE identity profiles (PIXm, PDQm, mCSD, PMIR, XCPD, with their audit
 # records behind `balp` and `atna`), owned and published by FerroHEALTH/FerroPIX
 # since #367 and required by a caret range, at the release on ferrohealth-smart
 # 0.34 (#1946).
-ihe-iti = "0.23.0"
+ihe-iti = "0.24.0"
 # The Dutch Generic Functions (NVI, Mitz, LRZa and the Nuts grant), owned and
 # published by FerroHEALTH/FerroPIX since #367 and required by a caret range, at
 # the release on ihe-iti 0.21 (#1946).
-nl-generic-functions = "0.23.0"
+nl-generic-functions = "0.24.0"
 # The FHIR package archive (an npm tarball, gzip over tar) the testkit reads
 # the vendored packages from (#684): flate2 on its pure-Rust backend, at the
 # version tower-http already locks, and tar without the extended attributes.
@@ -399,7 +399,7 @@ ferrohealth-ui = "=0.6.11"
 # and service credentials. It checks tokens and never issues them. Required by
 # a caret range, as the IHE crates; 0.34 is the one-registry release, where an
 # issuer is a SMART authorization server unless it is `federation` (#1946).
-ferrohealth-smart = { version = "0.34.0", default-features = false, features = ["fetch", "axum", "openehr", "server-tls"] }
+ferrohealth-smart = { version = "0.35.0", default-features = false, features = ["fetch", "axum", "openehr", "server-tls"] }
 # The secret and redaction types of FerroHEALTH/FerroSYS (#1397): `Secret`,
 # `WriteOnly` and `SecretUrl`, which never render a credential, and the
 # key-or-file rule every `<key>_file` sibling is read by. Pinned exactly, as
@@ -412,7 +412,7 @@ ferrohealth-secret = "=0.2.2"
 # session store, the four sign-in routes and the middleware every page sits
 # behind, over ferrohealth-smart's relying party. Pinned exactly, as a product
 # pins every family crate, at the release on ferrohealth-smart 0.34 (#1946).
-ferrohealth-session = { version = "=0.29.0", default-features = false }
+ferrohealth-session = { version = "=0.30.0", default-features = false }
 # The configuration loader of FerroHEALTH/FerroSYS (#1397, #1408): the
 # defaults, the file, the `FERROFED__` overrides and the `--set` pairs read
 # into one typed tree, with where each key came from and the merged table the
@@ -584,3 +584,4 @@ deref_by_slicing = "warn"
 panic = "unwind"
 overflow-checks = true
 debug = "line-tables-only"
+

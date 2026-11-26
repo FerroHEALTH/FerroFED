@@ -33,8 +33,7 @@ use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use ehds_logging::category::Category;
 use ferrofed_eehrxf::list::{
-    self, DISCHARGE_SUMMARY, Fetched, IMAGING_REPORT, ListRefusal, ListRequest, Listing, Match,
-    Subject,
+    self, Fetched, IMAGING_STUDY, ListRefusal, ListRequest, Listing, Match, Subject,
 };
 use ferrofed_eehrxf::report::Written;
 use ferrofed_engine::single_node::forward::Forwarded;
@@ -202,12 +201,12 @@ impl Lists {
         if self.written.0 && laboratory {
             written.insert(Written::Laboratory);
         }
-        // NOTE: no specification governs this: our own design; the gateway lists each report it
-        // writes under one code of the category's value set alone.
-        if self.written.1 && read.discharge().contains(&DISCHARGE_SUMMARY) {
+        // NOTE: MyHealth@EU NCPeH API 9.1.1-ci DocumentReference-minimal binds type to
+        // eHDSIDocumentTypes (required), so each written report is listed under its one code.
+        if self.written.1 && read.admits_hospital_discharge() {
             written.insert(Written::Discharge);
         }
-        if self.written.2 && read.imaging().contains(&IMAGING_REPORT) {
+        if self.written.2 && read.imaging().contains(&IMAGING_STUDY) {
             written.insert(Written::Imaging);
         }
         Wanted {

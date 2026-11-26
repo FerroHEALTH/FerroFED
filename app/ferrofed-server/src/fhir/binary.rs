@@ -43,9 +43,11 @@ use ferrofed_engine::single_node::forward::Forwarded;
 use ferrofed_engine::single_node::native as engine;
 use ferrofed_registry::id::{EhrId, EndpointId};
 use ferrohealth_smart::client::assertion::AssertionError;
+use ferrohealth_smart::jws::JwsError;
+use ferrohealth_smart::jws::claims::{ClaimError, Validation};
+use ferrohealth_smart::jws::compact;
+use ferrohealth_smart::jws::jwk::{Jwk, JwkError};
 use http::{HeaderValue, StatusCode, header};
-use jsonwebtoken::jwk::Jwk;
-use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
 
 use super::admission::Asked;
@@ -127,7 +129,16 @@ enum Named {
 enum Untaken {
     /// The token is no JWS of [`TYPE`] signed by a key of the gateway's.
     #[error("the token is no document URL the gateway signed")]
-    Unverified(#[source] Option<jsonwebtoken::errors::Error>),
+    Unverified(#[source] Option<JwsError>),
+    /// The key the token names has no public JWK to verify with.
+    #[error("the signing key has no public JWK")]
+    Unkeyed(#[source] JwkError),
+    /// The token's registered claims do not hold.
+    #[error("the token's claims do not hold")]
+    Unclaimed(#[source] ClaimError),
+    /// The token's claims are not the gateway's.
+    #[error("the token's claims are not the gateway's")]
+    Unshaped(#[source] serde_json::Error),
     /// The token names another caller.
     #[error("the token names another caller")]
     OtherCaller,
@@ -141,7 +152,7 @@ enum Untaken {
 ///
 /// # Errors
 ///
-/// The [`jsonwebtoken::errors::Error`] of a key that cannot sign.
+/// The [`AssertionError`] of a key that cannot sign.
 pub(super) fn mint(
     signer: &Signer,
     fhir: &FhirSettings,
@@ -163,7 +174,7 @@ pub(super) fn mint(
 ///
 /// # Errors
 ///
-/// The [`jsonwebtoken::errors::Error`] of a key that cannot sign.
+/// The [`AssertionError`] of a key that cannot sign.
 pub(super) fn mint_written(
     signer: &Signer,
     fhir: &FhirSettings,
@@ -184,7 +195,7 @@ pub(super) fn mint_written(
 ///
 /// # Errors
 ///
-/// The [`jsonwebtoken::errors::Error`] of a key that cannot sign.
+/// The [`AssertionError`] of a key that cannot sign.
 pub(super) fn mint_own(
     signer: &Signer,
     fhir: &FhirSettings,
@@ -233,7 +244,8 @@ fn signed(
 /// The claims of `token` when the gateway signed it for the face `fhir`
 /// with a key `signer` holds, of [`TYPE`], unexpired.
 fn verified(signer: &Signer, fhir: &FhirSettings, token: &str) -> Result<Claims, Untaken> {
-    let header = jsonwebtoken::decode_header(token).map_err(|e| Untaken::Unverified(Some(e)))?;
+    let read = compact::decode(token).map_err(|e| Untaken::Unverified(Some(e)))?;
+    let header = read.header();
     if header.typ.as_deref() != Some(TYPE) {
         return Err(Untaken::Unverified(None));
     }
@@ -247,18 +259,17 @@ fn verified(signer: &Signer, fhir: &FhirSettings, token: &str) -> Result<Claims,
     .flatten()
     .find(|key| header.kid.as_deref() == Some(key.kid()) && header.alg == key.algorithm())
     .ok_or(Untaken::Unverified(None))?;
-    let public: Jwk =
-        serde_json::from_value(key.public_jwk()).map_err(|_unread| Untaken::Unverified(None))?;
-    let decoding = DecodingKey::from_jwk(&public).map_err(|e| Untaken::Unverified(Some(e)))?;
-    let algorithm: Algorithm = key.algorithm();
-    let mut validation = Validation::new(algorithm);
-    validation.leeway = 0;
-    validation.set_audience(&[fhir.absolute.as_str()]);
-    validation.set_issuer(&[fhir.absolute.as_str()]);
-    validation.set_required_spec_claims(&["exp", "aud", "iss", "sub"]);
-    jsonwebtoken::decode::<Claims>(token, &decoding, &validation)
-        .map(|data| data.claims)
-        .map_err(|e| Untaken::Unverified(Some(e)))
+    let public = Jwk::try_from(&key.public_jwk()).map_err(Untaken::Unkeyed)?;
+    let claims = read
+        .verify_claims(&public)
+        .map_err(|e| Untaken::Unverified(Some(e)))?;
+    Validation::default()
+        .with_issuer(fhir.absolute.as_str())
+        .with_audiences([fhir.absolute.as_str()])
+        .with_required(&["exp", "aud", "iss", "sub"])
+        .check(&claims)
+        .map_err(Untaken::Unclaimed)?;
+    serde_json::from_value(serde_json::Value::Object(claims)).map_err(Untaken::Unshaped)
 }
 
 /// The member a verified token `claims` names, as the registry holds it.

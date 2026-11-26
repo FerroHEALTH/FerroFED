@@ -24,9 +24,10 @@ admits them, and a `type` that admits only them lists no summary.
 The gateway runs the reserved stored query
 `eu.ferrofed.eehrxf::laboratory-report` on every member the patient
 resolves at, by each member's own `ehr_id` alone, and lists one entry per
-laboratory composition: typed LOINC `11502-2` in the `Laboratory-Reports`
-category, its custodian the member's organisation, its `masterIdentifier`
-`urn:uuid:` and the UUID of the composition's versioned object, its
+laboratory composition, the interoperability component's description of
+it: typed LOINC `11502-2` in the `Laboratory-Reports` category, its
+version, language and period the composition's, its custodian the
+member's organisation, its `masterIdentifier` `urn:uuid:` and the UUID of the composition's versioned object, its
 `format` the `Bundle-eu-lab` profile, and its `attachment.url` a
 `Binary/{token}` the gateway signs for you, naming the member, its `ehr_id`
 and the composition. A composition two members hold under one version id

@@ -33,6 +33,7 @@ use std::time::Instant;
 
 use axum::response::Response;
 use ehds_logging::category::Category;
+use ferrofed_eehrxf::list::written::Writing;
 use ferrofed_eehrxf::list::{self, Listing, Match};
 use ferrofed_eehrxf::report::{Report, Writes, Written};
 use ferrofed_eehrxf::summary::Held;
@@ -104,15 +105,34 @@ pub(super) fn listed(
         let custodian = organisation(snapshot, &chosen.node);
         let unique = format!("urn:uuid:{object}");
         let id = fhir.ids.document((endpoint.as_str(), &unique));
+        let writing = Writing {
+            written,
+            composition: &held.composition,
+            operator: &fhir.operator,
+            custodian: &custodian,
+        };
+        let described = list::written::entry(
+            writing,
+            (id.as_str(), &unique),
+            listing,
+            &format!("Binary/{token}"),
+        );
+        // NOTE: draft EEHRxF Annex III Table 1: a composition with no version cannot be described,
+        // so it is not listed, as one with no UUID is not.
+        let described = match described {
+            Ok(described) => described,
+            Err(undescribed) => {
+                tracing::warn!(
+                    endpoint = endpoint.as_str(),
+                    error = %crate::chain(&undescribed),
+                    "a member's composition cannot be described as a report"
+                );
+                continue;
+            }
+        };
         matches.push((
             format!("{}/DocumentReference/{}", fhir.absolute, id.as_str()),
-            Match::Written(Box::new(list::written::entry(
-                written,
-                (id.as_str(), &unique),
-                listing,
-                &custodian,
-                &format!("Binary/{token}"),
-            ))),
+            Match::Written(Box::new(described)),
         ));
     }
     for (endpoint, answered) in gathered.written.values().flatten() {

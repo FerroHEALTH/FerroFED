@@ -162,4 +162,33 @@ release of the patch range it names. The HL7 packages declare CC0-1.0, the
 IHE packages CC-BY-4.0 and the DICOM code systems \`free\`; they are kept in
 the cache only, as the closures above are (7 MB)." "" "$read_by_imaging"
 
+# The packages the MyHealth@EU NCPeH API 9.1.1-ci closure names through
+# ihe.iti.mhd 4.2.2 that no corpus above nor a committed package holds
+# (#1949). A corpus of its own, so each closure above stays the one its
+# tests validate against.
+read_by_ncp_api=$'#1949 (each list entry the gateway writes, held to\n  DocumentReference-minimal), and the testkit\x27s NCPeH API closure'
+pin cache hl7.terminology.r4-5.5.0.tgz "5.5.0 (FHIR 4.0.1)" "$registry/hl7.terminology.r4/5.5.0" \
+  0bc96d49e4892a91e2b087e4c8b90c3ba307e1a18dc32dca6967a0f10adb2e28 "$cc0" \
+  "$cached The version ihe.iti.mhd 4.2.2 depends on."
+pin cache hl7.fhir.uv.extensions.r4-5.1.0.tgz "5.1.0 (FHIR 4.0.1)" "$registry/hl7.fhir.uv.extensions.r4/5.1.0" \
+  f96eec24d8ad2c043cf295acdfab46b01e0e1fcc568740aab3fd1acee4cb0456 "$cc0" \
+  "$cached The version ihe.iti.mhd 4.2.2 depends on."
+pin cache ihe.formatcode.fhir-1.2.0.tgz "1.2.0 (FHIR 4.0.1)" "$registry/ihe.formatcode.fhir/1.2.0" \
+  46a669d09c435e71296677dfbb9676d177eb74fa69e4c7a4ddb562552e050ff3 "$cc_by" \
+  "$cached The only release of the 1.2.x ihe.iti.mhd 4.2.2 depends on."
+pin cache hl7.terminology.r4-5.3.0.tgz "5.3.0 (FHIR 4.0.1)" "$registry/hl7.terminology.r4/5.3.0" \
+  c5bc37a30763994de424fadfde536ee9d492aab8fa5ccdbe8eb4f2912fe3248a "$cc0" \
+  "$cached The version ihe.formatcode.fhir 1.2.0 depends on."
+pin cache hl7.fhir.uv.extensions.r4-1.0.0.tgz "1.0.0 (FHIR 4.0.1)" "$registry/hl7.fhir.uv.extensions.r4/1.0.0" \
+  b270eb5b0ea3d015398a5af6c86cab2718070cbb850e366ef050ce6d6eb4a9d3 "$cc0" \
+  "$cached The version ihe.formatcode.fhir 1.2.0 depends on."
+pinned_corpus fhir-packages-ncp-api "FHIR package closure of the NCPeH API" \
+  "the FHIR packages the MyHealth@EU NCPeH API's dependency closure names beside the closures above" \
+  "The FHIR packages the manifests of \`myhealth.eu.fhir.ncp-api\` 9.1.1-ci,
+\`ihe.iti.mhd\` 4.2.2 and their dependencies name that no closure above nor
+a committed package holds, each the tarball of \`packages.fhir.org\` at the
+exact version a manifest names, or the newest release of the patch range it
+names. The HL7 packages declare CC0-1.0 and the IHE package CC-BY-4.0; they
+are kept in the cache only, as the closures above are (15 MB)." "" "$read_by_ncp_api"
+
 say "done"

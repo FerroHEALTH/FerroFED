@@ -25,8 +25,8 @@ use ferrohealth_smart::client::fapi2::Fapi2Error;
 use ferrohealth_smart::client::onward::OnwardError;
 use ferrohealth_smart::client::{ClientCredentials, TokenError};
 use ferrohealth_smart::config::credentials::OauthSection;
+use ferrohealth_smart::jws::algorithm::Algorithm;
 use ferrohealth_smart::metadata::{DiscoveryError, MAX_DOCUMENT_BYTES};
-use jsonwebtoken::Algorithm;
 use openehr_its::rest::client::{CredentialsError, CredentialsProvider as _};
 use secrecy::SecretString;
 
@@ -195,7 +195,7 @@ async fn a_server_without_es256_assertions_is_refused() -> TestResult {
                 matches!(
                     refused,
                     Fapi2Error::SigningAlgorithm {
-                        algorithm: Algorithm::ES256
+                        algorithm: Algorithm::Es256
                     }
                 )
             })
@@ -272,7 +272,7 @@ async fn a_server_without_es256_proofs_is_refused() -> TestResult {
                 matches!(
                     refused,
                     Fapi2Error::ProofAlgorithm {
-                        algorithm: Algorithm::ES256
+                        algorithm: Algorithm::Es256
                     }
                 )
             })
@@ -372,7 +372,7 @@ async fn a_grant_outside_the_profile_cannot_be_built() -> TestResult {
     };
     let es384 = AssertionKey::from_pem(
         oauth::Curve::P384.pem()?.as_bytes(),
-        Some(Algorithm::ES384),
+        Some(Algorithm::Es384),
         None,
     )?;
     refused(grant(&server, es384, &prover()?), &|error| {
@@ -428,7 +428,7 @@ async fn a_grant_outside_the_profile_cannot_be_built() -> TestResult {
 async fn debug_shows_no_key() -> TestResult {
     let server = AuthorizationServer::start(CLIENT_ID, Some(300)).await;
     let pem = oauth::Curve::P256.pem()?;
-    let key = AssertionKey::from_pem(pem.clone().as_bytes(), Some(Algorithm::ES256), None)?;
+    let key = AssertionKey::from_pem(pem.clone().as_bytes(), Some(Algorithm::Es256), None)?;
     let grant = grant(&server, key, &prover()?)?;
     let shown = format!("{grant:?}");
     let body = pem

@@ -16,8 +16,8 @@ use ferrohealth_smart::client::assertion::AssertionKey;
 use ferrohealth_smart::client::keys::KeyRing;
 use ferrohealth_smart::client::{ClientAuth, PresentedTls};
 use ferrohealth_smart::config::credentials::{CredentialsSection, OauthSection};
+use ferrohealth_smart::jws::algorithm::Algorithm;
 use ferrohealth_smart::kind::IssuerKind;
-use jsonwebtoken::Algorithm;
 use openehr_federation::object::Uri;
 use openehr_its::rest::client::{BasicPart, InvalidCredentials};
 
@@ -485,21 +485,11 @@ fn next_key(path: &Path, intended: Algorithm) -> Result<AssertionKey, Error> {
     if next.algorithm() != intended {
         return Err(Error::Credentials(CredentialsFault::NextKeyAlgorithm {
             key: String::from("signing.next_key_file"),
-            found: algorithm_name(next.algorithm()),
-            intended: algorithm_name(intended),
+            found: next.algorithm().name(),
+            intended: intended.name(),
         }));
     }
     Ok(next)
-}
-
-/// The name RFC 7518 §3.1 gives `algorithm`, one of the two a signing key
-/// signs with.
-fn algorithm_name(algorithm: Algorithm) -> &'static str {
-    match algorithm {
-        Algorithm::ES256 => "ES256",
-        Algorithm::ES384 => "ES384",
-        _ => "an algorithm other than ES256 and ES384",
-    }
 }
 
 /// Reads the signing key the `_file` sibling of `key` names.
@@ -515,7 +505,7 @@ fn signing_key(key: &str, path: &Path) -> Result<AssertionKey, Error> {
     };
     let read = AssertionKey::from_pem(pem.expose().as_bytes(), None, None)
         .map_err(|source| refused(SigningKeyError::Key(source)))?;
-    if !matches!(read.algorithm(), Algorithm::ES256 | Algorithm::ES384) {
+    if !matches!(read.algorithm(), Algorithm::Es256 | Algorithm::Es384) {
         return Err(refused(SigningKeyError::NotEc));
     }
     Ok(read)

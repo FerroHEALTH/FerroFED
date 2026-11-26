@@ -38,6 +38,7 @@ use ferrohealth_smart::client::assertion::AssertionKey;
 use ferrohealth_smart::client::fapi2::Fapi2Error;
 use ferrohealth_smart::client::{Endpoint, TokenError};
 use ferrohealth_smart::config::ConfigError as SmartError;
+use ferrohealth_smart::jws::algorithm::Algorithm as JwsAlgorithm;
 use ferrohealth_telemetry::section::Rendering;
 use http::{Request, StatusCode, header};
 use jsonwebtoken::Algorithm;
@@ -161,8 +162,11 @@ async fn node_a_receives_the_dpop_bound_fapi2_token() -> TestResult {
     let a = node(authority.endpoint().dpop_bound(None)).await;
     let (app, _state) = gateway(dir.path(), &a.uri(), &material.tables)?;
     let jwks = published(&app).await?;
-    let client_key =
-        AssertionKey::from_pem(material.client_pem.as_bytes(), Some(Algorithm::ES256), None)?;
+    let client_key = AssertionKey::from_pem(
+        material.client_pem.as_bytes(),
+        Some(JwsAlgorithm::Es256),
+        None,
+    )?;
     assert!(
         jwks.find(client_key.kid()).is_some(),
         "the client key is published"
@@ -536,11 +540,11 @@ async fn a_rotated_client_key_is_published_beside_the_previous_one_and_alone_sig
 
     let old = AssertionKey::from_pem(
         material.client_pem.clone().as_bytes(),
-        Some(Algorithm::ES256),
+        Some(JwsAlgorithm::Es256),
         None,
     )?;
     let new_pem = oauth::Curve::P256.pem()?;
-    let new = AssertionKey::from_pem(new_pem.clone().as_bytes(), Some(Algorithm::ES256), None)?;
+    let new = AssertionKey::from_pem(new_pem.clone().as_bytes(), Some(JwsAlgorithm::Es256), None)?;
     let new_file = dir.path().join("fapi2-client-new.pem");
     std::fs::write(&new_file, &new_pem)?;
     let new_file = toml::Value::String(new_file.display().to_string());

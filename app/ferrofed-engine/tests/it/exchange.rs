@@ -40,9 +40,9 @@ use ferrohealth_smart::client::keys::KeyRing;
 use ferrohealth_smart::client::onward::SubjectToken as OnwardSubject;
 use ferrohealth_smart::client::{ClientCredentials, Endpoint};
 use ferrohealth_smart::config::onward::OnwardSection;
+use ferrohealth_smart::jws::algorithm::Algorithm;
 use ferrohealth_smart::kind::{CallerKind, IssuerKind};
 use ferrohealth_smart::resource::Caller as SmartCaller;
-use jsonwebtoken::Algorithm;
 use openehr_federation::outcome::ErrorDetail;
 use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::ReqwestTransport;
@@ -107,7 +107,7 @@ pub(crate) fn caller_token_of(issuer: &Issuer, subject: &str) -> Result<String, 
 pub(crate) fn keys() -> Result<Arc<KeyRing>, Box<dyn Error>> {
     let key = AssertionKey::from_pem(
         oauth::Curve::P384.pem()?.as_bytes(),
-        Some(Algorithm::ES384),
+        Some(Algorithm::Es384),
         None,
     )?;
     Ok(Arc::new(KeyRing::new(key)))

@@ -45,6 +45,13 @@ slow-timeout = { period = "30s", terminate-after = 6 }
 filter = 'package(ferrofed-eehrxf) & test(/::a_.*_conforms/)'
 slow-timeout = { period = "30s", terminate-after = 6 }
 
+# A written report's list entry is held to EehrxfMhdDocumentReference and
+# MyHealth@EU DocumentReference-minimal (#1949), two package closures the
+# validator parses in full, so its tests get the same three minutes.
+[[profile.default.overrides]]
+filter = 'package(ferrofed-eehrxf) & test(/^written_entry::/)'
+slow-timeout = { period = "30s", terminate-after = 6 }
+
 # A container-backed test pulls images and starts PostgreSQL and two
 # FerroEHR nodes, so it gets ten minutes before it is killed. Every such test
 # sits in an e2e module (scripts/checks/e2e-placement.sh).
