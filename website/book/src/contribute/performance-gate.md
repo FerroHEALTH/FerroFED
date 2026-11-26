@@ -314,6 +314,14 @@ change cannot exceed, whatever its base did:
   `app/ferrofed-server/tests/it/e2e/budget.rs`. Run it with
   `FERROFED_E2E=1 cargo nextest run -p ferrofed-server -E 'test(/^e2e::budget/)'`
   where containers can run.
+- **Allocations and store calls per loop run:** the `e2e::loop_budget`
+  case, in the same lane, runs one iteration of each background loop five
+  times after two warm runs, in the steady state its loop runs in: the
+  store's sweep of expired rows, the registry reload, the PMIR
+  subscription's check against a stub Patient Identity Registry and the mCSD
+  directory's refresh against a stub Care Services Directory. It counts
+  them as the request budget does and holds each to `BUDGETS` in
+  `app/ferrofed-server/tests/it/e2e/loop_budget.rs`.
 - **CPU instructions:** `scripts/perf/instructions.sh` builds the example
   `hot_path_instructions` in release, counts the in-process work of the
   AQL analysis and rewrite (`aql_rewrite`) and of the merge of two members'

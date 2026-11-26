@@ -107,6 +107,8 @@ mod emergency;
 #[cfg(feature = "binding-ihe")]
 mod face_ids;
 mod keycloak;
+#[cfg(feature = "binding-ihe")]
+mod loop_budget;
 mod national;
 mod onward_cdr;
 mod pixm;
