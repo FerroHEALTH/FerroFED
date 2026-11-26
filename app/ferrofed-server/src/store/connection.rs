@@ -101,14 +101,43 @@ impl Target {
         ca: Option<&str>,
         budget: Duration,
     ) -> Result<Self, StoreError> {
-        let config = Config::from_str(url.expose())
+        let mut config = Config::from_str(url.expose())
             .map_err(|_quoted| backend(ConnectionError::Unparsable))?;
+        session(&mut config, budget);
         Ok(Self {
             config,
             tls: MakeRustlsConnect::new(client_config(ca)?),
             budget,
         })
     }
+}
+
+/// The name each connection gives the server, which `pg_stat_activity`
+/// shows (PostgreSQL 19 `application_name`).
+pub(crate) const APPLICATION_NAME: &str = "ferrofed";
+
+/// Sets on `config` the session settings every connection runs under: its
+/// name, and `budget` as the server's own statement, lock and idle
+/// transaction timeouts, so a statement the client stopped waiting for
+/// stops on the server too and holds no lock past the budget.
+///
+/// The settings follow any `options` the connection string names, so they
+/// take precedence (PostgreSQL 19 libpq `options`, a later `-c` overriding an
+/// earlier one).
+fn session(config: &mut Config, budget: Duration) {
+    // NOTE: PostgreSQL 19 runtime-config-client, Statement Behavior: statement_timeout, lock_timeout
+    // and idle_in_transaction_session_timeout take milliseconds when no unit is given.
+    let millis = budget.as_millis();
+    let ours = format!(
+        "-c statement_timeout={millis} -c lock_timeout={millis} \
+         -c idle_in_transaction_session_timeout={millis}"
+    );
+    let options = match config.get_options() {
+        Some(theirs) if !theirs.trim().is_empty() => format!("{theirs} {ours}"),
+        _ => ours,
+    };
+    config.options(options);
+    config.application_name(APPLICATION_NAME);
 }
 
 /// Connections to a PostgreSQL database, each on a thread of its own.
@@ -372,6 +401,29 @@ mod tests {
     use rustls::{ClientConnection, NamedGroup};
 
     use super::{Connection, ConnectionError, Statement, Target, client_config};
+
+    #[test]
+    fn every_connection_runs_under_the_budget_as_its_server_timeouts_and_its_name() {
+        let target = Target::new(
+            &SecretUrl::new(
+                "postgres://ferrofed@db.example.org/ferrofed?sslmode=require&options=-c%20search_path%3Dfed",
+            ),
+            None,
+            Duration::from_millis(2500),
+        )
+        .unwrap();
+        assert_eq!(
+            target.config.get_options(),
+            Some(
+                "-c search_path=fed -c statement_timeout=2500 -c lock_timeout=2500 \
+                 -c idle_in_transaction_session_timeout=2500"
+            )
+        );
+        assert_eq!(
+            target.config.get_application_name(),
+            Some(super::APPLICATION_NAME)
+        );
+    }
 
     /// A prepare that is never reached when the open fails first.
     fn prepared(_client: &mut tokio_postgres::Client) -> Statement<'_, ()> {

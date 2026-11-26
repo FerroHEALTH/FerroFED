@@ -74,7 +74,7 @@ sweep_interval = "1min"                          # how often expired rows are de
 | `url`, `url_file` | none, one is required | the connection string, a URL (`postgres://ferrofed@db.example.org:5432/ferrofed?sslmode=require`) or libpq key/value pairs; a secret, read at boot and trimmed when it comes from the file, never both |
 | `ca_file` | the platform's trusted roots | a PEM file of the CA certificates the database's certificate is verified by, in place of the platform's roots |
 | `max_connections` | `4` | how many connections the gateway opens, 1 to 64 |
-| `timeout_ms` | `10000` | how long one connection, or one statement, may take; zero is refused |
+| `timeout` | `10s` | how long one connection, or one statement, may take, on the gateway and on the server alike; zero is refused |
 | `sweep_interval` | `1min` | how often the rows past their window are deleted; zero is refused |
 
 Give the credentials with `url_file`: write the whole connection string,
@@ -101,6 +101,37 @@ store.url does not require TLS: FerroFED's store is reached over TLS under every
 TLS uses rustls and always verifies the server's certificate, against
 `ca_file` when it is set and the platform's roots otherwise. A database that
 listens on a Unix socket alone cannot serve TLS, so give it a TCP listener.
+
+## The session each connection opens
+
+Each connection opens with these settings, set in one place, after any
+`options` your connection string names, so they take precedence:
+
+| Setting | Value | Why |
+|---|---|---|
+| `statement_timeout` | `timeout` | a statement the gateway stopped waiting for stops on the server too, so it holds no lock and no backend past the budget |
+| `lock_timeout` | `timeout` | a statement waiting on a lock gives up within the budget, never after it |
+| `idle_in_transaction_session_timeout` | `timeout` | a session left inside a transaction ends, releasing its locks |
+| `application_name` | `ferrofed` | `pg_stat_activity` names the gateway's sessions |
+
+They are sent as the libpq `options` startup parameter, so the gateway
+connects to PostgreSQL itself, or to a pooler that passes `options` on.
+The settings come from the PostgreSQL 19 documentation of client connection
+defaults (`statement_timeout`, `lock_timeout`,
+`idle_in_transaction_session_timeout`) and of `application_name`.
+
+The rest of the connection is chosen too:
+
+- **Pool:** `max_connections` connections, 4 by default and at most 64,
+  each on a thread of its own, opened at start, so a database that cannot
+  be reached refuses the start. A call waits for the next free connection.
+- **Lifetime:** a connection lives as long as the process and is reopened
+  when it closes, or when a statement on it ran past the budget. The
+  migrations run each time a connection opens.
+- **Statements:** each statement is prepared and run on its connection as
+  it is sent, with no statement cache, so the gateway keeps no server-side
+  state between calls.
+- **TLS:** required, as the next section says.
 
 ## Migrations
 
