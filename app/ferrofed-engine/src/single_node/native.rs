@@ -94,12 +94,9 @@ impl Answer {
     pub fn status(&self) -> EndpointStatus {
         match self {
             Self::Success(_) | Self::Absent => EndpointStatus::Active,
-            Self::Abandoned
-            | Self::Failed(
-                ForwardError::TimeOut { .. } | ForwardError::Expired(_) | ForwardError::Capped(_),
-            ) => EndpointStatus::TimeOut,
-            Self::Failed(ForwardError::Unreachable { .. }) => EndpointStatus::Offline,
-            Self::Erred(_) | Self::Failed(_) => EndpointStatus::NodeError,
+            Self::Abandoned => EndpointStatus::TimeOut,
+            Self::Failed(failure) => failure.status(),
+            Self::Erred(_) => EndpointStatus::NodeError,
         }
     }
 

@@ -35,11 +35,13 @@ use eehrxf::receive::conform::{CheckError, Finding, Unevaluated};
 use fhir_types::codec::{Json as _, Path, Value};
 use fhir_types::r4::identifier::Identifier;
 use fhir_types::r4::medication_dispense::MedicationDispense;
-use fhir_types::r4::operation_outcome::{OperationOutcome, OperationOutcomeIssue};
+use fhir_types::r4::operation_outcome::OperationOutcome;
 use fhir_types::r4::reference::Reference;
 use fhir_types::r4::resource::Resource;
 use serde::de::{Deserialize, Deserializer, MapAccess, Visitor};
 use serde_json::value::RawValue;
+
+use crate::receive::issue;
 
 /// The resource type received.
 pub const RESOURCE: &str = "MedicationDispense";
@@ -440,22 +442,6 @@ fn told(received: &Received, what: &str) -> OperationOutcome {
     OperationOutcome {
         issue: issues,
         ..OperationOutcome::default()
-    }
-}
-
-/// One issue of `severity` and the FHIR R4 `issue-type` `kind`, with the
-/// text `diagnostics`, at the element path `at` when one is named.
-fn issue(
-    (severity, kind): (&str, &str),
-    diagnostics: &str,
-    at: Option<&str>,
-) -> OperationOutcomeIssue {
-    OperationOutcomeIssue {
-        severity: severity.into(),
-        code: kind.into(),
-        diagnostics: Some(diagnostics.into()),
-        expression: at.map(Into::into).into_iter().collect(),
-        ..OperationOutcomeIssue::default()
     }
 }
 
