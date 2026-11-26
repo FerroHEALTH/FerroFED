@@ -58,26 +58,27 @@ struct Budget {
     store_calls: u64,
 }
 
-// NOTE: no specification governs these ceilings: our own design (#2019).
+// NOTE: no specification governs these ceilings: our own design; each allocation budget is the
+// Linux CI figure plus 2%, and each store-call budget the figure itself (#2019).
 const BUDGETS: [Budget; 4] = [
     Budget {
         run: Loop::Sweep,
-        allocations: 0,
-        store_calls: 0,
+        allocations: 2,
+        store_calls: 1,
     },
     Budget {
         run: Loop::Reload,
-        allocations: 0,
+        allocations: 3106,
         store_calls: 0,
     },
     Budget {
         run: Loop::Pmir,
-        allocations: 0,
+        allocations: 112,
         store_calls: 0,
     },
     Budget {
         run: Loop::Mcsd,
-        allocations: 0,
+        allocations: 557,
         store_calls: 0,
     },
 ];
