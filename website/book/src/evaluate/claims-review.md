@@ -73,6 +73,7 @@ as a broken command, is fixed in the same change.
 | v0.0.19 | 2026-11-11 | see below | 92 to 95, below | the v0.0.19 version bump |
 | v0.0.20 | 2026-11-12 | see below | 96 to 100, below | the v0.0.20 version bump |
 | v0.0.21 | 2026-11-25 | see below | 101 to 104, below | the v0.0.21 version bump |
+| v0.0.22 | 2026-11-26 | see below | 105 to 107, below | the v0.0.22 version bump |
 
 ### Findings of 2026-10-06
 
@@ -717,6 +718,40 @@ Against Art 28(b), no limitation was left out: the instructions for use
 name the keys 0.0.21 removes, the audit spool to drain before the upgrade
 and PostgreSQL 19 for the store in their maintenance table, with the
 Upgrading page's notes for v0.0.21.
+
+No text suggested a use outside the intended purpose, (c).
+
+### Findings of 2026-11-26
+
+The review at the v0.0.22 cut. Read in full: `README.md`, `CITATION.cff`,
+the information sheet, the claims page, the instructions for use, the
+Upgrading page, the MyHealth@EU self-assessment, the patient summary,
+discharge report and vaccination history pages, the store page and the
+assembled release notes. Every other page of the book and `README.md` was
+searched for "v0.0.21", "9.1.1", "Core 1.0.0", "FerroPIX 0.0.", "PostgreSQL
+18", "partly met", "not yet" and the FerroPIX issuer keys the quickstart
+dropped, next to a statement that the work is still to come.
+
+Stale or wrong statements, which read as claims about the release a user
+runs:
+
+105. The claims page had no section for the release. It now has one for
+     v0.0.22.
+106. The pending upgrade notes did not say that a written discharge report
+     now needs the terminology server of `[eehrxf.terminology]`, without
+     which each is listed unavailable. The release notes, the Upgrading
+     page and the instructions for use now say so
+     ([#1962](https://github.com/FerroHEALTH/FerroFED/issues/1962)).
+107. The Upgrading page had no notes for v0.0.22. It now gives the id key
+     the FHIR face requires, the libpq `options` a pooler must pass on and
+     the terminology server of finding 106
+     ([#1976](https://github.com/FerroHEALTH/FerroFED/issues/1976), [#2004](https://github.com/FerroHEALTH/FerroFED/issues/2004)).
+
+Against Art 28(b), no limitation was left out: the MyHealth@EU
+self-assessment names the five binding rows still partly met, and the
+instructions for use name the key, the pooler setting and the terminology
+server 0.0.22 asks for in their maintenance table, with the Upgrading
+page's notes for v0.0.22.
 
 No text suggested a use outside the intended purpose, (c).
 

@@ -98,6 +98,26 @@ to get the fix; upgrading is free
 
 ## Upgrade notes by release
 
+### To v0.0.22, from v0.0.21
+
+- Give the FHIR face a key for its stable ids: `fhir.id_key`, or
+  `fhir.id_key_file`, 32 random bytes in base64url (for example
+  `openssl rand 32 | basenc --base64url`). A configuration with `[fhir]` and
+  no key is refused at start and by `config check`. Rotating the key changes
+  every patient id the face gives
+  ([Looking a patient up](../integrate/patient-summary.md#looking-a-patient-up),
+  #1976).
+- `[store]`: the gateway sends the libpq `options` startup parameter on
+  every connection, which sets `statement_timeout`, `lock_timeout` and
+  `idle_in_transaction_session_timeout` to `[store] timeout`. A connection
+  pooler in front of the store must pass it on, or the gateway must connect
+  to PostgreSQL itself ([FerroFED's own store](store.md), #2004).
+- Name a terminology server in `[eehrxf.terminology]` where the FHIR face
+  writes discharge reports: a written discharge report states the record's
+  language only once that server answers that `eHDSILanguage` holds it, so
+  without one each discharge report is listed unavailable with the reason
+  ([Discharge reports](../integrate/discharge-reports.md), #1962).
+
 ### To v0.0.21, from v0.0.20
 
 - Name every issuer: each `[[auth.issuer]]` becomes an

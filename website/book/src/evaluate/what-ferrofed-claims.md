@@ -636,6 +636,28 @@ Released on 2026-11-25.
   segments, and the quickstart on FerroPIX 0.0.39
   ([#1941](https://github.com/FerroHEALTH/FerroFED/issues/1941), [#1922](https://github.com/FerroHEALTH/FerroFED/issues/1922), [#1927](https://github.com/FerroHEALTH/FerroFED/issues/1927)).
 
+### v0.0.22: the national contact point API, the vaccination history and measured speed
+
+Released on 2026-11-26.
+
+- The document list answers the MyHealth@EU national contact point API:
+  stable patient and document ids under `fhir.id_key`, `patient=Patient/{id}`,
+  `GET {fhir-base}/DocumentReference/{id}` and the `DocumentReference`
+  search parameters, a member asked with the parameters IHE MHD ITI-67
+  defines
+  ([#1975](https://github.com/FerroHEALTH/FerroFED/issues/1975), [#1976](https://github.com/FerroHEALTH/FerroFED/issues/1976), [#1977](https://github.com/FerroHEALTH/FerroFED/issues/1977), [#1982](https://github.com/FerroHEALTH/FerroFED/issues/1982), [#1996](https://github.com/FerroHEALTH/FerroFED/issues/1996)).
+- The vaccination history and the discharge report in their MyHealth@EU
+  forms, which HL7's FHIR Validator finds valid against MyHealth@EU
+  Vaccination 10.0.0-preview and Hospital Discharge Report 9.2.0, each
+  listed report described by `eehrxf` 0.45, and 26 of the catalogue's 31
+  binding rows met
+  ([#1949](https://github.com/FerroHEALTH/FerroFED/issues/1949), [#1962](https://github.com/FerroHEALTH/FerroFED/issues/1962), [#1978](https://github.com/FerroHEALTH/FerroFED/issues/1978), [#1980](https://github.com/FerroHEALTH/FerroFED/issues/1980)).
+- The hybrid key exchange X25519MLKEM768 offered first on every listener,
+  client and the store, the store's server-side session timeouts, and the
+  hot paths and background loops held to allocation and store-call budgets
+  in CI; the quickstart on FerroPIX 0.0.45
+  ([#1991](https://github.com/FerroHEALTH/FerroFED/issues/1991), [#2004](https://github.com/FerroHEALTH/FerroFED/issues/2004), [#2003](https://github.com/FerroHEALTH/FerroFED/issues/2003), [#2019](https://github.com/FerroHEALTH/FerroFED/issues/2019), [#2014](https://github.com/FerroHEALTH/FerroFED/issues/2014)).
+
 ## Limitations
 
 Regulation (EU) 2025/327 Art 28(b) forbids "failing to inform the

@@ -25,6 +25,143 @@ shaping, single-node routing and the targeting mechanisms in 0.0.6.
 
 ## [Unreleased]
 
+## [0.0.22] - 2026-11-26
+
+Security fixes until 2031-11-26, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)), shipped only in the newest release (Art 13(10)). This release is supported while it is the newest; upgrade to the newest release to get a fix, as [SECURITY.md](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions) says.
+
+### Upgrade notes
+
+- Give the FHIR face a key for its stable ids: `fhir.id_key`, or
+  `fhir.id_key_file`, 32 random bytes in base64url (for example
+  `openssl rand 32 | basenc --base64url`). A configuration with `[fhir]` and
+  no key is refused at start and by `config check`. Rotating the key changes
+  every patient id the face gives
+  ([Looking a patient up](https://ferrofed.eu/docs/integrate/patient-summary.html#looking-a-patient-up),
+  #1976).
+- `[store]`: the gateway sends the libpq `options` startup parameter on
+  every connection. A connection pooler in front of the store must pass it
+  on, or the gateway must connect to PostgreSQL itself.
+- Name a terminology server in `[eehrxf.terminology]` where the FHIR face
+  writes discharge reports: a written discharge report states the record's
+  language only once that server answers that `eHDSILanguage` holds it, so
+  without one each discharge report is listed unavailable with the reason
+  ([Discharge reports](https://ferrofed.eu/docs/integrate/discharge-reports.html),
+  #1962).
+
+### Added
+
+- The README carries one badge per MyHealth@EU guide FerroFED is tested against on its CI line, each naming the guide at the pinned version and saying self-tested: the NCPeH API 9.1.1-ci `DocumentReference` search parameters the document list answers (2 of 12), and the documents valid against MyHealth@EU Core 1.0.1, Laboratory Report 9.2.0 and Hospital Discharge Report 9.2.0, which HL7's FHIR Validator checks in CI against the verdicts `conformance/myhealth-eu-validation.tsv` records. The catalogue badge is labelled self-assessed, and `scripts/checks/myhealth-eu-ci.sh` refuses a badge label that says certified, compliant or conformant (#1952).
+- The document list evaluates the MyHealth@EU national contact point API
+  `DocumentReference` search parameters `category`, `contenttype`,
+  `status`, `modality`, `bodysite`, `creation`, `date` and `period` on
+  every entry it lists, and `metadata` declares them; a malformed value is a
+  `400` naming the parameter
+  ([The document list](https://ferrofed.eu/docs/integrate/patient-summary.html#the-document-list),
+  #1975).
+- The patient lookup gives each patient a stable id, the same in every
+  answer, derived from the identifier with HMAC-SHA-256 under a key from
+  `fhir.id_key`. With `[store]`, the identifier it stands for is kept sealed
+  for `fhir.id_lifetime`, and the document list answers
+  `patient=Patient/{id}`, the MyHealth@EU national contact point API's
+  `patient` parameter. An id the store no longer holds answers an empty
+  `searchset` with an `outcome` entry asking for the lookup again
+  ([Looking a patient up](https://ferrofed.eu/docs/integrate/patient-summary.html#looking-a-patient-up),
+  #1976).
+- Every entry of the document list has a stable id, the same in every list,
+  and a member's own `DocumentReference` takes it in place of the member's
+  id. `_id` selects entries by it. With `[store]`, `_id` alone and
+  `GET {fhir-base}/DocumentReference/{id}`, the MyHealth@EU national contact
+  point API's read, answer the document through the store's sealed record of
+  its patient, and an id the store no longer holds is a `404` asking for the
+  search again
+  ([Reading a listed document](https://ferrofed.eu/docs/integrate/patient-summary.html#reading-a-listed-document),
+  #1977).
+- The FHIR face writes the vaccination history MyHealth@EU Requirements
+  Catalogue v10.0.0 §1.24 asks of the contact point: with a
+  `[fhir.vaccination]` template, the document list names one
+  `bundle-euvac-myhealtheu` per attested immunisation list per member,
+  typed LOINC `11369-6`, whose legal authenticator is the person who
+  attested the record's version. A record no person attested, or a patient
+  with no name or birth date, is listed unavailable with the reason. HL7's
+  FHIR Validator finds the history valid against MyHealth@EU Vaccination
+  10.0.0-preview, and catalogue rows 16 and 16.01 are met
+  ([The vaccination history over FHIR](https://ferrofed.eu/docs/integrate/vaccination-history.html),
+  #1980).
+- The gateway, admin and console listeners, every client FerroFED builds and
+  the PostgreSQL store offer the hybrid key exchange X25519MLKEM768
+  (RFC 10024) first, through `ferrohealth-server` 0.12.4, and agree on
+  X25519, P-256 or P-384 with a peer that lacks it. `docs/post-quantum.md`
+  and `conformance/post-quantum.tsv` list every cryptographic use, and the
+  README badge counts the safe ones.
+
+### Changed
+
+- Each report the gateway writes is listed with the interoperability
+  component's own description of it, which FerroBRIDGE's validator holds to
+  both HL7 Europe `EehrxfMhdDocumentReference` and MyHealth@EU
+  `DocumentReference-minimal`: its version, language and period come from
+  the member's composition, its one `category` holds the document category
+  beside the priority category, and its master identifier is marked
+  `usual`. A written discharge report is now typed `34105-7` and a written
+  imaging report `18748-4`, the codes `DocumentReference-minimal` requires,
+  so a search for `18842-5` or `85430-7` no longer returns them. FerroFED
+  moves to `eehrxf` 0.40, `ferrobridge-term` 0.21, `ferrobridge-validator`
+  0.22 and `ferrohealth-smart` 0.35, whose own JWS library now verifies the
+  gateway's signed document URLs (#1949).
+- FerroFED reads the MyHealth@EU guides on their CI line, `build-fhir.ehdsi.eu`: Core 1.0.1, Laboratory Report 9.2.0, Hospital Discharge Report 9.2.0 and the Master Value Sets Catalogue 10.1.0, each pinned by URL and sha256 in place of Core 1.0.0, Laboratory Report 9.1.1 and Hospital Discharge Report 9.1.1. The exchange-format validator lane binds the patient summary's value sets from the catalogue's CI build, and `scripts/checks/pin-freshness.sh` watches every MyHealth@EU guide's CI build by its version and date and reports a guide the line builds that no pin watches. Core 1.0.0 and the catalogue's 9.1.0 stay vendored as the versions the guides with no newer CI build, and the CI builds themselves, depend on (#1951).
+- The MyHealth@EU self-assessment re-assesses catalogue rows 06, 06.01, 13,
+  13.01, 14, 14.01, 15 and 15.01 against what the face serves today: 23 of
+  31 binding rows are met. Laboratory, discharge and imaging reports are
+  listed, served and received, and prescriptions are served from openEHR in
+  the map mode. 06.01, 14.01 and 15.01 stay partly met: a mapped
+  prescription carries no missing-data reason, the discharge report does
+  not yet validate against MyHealth@EU HDR 9.2.0, and the catalogue lacks
+  the imaging codes HL7 Europe fixes
+  ([MyHealth@EU self-assessment](https://ferrofed.eu/docs/evaluate/myhealth-eu.html),
+  #1978).
+- FerroFED moves to `fhir-types` 0.2 and the `openehr-*` 0.5 line with the
+  family crates built on them: `eehrxf` 0.35 with `fhirconnect` 0.13,
+  `openehr-mapping-core` 0.9, `ferrobridge-term` 0.19 and
+  `ferrobridge-validator` 0.20, `ihe-iti` and `nl-generic-functions` 0.23,
+  and `ehds-logging` and `ihe-atna` 0.28, so one copy of each links. Every
+  report the gateway writes now states its language on the `Composition`,
+  which MyHealth@EU HDR 9.2.0 requires (#1979).
+- The document list asks a member that serves its own documents with the
+  `category`, `creation`, `date`, `period` and `status` of the search, the
+  parameters IHE MHD 4.2.2 ITI-67 defines, so less data travels, and still
+  evaluates every parameter on what the member answers
+  ([The document list](https://ferrofed.eu/docs/integrate/patient-summary.html#the-document-list),
+  #1982).
+- Every connection to FerroFED's own PostgreSQL store now runs under
+  `[store] timeout` on the server too: `statement_timeout`, `lock_timeout`
+  and `idle_in_transaction_session_timeout` are set to it at connect, and
+  `application_name` to `ferrofed`, so a statement the gateway stopped
+  waiting for holds no lock past the budget. A pooler in front of the
+  database must pass the libpq `options` parameter on
+  ([The store](https://ferrofed.eu/docs/operate/store.html), #2004).
+- The quickstart runs FerroPIX 0.0.45. Its configuration names each
+  identifier domain's `identifier_type` and trusts the development issuer
+  by its `issuer` and `audience` alone, and that issuer signs RFC 9068
+  `at+jwt` access tokens, as FerroPIX now requires (#2014).
+
+### Fixed
+
+- The discharge report the face writes is in the MyHealth@EU Hospital
+  Discharge Report 9.2.0 form, and HL7's FHIR Validator finds it valid
+  against `bundle-hdr-myhealtheu`: its author is the one the record names
+  (the identified composer, else the health care facility), its language is
+  the record's language-region tag once the terminology server of
+  `[eehrxf.terminology]` answers that `eHDSILanguage` holds it, and each
+  discharge medicine names when it was ordered and by whom. A record that
+  names no author or language, or a deployment with no terminology server,
+  is refused with the reason. Catalogue row 14.01 is met (`eehrxf` 0.45,
+  #1962).
+- The summary written on request is listed under one master identifier,
+  derived from its stable id, so `GET {fhir-base}/DocumentReference/{id}`
+  answers the entry the list named. As an IHE On-Demand Document Entry, it
+  carries neither hash nor size, and each summary written from it takes its
+  own identifier (ITI TF-1 §18.3.3.1, #1996).
+
 ## [0.0.21] - 2026-11-25
 
 Security fixes until 2031-11-25, 5 years from this release (Regulation (EU) 2024/2847 Art 13(8), (19)), shipped only in the newest release (Art 13(10)). This release is supported while it is the newest; upgrade to the newest release to get a fix, as [SECURITY.md](https://github.com/FerroHEALTH/FerroFED/blob/main/SECURITY.md#supported-versions) says.
@@ -7545,7 +7682,8 @@ the documentation site and the architecture of record, with no binaries.
   `SUPPORT.md`, `AI_STATEMENT.md`, `CITATION.cff`, `llms.txt`, and the root
   toolchain, format and lint configuration (#15).
 
-[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.21...HEAD
+[Unreleased]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.22...HEAD
+[0.0.22]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.21...v0.0.22
 [0.0.21]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.20...v0.0.21
 [0.0.20]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.19...v0.0.20
 [0.0.19]: https://github.com/FerroHEALTH/FerroFED/compare/v0.0.18...v0.0.19
