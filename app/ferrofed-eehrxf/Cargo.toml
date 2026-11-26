@@ -62,6 +62,9 @@ openehr-mapping-core.workspace = true
 # Every query is built as an AQL syntax tree and printed with
 # printer::to_aql, never spliced.
 openehr-query.workspace = true
+# The ORIGINAL_VERSION and ATTESTATION a vaccination history's legal
+# authenticators are read from (#1980).
+openehr-rm.workspace = true
 # The terminology server seam the terminology client implements.
 async-trait.workspace = true
 # FerroBRIDGE's FHIR terminology client, which the seam is answered with

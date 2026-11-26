@@ -99,6 +99,16 @@ pub const EPS_BUNDLE: &str = "http://hl7.eu/fhir/eps/StructureDefinition/bundle-
 /// The system of an identifier that is a URI (FHIR R4 `identifier-registry`).
 pub(super) const URI_SYSTEM: &str = "urn:ietf:rfc:3986";
 
+/// The document types the list names by one code each: the patient
+/// summary, the laboratory report, the discharge report the gateway writes
+/// and the vaccination history.
+const SINGLE: [&str; 4] = [
+    PATIENT_SUMMARY,
+    LABORATORY_REPORT,
+    HOSPITAL_DISCHARGE_SUMMARY,
+    IMMUNIZATION_HISTORY,
+];
+
 /// The `_format` values that ask for FHIR JSON.
 const JSON_FORMATS: [&str; 3] = ["json", "application/json", FHIR_JSON];
 
@@ -107,10 +117,7 @@ const JSON_FORMATS: [&str; 3] = ["json", "application/json", FHIR_JSON];
 #[derive(Clone, PartialEq, Eq)]
 pub struct ListRequest {
     subject: Subject,
-    summaries: bool,
-    laboratory: bool,
-    hospital_discharge: bool,
-    vaccination: bool,
+    single: Vec<&'static str>,
     discharge: Vec<&'static str>,
     imaging: Vec<&'static str>,
     criteria: Criteria,
@@ -119,10 +126,7 @@ pub struct ListRequest {
 impl std::fmt::Debug for ListRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ListRequest")
-            .field("summaries", &self.summaries)
-            .field("laboratory", &self.laboratory)
-            .field("hospital_discharge", &self.hospital_discharge)
-            .field("vaccination", &self.vaccination)
+            .field("single", &self.single)
             .field("discharge", &self.discharge)
             .field("imaging", &self.imaging)
             .field("criteria", &self.criteria)
@@ -201,28 +205,28 @@ impl ListRequest {
     /// summary, the one document type the face lists.
     #[must_use]
     pub fn admits_summaries(&self) -> bool {
-        self.summaries
+        self.single.contains(&PATIENT_SUMMARY)
     }
 
     /// Returns whether every `type` the search gives admits a laboratory
     /// report.
     #[must_use]
     pub fn admits_laboratory(&self) -> bool {
-        self.laboratory
+        self.single.contains(&LABORATORY_REPORT)
     }
 
     /// Returns whether every `type` the search gives admits a hospital
     /// discharge summary ([`HOSPITAL_DISCHARGE_SUMMARY`]).
     #[must_use]
     pub fn admits_hospital_discharge(&self) -> bool {
-        self.hospital_discharge
+        self.single.contains(&HOSPITAL_DISCHARGE_SUMMARY)
     }
 
     /// Returns whether every `type` the search gives admits a vaccination
     /// history ([`IMMUNIZATION_HISTORY`]).
     #[must_use]
     pub fn admits_vaccination(&self) -> bool {
-        self.vaccination
+        self.single.contains(&IMMUNIZATION_HISTORY)
     }
 
     /// Returns the codes of [`DISCHARGE_REPORTS`] every `type` the search
@@ -258,10 +262,7 @@ impl ListRequest {
     pub fn from_query(query: Option<&str>) -> Result<Self, ListRefusal> {
         let pairs = url::form_urlencoded::parse(query.unwrap_or_default().as_bytes());
         let mut subject = None;
-        let mut summaries = true;
-        let mut laboratory = true;
-        let mut hospital_discharge = true;
-        let mut vaccination = true;
+        let mut single = SINGLE.to_vec();
         let mut discharge = DISCHARGE_REPORTS.to_vec();
         let mut imaging = IMAGING_DOCUMENTS.to_vec();
         let mut criteria = Criteria::default();
@@ -286,17 +287,7 @@ impl ListRequest {
                 // NOTE: FHIR R4 search, several values; repeated parameters are ANDed and the
                 // values of one ORed, so every repetition must admit the summary type.
                 "type" => {
-                    summaries &= value.split(',').any(|token| admits(token, PATIENT_SUMMARY));
-                    laboratory &= value
-                        .split(',')
-                        .any(|token| admits(token, LABORATORY_REPORT));
-                    hospital_discharge &= value
-                        .split(',')
-                        .any(|token| admits(token, HOSPITAL_DISCHARGE_SUMMARY));
-                    vaccination &= value
-                        .split(',')
-                        .any(|token| admits(token, IMMUNIZATION_HISTORY));
-                    for codes in [&mut discharge, &mut imaging] {
+                    for codes in [&mut single, &mut discharge, &mut imaging] {
                         codes.retain(|code| value.split(',').any(|token| admits(token, code)));
                     }
                 }
@@ -324,10 +315,7 @@ impl ListRequest {
         };
         Ok(Self {
             subject,
-            summaries,
-            laboratory,
-            hospital_discharge,
-            vaccination,
+            single,
             discharge,
             imaging,
             criteria,
@@ -348,10 +336,7 @@ impl ListRequest {
         criteria.read("_id", &fhir_search::escape::escape(id))?;
         Ok(Self {
             subject: Subject::Document(id.to_owned()),
-            summaries: true,
-            laboratory: true,
-            hospital_discharge: true,
-            vaccination: true,
+            single: SINGLE.to_vec(),
             discharge: DISCHARGE_REPORTS.to_vec(),
             imaging: IMAGING_DOCUMENTS.to_vec(),
             criteria,

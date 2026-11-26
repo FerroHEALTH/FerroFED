@@ -172,16 +172,7 @@ fn unwritable(held: &Held, subject: Option<&Result<(), String>>) -> Option<Strin
     if let Some(Err(reason)) = subject {
         return Some(reason.clone());
     }
-    // NOTE: openEHR RM Common ORIGINAL_VERSION.attestations is 0..1, so a version with no cell,
-    // or one whose cell is no JSON, is legitimately one no person attested.
-    let attested = match held
-        .attestations
-        .as_deref()
-        .map(serde_json::from_str::<serde_json::Value>)
-    {
-        Some(Ok(attestations)) => vaccination::attesters(&attestations),
-        Some(Err(_)) | None => Err(vaccination::Unattested::None),
-    };
+    let attested = vaccination::listed(held.attestations.as_deref());
     attested.err().map(|unattested| unattested.to_string())
 }
 

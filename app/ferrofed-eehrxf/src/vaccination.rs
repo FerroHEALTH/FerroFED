@@ -43,9 +43,14 @@ use fhir_types::r4::identifier::Identifier;
 use fhir_types::r4::meta::Meta;
 use fhir_types::r4::practitioner::Practitioner;
 use fhir_types::r4::resource::Resource;
+use openehr_its::json::{JsonParseError, from_canonical_json, to_canonical_json};
 use openehr_its::rest::stored_query::{QualifiedQueryName, QueryNameError};
 use openehr_query::printer;
-use serde_json::Value;
+use openehr_rm::v1_2::common::change_control::original_version::OriginalVersion;
+use openehr_rm::v1_2::common::generic::attestation::Attestation;
+use openehr_rm::v1_2::common::generic::party_identified::PartyIdentified;
+use openehr_rm::v1_2::common::generic::party_proxy::PartyProxy;
+use openehr_rm::v1_2::composition::composition::Composition;
 
 use crate::list::LOINC;
 use crate::prescriptions::mapped::Template;
@@ -108,42 +113,35 @@ impl std::fmt::Debug for Attester {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
 pub enum Unattested {
-    /// The version carries no attestation, or one that is still pending.
+    /// The version carries no attestation, or only pending ones.
     #[error("no attestation of the record's version is complete")]
     None,
     /// Every complete attestation is by a committer the gateway cannot
-    /// describe as a person: no `PARTY_IDENTIFIED` with a name, or one with
-    /// no `time_committed`.
-    #[error("no complete attestation of the record's version names a person and a time")]
+    /// describe as a person: no `PARTY_IDENTIFIED` with a name.
+    #[error("no complete attestation of the record's version names a person")]
     Impersonal,
+    /// The attestations the member answered do not read as openEHR
+    /// `ATTESTATION`s.
+    #[error("the attestations of the record's version do not read")]
+    Unreadable,
 }
 
-/// The persons who attested a version, read from `attestations`, the
-/// `ORIGINAL_VERSION.attestations` of its canonical JSON: one `ATTESTATION`
-/// or a list of them.
+/// The persons who attested a version, of its `attestations` (openEHR RM
+/// Common `ORIGINAL_VERSION.attestations`).
 ///
-/// An attestation counts when it says it is not pending (`is_pending`,
-/// mandatory) and its
-/// `committer` is a `PARTY_IDENTIFIED` with a name (openEHR RM Common
-/// `ATTESTATION`, `AUDIT_DETAILS`); a `PARTY_SELF` is the record's subject.
+/// An attestation counts when it is not pending (`is_pending`) and its
+/// `committer` is a `PARTY_IDENTIFIED` itself with a name (openEHR RM
+/// Common `ATTESTATION`, `AUDIT_DETAILS`); a `PARTY_SELF` is the record's
+/// subject and a `PARTY_RELATED` a person related to the subject.
 ///
 /// # Errors
 ///
 /// [`Unattested::None`] when no attestation is complete, and
-/// [`Unattested::Impersonal`] when none of those names a person and a
-/// time.
-pub fn attesters(attestations: &Value) -> Result<Vec<Attester>, Unattested> {
-    let listed = match attestations {
-        Value::Array(listed) => listed.iter().collect(),
-        Value::Object(_) => vec![attestations],
-        _ => Vec::new(),
-    };
-    let complete: Vec<&Value> = listed
-        .into_iter()
-        .filter(|attestation| {
-            attestation.get("_type").and_then(Value::as_str) == Some("ATTESTATION")
-        })
-        .filter(|attestation| attestation.get("is_pending").and_then(Value::as_bool) == Some(false))
+/// [`Unattested::Impersonal`] when none of those names a person.
+pub fn attesters(attestations: &[Attestation]) -> Result<Vec<Attester>, Unattested> {
+    let complete: Vec<&Attestation> = attestations
+        .iter()
+        .filter(|attestation| !attestation.is_pending)
         .collect();
     if complete.is_empty() {
         return Err(Unattested::None);
@@ -155,15 +153,31 @@ pub fn attesters(attestations: &Value) -> Result<Vec<Attester>, Unattested> {
     Ok(persons)
 }
 
+/// The persons who attested a version, read from `cell`, the
+/// `v/attestations` a member answered the stored query with, a list of
+/// `ATTESTATION`s in canonical JSON, or none for a version with none.
+///
+/// # Errors
+///
+/// [`Unattested::Unreadable`] for a cell that is no list of
+/// `ATTESTATION`s, and the errors of [`attesters`].
+pub fn listed(cell: Option<&str>) -> Result<Vec<Attester>, Unattested> {
+    let attestations: Vec<Attestation> = match cell {
+        Some(cell) => from_canonical_json(cell).map_err(|_unread| Unattested::Unreadable)?,
+        None => Vec::new(),
+    };
+    attesters(&attestations)
+}
+
 /// Why a member's `ORIGINAL_VERSION` gives no vaccination history; no
 /// variant's text names a value the record carries.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Unversioned {
-    /// The answer is no JSON.
-    #[error("the version is no canonical JSON")]
-    Json(#[source] serde_json::Error),
-    /// The answer is no `ORIGINAL_VERSION` holding a composition.
+    /// The answer is no `ORIGINAL_VERSION` of a `COMPOSITION`.
+    #[error("the version does not read as an ORIGINAL_VERSION of a COMPOSITION")]
+    Unread(#[source] JsonParseError),
+    /// The version holds no composition.
     #[error("the version holds no composition")]
     NoData,
     /// No person attested the version.
@@ -179,45 +193,38 @@ pub enum Unversioned {
 ///
 /// The [`Unversioned`] that says why `version` gives none.
 pub fn original_version(version: &str) -> Result<(String, Vec<Attester>), Unversioned> {
-    let version: Value = serde_json::from_str(version).map_err(Unversioned::Json)?;
-    if version.get("_type").and_then(Value::as_str) != Some("ORIGINAL_VERSION") {
-        return Err(Unversioned::NoData);
-    }
-    let composition = version
-        .get("data")
-        .filter(|data| data.get("_type").and_then(Value::as_str) == Some("COMPOSITION"))
-        .ok_or(Unversioned::NoData)?;
-    let attested = attesters(version.get("attestations").unwrap_or(&Value::Null))?;
-    Ok((composition.to_string(), attested))
+    let version: OriginalVersion<Composition> =
+        from_canonical_json(version).map_err(Unversioned::Unread)?;
+    let composition = version.data.as_ref().ok_or(Unversioned::NoData)?;
+    let attested = attesters(version.attestations.as_deref().unwrap_or_default())?;
+    Ok((to_canonical_json(composition), attested))
 }
 
-/// The person `attestation` names, when its committer is a named
-/// `PARTY_IDENTIFIED` and it carries a `time_committed`.
-fn person(attestation: &Value) -> Option<Attester> {
-    // NOTE: openEHR RM Common AUDIT_DETAILS.committer is a PARTY_PROXY; an attestation by no
-    // named PARTY_IDENTIFIED is legitimately no person's, so it names no legal authenticator.
-    let committer = attestation
-        .get("committer")
-        .filter(|party| party.get("_type").and_then(Value::as_str) == Some("PARTY_IDENTIFIED"))?;
+/// The person `attestation` names, when its committer is a `PARTY_IDENTIFIED`
+/// itself with a name.
+fn person(attestation: &Attestation) -> Option<Attester> {
+    // NOTE: openEHR RM Common AUDIT_DETAILS.committer is a PARTY_PROXY; one that is no named
+    // PARTY_IDENTIFIED is legitimately no professional's, so it names no legal authenticator.
+    let PartyProxy::PartyIdentified(PartyIdentified::PartyIdentified(committer)) =
+        attestation.committer.as_ref()
+    else {
+        return None;
+    };
     let name = committer
-        .get("name")
-        .and_then(Value::as_str)
+        .name
+        .as_deref()
         .filter(|name| !name.trim().is_empty())?;
-    let time = attestation
-        .pointer("/time_committed/value")
-        .and_then(Value::as_str)?;
     let identifiers = committer
-        .get("identifiers")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|identifier| identifier.get("id").and_then(Value::as_str))
-        .map(str::to_owned)
+        .identifiers
+        .as_deref()
+        .unwrap_or_default()
+        .iter()
+        .map(|identifier| identifier.id.clone())
         .collect();
     Some(Attester {
         name: name.to_owned(),
         identifiers,
-        time: time.to_owned(),
+        time: attestation.time_committed.value.clone(),
     })
 }
 
@@ -307,7 +314,7 @@ impl Writes for Served {
         report: Report<'_>,
         terminology: &Terminology,
     ) -> Result<Bundle, ServedError> {
-        let record: Value = serde_json::from_str(composition).map_err(ServedError::Composition)?;
+        let record = serde_json::from_str(composition).map_err(ServedError::Composition)?;
         if report.attesters.is_empty() {
             return Err(ServedError::Unattested(Unattested::None));
         }
@@ -417,54 +424,51 @@ fn practitioner(index: usize, attester: &Attester) -> Practitioner {
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
+    use super::{Unattested, listed};
 
-    use super::{Unattested, attesters};
-
-    fn attestation(committer: serde_json::Value, pending: bool) -> serde_json::Value {
-        json!({
-            "_type": "ATTESTATION",
-            "system_id": "synthetic.example.org",
-            "time_committed": { "_type": "DV_DATE_TIME", "value": "2026-10-01T09:00:00Z" },
-            "change_type": { "_type": "DV_CODED_TEXT", "value": "creation", "defining_code": { "_type": "CODE_PHRASE", "terminology_id": { "_type": "TERMINOLOGY_ID", "value": "openehr" }, "code_string": "249" } },
-            "committer": committer,
-            "is_pending": pending,
-            "reason": { "_type": "DV_TEXT", "value": "signed" }
-        })
+    fn attestation(committer: &str, pending: bool) -> String {
+        format!(
+            r#"{{ "_type": "ATTESTATION", "system_id": "synthetic.example.org",
+  "time_committed": {{ "_type": "DV_DATE_TIME", "value": "2026-10-01T09:00:00Z" }},
+  "change_type": {{ "_type": "DV_CODED_TEXT", "value": "attestation", "defining_code": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "openehr" }}, "code_string": "666" }} }},
+  "committer": {committer}, "reason": {{ "_type": "DV_TEXT", "value": "Signed" }}, "is_pending": {pending} }}"#
+        )
     }
 
-    fn person() -> serde_json::Value {
-        json!({ "_type": "PARTY_IDENTIFIED", "name": "Synthetic Attester" })
-    }
+    const PERSON: &str = r#"{ "_type": "PARTY_IDENTIFIED", "name": "Synthetic Attester" }"#;
 
     #[test]
     fn a_complete_attestation_by_a_named_person_names_its_attester() {
-        let found = attesters(&json!([attestation(person(), false)])).unwrap();
+        let found = listed(Some(&format!("[{}]", attestation(PERSON, false)))).unwrap();
         assert_eq!(found.len(), 1);
     }
 
     #[test]
     fn no_attestation_or_only_a_pending_one_is_none() {
-        assert_eq!(attesters(&json!([])), Err(Unattested::None));
-        assert_eq!(attesters(&serde_json::Value::Null), Err(Unattested::None));
+        assert_eq!(listed(None), Err(Unattested::None));
+        assert_eq!(listed(Some("[]")), Err(Unattested::None));
         assert_eq!(
-            attesters(&json!([attestation(person(), true)])),
+            listed(Some(&format!("[{}]", attestation(PERSON, true)))),
             Err(Unattested::None)
         );
     }
 
     #[test]
     fn an_attestation_by_the_subject_or_a_nameless_party_is_impersonal() {
-        assert_eq!(
-            attesters(&attestation(json!({ "_type": "PARTY_SELF" }), false)),
-            Err(Unattested::Impersonal)
-        );
-        assert_eq!(
-            attesters(&json!([attestation(
-                json!({ "_type": "PARTY_IDENTIFIED" }),
-                false
-            )])),
-            Err(Unattested::Impersonal)
-        );
+        for committer in [
+            r#"{ "_type": "PARTY_SELF" }"#,
+            r#"{ "_type": "PARTY_IDENTIFIED", "identifiers": [{ "_type": "DV_IDENTIFIER", "id": "x" }] }"#,
+        ] {
+            assert_eq!(
+                listed(Some(&format!("[{}]", attestation(committer, false)))),
+                Err(Unattested::Impersonal),
+                "{committer}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_cell_that_is_no_list_of_attestations_does_not_read() {
+        assert_eq!(listed(Some("{}")), Err(Unattested::Unreadable));
     }
 }
