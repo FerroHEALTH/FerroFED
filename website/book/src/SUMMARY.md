@@ -49,6 +49,7 @@
   - [Laboratory reports over FHIR](integrate/laboratory-reports.md)
   - [Discharge reports over FHIR](integrate/discharge-reports.md)
   - [Imaging reports over FHIR](integrate/imaging-reports.md)
+  - [The vaccination history over FHIR](integrate/vaccination-history.md)
   - [Terminology on the FHIR face](integrate/terminology.md)
 - [Prescriptions and dispensations over FHIR](integrate/prescriptions.md)
 - [A national contact point](integrate/national-contact-point.md)

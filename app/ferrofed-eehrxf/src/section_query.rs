@@ -23,6 +23,10 @@
 //! archetypes from an openEHR template ([`crate::patient_summary`],
 //! [`crate::laboratory`]), or, for a document one composition archetype
 //! carries whole, by that archetype ([`composed`], [`crate::discharge`]).
+//! A document whose legal authenticator is the record's attester also
+//! selects the attestations of each composition's version, through
+//! `VERSION v CONTAINS COMPOSITION c` ([`attested`],
+//! [`crate::vaccination`]).
 
 use openehr_query::ast::{
     ArchetypePredicate, ClassExprOperand, ColumnExpr, CompareOperand, ContainsConstraint,
@@ -69,14 +73,20 @@ pub struct Placed {
 #[must_use]
 pub fn query(archetypes: &[Archetype], held: &[Placed]) -> Option<SelectQuery> {
     let entries = entries(archetypes, held)?;
-    Some(selecting(class("COMPOSITION", "c", None), Some(entries)))
+    Some(selecting(contained(
+        class("COMPOSITION", "c", None),
+        Some(entries),
+    )))
 }
 
 /// Returns the query that selects every composition containing
 /// `archetype`, in the shape [`query`] gives.
 #[must_use]
 pub fn containing(archetype: &Archetype) -> SelectQuery {
-    selecting(class("COMPOSITION", "c", None), Some(leaf(archetype, 0)))
+    selecting(contained(
+        class("COMPOSITION", "c", None),
+        Some(leaf(archetype, 0)),
+    ))
 }
 
 /// Returns the query that selects every composition of the composition
@@ -85,13 +95,40 @@ pub fn containing(archetype: &Archetype) -> SelectQuery {
 #[must_use]
 pub fn composed(composition: &str) -> SelectQuery {
     let predicate = PathPredicate::Archetype(ArchetypePredicate::Hrid(composition.to_owned()));
-    selecting(class("COMPOSITION", "c", Some(predicate)), None)
+    selecting(contained(class("COMPOSITION", "c", Some(predicate)), None))
 }
 
-/// The query that selects each whole composition `composition` names,
-/// containing `entries` when given, with its uid and its template id, for
-/// the patient the two parameters name.
-fn selecting(composition: ClassExprOperand, entries: Option<ContainsExpr>) -> SelectQuery {
+/// Returns the query that selects every composition holding the `SECTION`
+/// archetype `section`, with the attestations of its version.
+///
+/// It is in the shape [`query`] gives, with a fourth column, `attestations`
+/// (openEHR RM Common `ORIGINAL_VERSION.attestations`).
+#[must_use]
+pub fn attested(section: &str) -> SelectQuery {
+    let predicate = PathPredicate::Archetype(ArchetypePredicate::Hrid(section.to_owned()));
+    let composition = contained(
+        class("COMPOSITION", "c", None),
+        Some(contained(class("SECTION", "s0", Some(predicate)), None)),
+    );
+    let version = ClassExprOperand::Version {
+        variable: Some(String::from("v")),
+        predicate: None,
+    };
+    let mut query = selecting(contained(version, Some(composition)));
+    query.select.columns.push(SelectExpr {
+        column: ColumnExpr::Path(identified("v", &["attestations"])),
+        alias: Some(ATTESTATIONS.to_owned()),
+    });
+    query
+}
+
+/// The alias of the column [`attested`] selects the attestations in.
+pub const ATTESTATIONS: &str = "attestations";
+
+/// The query that selects each whole composition `c` the `CONTAINS`
+/// expression `held` under the EHR binds, with its uid and its template id,
+/// for the patient the two parameters name.
+fn selecting(held: ContainsExpr) -> SelectQuery {
     let column = |path: IdentifiedPath, alias: &str| SelectExpr {
         column: ColumnExpr::Path(path),
         alias: Some(alias.to_owned()),
@@ -109,10 +146,7 @@ fn selecting(composition: ClassExprOperand, entries: Option<ContainsExpr>) -> Se
                 ),
             ],
         },
-        from: contained(
-            class("EHR", "e", None),
-            Some(contained(composition, entries)),
-        ),
+        from: contained(class("EHR", "e", None), Some(held)),
         where_: Some(WhereExpr::And(
             Box::new(subject(&["id", "value"], PATIENT)),
             Box::new(subject(&["namespace"], ISSUER)),

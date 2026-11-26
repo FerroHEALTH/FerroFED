@@ -95,6 +95,8 @@
 //!   (#1623);
 //! - [`unreachable`](mod@unreachable): a base URL no connection can
 //!   reach, the unreachable node of a test;
+//! - [`vaccination`]: a synthetic immunisation list composition and the
+//!   `ORIGINAL_VERSION` with its attestations a member answers (#1980);
 //! - [`spool`]: the records an audit spool holds on disk, read from its
 //!   segments (#1922);
 //! - [`seed`]: the synthetic seed builder, which writes over ITS-REST alone,
@@ -152,6 +154,7 @@ mod sender;
 pub mod spool;
 pub mod tls;
 pub mod unreachable;
+pub mod vaccination;
 pub mod xcpd;
 
 use std::fmt;

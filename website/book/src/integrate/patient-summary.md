@@ -364,7 +364,9 @@ writes from the members' compositions and the ones a member serves itself
 ([Laboratory reports over FHIR](laboratory-reports.md)), and the discharge
 reports and imaging documents a member serves itself
 ([Discharge reports over FHIR](discharge-reports.md),
-[Imaging reports over FHIR](imaging-reports.md)).
+[Imaging reports over FHIR](imaging-reports.md)), and the vaccination
+history the gateway writes from each member's attested immunisation list
+([The vaccination history over FHIR](vaccination-history.md)).
 
 `metadata` declares the search: the `DocumentReference` resource with the
 `search-type` interaction, its supported profile and each parameter above

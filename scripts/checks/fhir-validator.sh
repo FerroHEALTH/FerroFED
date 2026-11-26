@@ -87,11 +87,13 @@ docs/specs/ihe-pharm-mpd/ihe.pharm.mpd.r4-1.0.0-comment-2.tgz"
 readonly MYHEALTH_EU_CHECKS="\
 core	docs/specs/ehdsi-core/myhealth.eu.fhir.core-1.0.1.tgz	http://fhir.ehdsi.eu/core/StructureDefinition/patient-myhealtheu-core	patients
 laboratory	docs/specs/ehdsi-laboratory/myhealth.eu.fhir.laboratory-9.2.0.tgz	http://fhir.ehdsi.eu/laboratory/StructureDefinition/Bundle-lab-myhealtheu	myhealth-eu/laboratory
-discharge	docs/specs/ehdsi-hdr/myhealth.eu.fhir.hdr-9.2.0.tgz	http://fhir.ehdsi.eu/hdr/StructureDefinition/bundle-hdr-myhealtheu	myhealth-eu/discharge"
+discharge	docs/specs/ehdsi-hdr/myhealth.eu.fhir.hdr-9.2.0.tgz	http://fhir.ehdsi.eu/hdr/StructureDefinition/bundle-hdr-myhealtheu	myhealth-eu/discharge
+vaccination	docs/specs/ehdsi-euvac/myhealth.eu.fhir.euvac-10.0.0-preview.tgz	http://fhir.ehdsi.eu/euvac/StructureDefinition/bundle-euvac-myhealtheu	myhealth-eu/vaccination"
 readonly MYHEALTH_EU_VENDORED="\
 docs/specs/ehdsi-core/myhealth.eu.fhir.core-1.0.1.tgz
 docs/specs/ehdsi-laboratory/myhealth.eu.fhir.laboratory-9.2.0.tgz
 docs/specs/ehdsi-hdr/myhealth.eu.fhir.hdr-9.2.0.tgz
+docs/specs/ehdsi-euvac/myhealth.eu.fhir.euvac-10.0.0-preview.tgz
 docs/specs/ehdsi-mvc/myhealth.eu.fhir.mvc-package-9.1.0.tgz
 docs/specs/eu-hl7-laboratory/hl7.fhir.eu.laboratory-2.1.0.tgz
 docs/specs/eu-hl7-hdr/hl7.fhir.eu.hdr-1.0.0.tgz
@@ -136,7 +138,10 @@ hl7.fhir.uv.extensions	5.3.0	6e3a3f9929e05d2b813a3f98fa1ad2f5122fb6b2819fa73e6c5
 hl7.fhir.r5.core	5.0.0	74b27cd1bfce9e80eaceac431edf230b0945a443564fbf5512f82e5fa50a80d4
 hl7.fhir.uv.extensions.r5	5.2.0	e02fc6eff0f37c1611a35aa93ef9aaa3b55ab7371a5c96f4d2a5834106a13170
 hl7.fhir.uv.extensions.r5	5.3.0	f1039cac888d79ebd29878d7debe5e647ffe7ed962a9033da095258a03a06105
-hl7.terminology.r5	7.1.0	473303108b5607aad7b910581739e8bbf3e61a625ed9e739c66e0ca597d4aefe"
+hl7.terminology.r5	7.1.0	473303108b5607aad7b910581739e8bbf3e61a625ed9e739c66e0ca597d4aefe
+myhealth.eu.fhir.core	1.0.0	d40b9979dd971a76fc39452aee4091a5f79a9d46192ece7c28e70b4d429a9270
+xtehr.eu.ehds.models	0.3.0	f2cb6b0b5b35cab33e9b618b38c54797ece61f5e2dda59982c952ecd9398865b
+hl7.terminology.r5	7.0.1	f2de7264bd4a9c6771f211ee96b9952d32ab866e8b5d657884f8c375a34ffb87"
 
 fail=0
 bad() {

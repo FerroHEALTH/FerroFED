@@ -67,6 +67,7 @@ fn held(uid: &str, template: &str) -> Held {
         uid: uid.to_owned(),
         template: template.to_owned(),
         composition: eps::allergy_composition(uid, template, "Synthetic substance"),
+        attestations: None,
     }
 }
 

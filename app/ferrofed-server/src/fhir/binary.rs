@@ -184,7 +184,7 @@ pub(super) fn mint_written(
     signed(
         (signer, fhir, caller),
         (&chosen.via, chosen),
-        (written.category(), written.bundle()),
+        (written.code(), written.bundle()),
         (Some(composition), None),
     )
 }
@@ -279,7 +279,7 @@ fn chosen(federation: &Federation, claims: &Claims) -> Result<Chosen, Untaken> {
     let via = EndpointId::new(claims.via.as_str()).map_err(|_bad| Untaken::Unheld)?;
     let ehr_id = EhrId::new(claims.ehr_id.as_str()).map_err(|_bad| Untaken::Unheld)?;
     if claims.composition.is_some() {
-        let mapped = Written::of_category(&claims.category)
+        let mapped = Written::of_code(&claims.category)
             .is_some_and(|written| claims.profile == written.bundle());
         if !mapped || claims.binary.is_some() || native != via {
             return Err(Untaken::Unheld);
@@ -427,7 +427,7 @@ fn taken(admitted: &admission::Admitted<'_>, token: &str) -> Result<(Chosen, Nam
     let member = chosen(federation, &claims).map_err(|refused| untaken(&refused, logged))?;
     let named = match (claims.composition, claims.binary) {
         (Some(composition), _) => {
-            let written = Written::of_category(&claims.category)
+            let written = Written::of_code(&claims.category)
                 .ok_or_else(|| untaken(&Untaken::Unheld, logged))?;
             Named::Composition(written, composition)
         }

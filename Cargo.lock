@@ -1423,6 +1423,7 @@ dependencies = [
  "openehr-its",
  "openehr-mapping-core",
  "openehr-query",
+ "openehr-rm",
  "serde",
  "serde_json",
  "tempfile",

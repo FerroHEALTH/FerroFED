@@ -30,6 +30,8 @@ pub enum Lane {
     /// A hospital discharge report, also held to MyHealth@EU Hospital
     /// Discharge Report (#1952).
     Discharge,
+    /// A vaccination history, held to MyHealth@EU Vaccination (#1980).
+    Vaccination,
 }
 
 impl Lane {
@@ -41,6 +43,7 @@ impl Lane {
             Self::Eehrxf => None,
             Self::Laboratory => Some("myhealth-eu/laboratory"),
             Self::Discharge => Some("myhealth-eu/discharge"),
+            Self::Vaccination => Some("myhealth-eu/vaccination"),
         }
     }
 }

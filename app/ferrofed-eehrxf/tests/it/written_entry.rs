@@ -162,7 +162,7 @@ fn each_written_entry_is_the_components_description_of_its_composition()
             .ok_or("one category with codings")?;
         assert_eq!(reference["category"].as_array().map(Vec::len), Some(1));
         assert_eq!(codings.len(), 2, "{codings:?}");
-        assert_eq!(codings[1]["code"], written.category());
+        assert_eq!(codings[1]["code"], written.code());
         assert_eq!(reference["content"][0]["format"]["code"], written.bundle());
         assert_eq!(reference["custodian"]["display"], "Synthetic member");
     }

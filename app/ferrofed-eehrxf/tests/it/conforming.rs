@@ -15,9 +15,10 @@ use ferrobridge_validator::set::PackageSet;
 use std::sync::Arc;
 
 use eehrxf::terminology::Terminology;
-use ferrofed_eehrxf::report::{Report, Writes};
+use ferrofed_eehrxf::report::{Report, ServedError, Writes};
 use ferrofed_eehrxf::summary::Organisation;
 use ferrofed_eehrxf::terminology::BridgeTerminology;
+use ferrofed_eehrxf::vaccination::Attester;
 use ferrofed_identity::role::header::PatientHeader;
 use ferrofed_testkit::ehdsi_language;
 use ferrofed_testkit::mock::Server;
@@ -46,13 +47,29 @@ pub(crate) async fn written(
     header: &PatientHeader,
     terminology: &Terminology,
 ) -> Result<Bundle, Box<dyn Error>> {
+    Ok(attested(
+        served,
+        (composition, identifier),
+        (header, &[]),
+        terminology,
+    )
+    .await?)
+}
+
+/// What [`written`] answers for a version the persons `attesters` attested.
+pub(crate) async fn attested(
+    served: &dyn Writes,
+    (composition, identifier): (&str, &str),
+    (header, attesters): (&PatientHeader, &[Attester]),
+    terminology: &Terminology,
+) -> Result<Bundle, ServedError> {
     let organisation = |name: &str| Organisation {
         id: name.to_lowercase().replace(' ', "-"),
         name: Some(name.to_owned()),
         identifiers: Vec::new(),
     };
     let (operator, member) = (organisation("Synthetic operator"), organisation(MEMBER));
-    Ok(served
+    served
         .document(
             composition,
             Report {
@@ -63,10 +80,11 @@ pub(crate) async fn written(
                 header,
                 operator: &operator,
                 member: &member,
+                attesters,
             },
             terminology,
         )
-        .await?)
+        .await
 }
 
 /// The name of the member [`written`] reads the report at.

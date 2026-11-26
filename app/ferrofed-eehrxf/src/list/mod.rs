@@ -87,12 +87,27 @@ pub const IMAGING_REPORT: &str = "85430-7";
 /// MyHealth@EU `eHDSIMedicalImagingReportType`.
 pub const IMAGING_STUDY: &str = "18748-4";
 
+/// The LOINC code a vaccination history is listed under, `11369-6`
+/// "History of Immunization note", which `composition-euvac-myhealtheu`
+/// fixes as its type and MyHealth@EU `eHDSIDocumentCode` holds.
+pub const IMMUNIZATION_HISTORY: &str = eehrxf::document::vaccination::IMMUNIZATION_HISTORY;
+
 /// The canonical URL of the document `Bundle` profile the gateway's own
 /// summary follows.
 pub const EPS_BUNDLE: &str = "http://hl7.eu/fhir/eps/StructureDefinition/bundle-eu-eps";
 
 /// The system of an identifier that is a URI (FHIR R4 `identifier-registry`).
 pub(super) const URI_SYSTEM: &str = "urn:ietf:rfc:3986";
+
+/// The document types the list names by one code each: the patient
+/// summary, the laboratory report, the discharge report the gateway writes
+/// and the vaccination history.
+const SINGLE: [&str; 4] = [
+    PATIENT_SUMMARY,
+    LABORATORY_REPORT,
+    HOSPITAL_DISCHARGE_SUMMARY,
+    IMMUNIZATION_HISTORY,
+];
 
 /// The parameters a member that serves its own documents is asked with as
 /// a narrowing, the ones IHE MHD 4.2.2 ITI-67 defines beside `type`
@@ -107,9 +122,7 @@ const JSON_FORMATS: [&str; 3] = ["json", "application/json", FHIR_JSON];
 #[derive(Clone, PartialEq, Eq)]
 pub struct ListRequest {
     subject: Subject,
-    summaries: bool,
-    laboratory: bool,
-    hospital_discharge: bool,
+    single: Vec<&'static str>,
     discharge: Vec<&'static str>,
     imaging: Vec<&'static str>,
     criteria: Criteria,
@@ -119,9 +132,7 @@ pub struct ListRequest {
 impl std::fmt::Debug for ListRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ListRequest")
-            .field("summaries", &self.summaries)
-            .field("laboratory", &self.laboratory)
-            .field("hospital_discharge", &self.hospital_discharge)
+            .field("single", &self.single)
             .field("discharge", &self.discharge)
             .field("imaging", &self.imaging)
             .field("criteria", &self.criteria)
@@ -201,21 +212,28 @@ impl ListRequest {
     /// summary, the one document type the face lists.
     #[must_use]
     pub fn admits_summaries(&self) -> bool {
-        self.summaries
+        self.single.contains(&PATIENT_SUMMARY)
     }
 
     /// Returns whether every `type` the search gives admits a laboratory
     /// report.
     #[must_use]
     pub fn admits_laboratory(&self) -> bool {
-        self.laboratory
+        self.single.contains(&LABORATORY_REPORT)
     }
 
     /// Returns whether every `type` the search gives admits a hospital
     /// discharge summary ([`HOSPITAL_DISCHARGE_SUMMARY`]).
     #[must_use]
     pub fn admits_hospital_discharge(&self) -> bool {
-        self.hospital_discharge
+        self.single.contains(&HOSPITAL_DISCHARGE_SUMMARY)
+    }
+
+    /// Returns whether every `type` the search gives admits a vaccination
+    /// history ([`IMMUNIZATION_HISTORY`]).
+    #[must_use]
+    pub fn admits_vaccination(&self) -> bool {
+        self.single.contains(&IMMUNIZATION_HISTORY)
     }
 
     /// Returns the codes of [`DISCHARGE_REPORTS`] every `type` the search
@@ -262,9 +280,7 @@ impl ListRequest {
     pub fn from_query(query: Option<&str>) -> Result<Self, ListRefusal> {
         let pairs = url::form_urlencoded::parse(query.unwrap_or_default().as_bytes());
         let mut subject = None;
-        let mut summaries = true;
-        let mut laboratory = true;
-        let mut hospital_discharge = true;
+        let mut single = SINGLE.to_vec();
         let mut discharge = DISCHARGE_REPORTS.to_vec();
         let mut imaging = IMAGING_DOCUMENTS.to_vec();
         let mut criteria = Criteria::default();
@@ -290,14 +306,7 @@ impl ListRequest {
                 // NOTE: FHIR R4 search, several values; repeated parameters are ANDed and the
                 // values of one ORed, so every repetition must admit the summary type.
                 "type" => {
-                    summaries &= value.split(',').any(|token| admits(token, PATIENT_SUMMARY));
-                    laboratory &= value
-                        .split(',')
-                        .any(|token| admits(token, LABORATORY_REPORT));
-                    hospital_discharge &= value
-                        .split(',')
-                        .any(|token| admits(token, HOSPITAL_DISCHARGE_SUMMARY));
-                    for codes in [&mut discharge, &mut imaging] {
+                    for codes in [&mut single, &mut discharge, &mut imaging] {
                         codes.retain(|code| value.split(',').any(|token| admits(token, code)));
                     }
                 }
@@ -328,9 +337,7 @@ impl ListRequest {
         };
         Ok(Self {
             subject,
-            summaries,
-            laboratory,
-            hospital_discharge,
+            single,
             discharge,
             imaging,
             criteria,
@@ -352,9 +359,7 @@ impl ListRequest {
         criteria.read("_id", &fhir_search::escape::escape(id))?;
         Ok(Self {
             subject: Subject::Document(id.to_owned()),
-            summaries: true,
-            laboratory: true,
-            hospital_discharge: true,
+            single: SINGLE.to_vec(),
             discharge: DISCHARGE_REPORTS.to_vec(),
             imaging: IMAGING_DOCUMENTS.to_vec(),
             criteria,
@@ -797,6 +802,29 @@ pub fn unread(endpoint: &str, documents: &str, reason: &str) -> OperationOutcome
                      the list cannot pass through: {reason} (§11.3)"
                 )
                 .into(),
+            ),
+            ..OperationOutcomeIssue::default()
+        }],
+        ..OperationOutcome::default()
+    }
+}
+
+/// Returns the `OperationOutcome` that names a document the gateway would
+/// write from a member's record and cannot, so the list names it
+/// unavailable in its place.
+///
+/// The member's Query API endpoint is `endpoint`, the document is named
+/// `document`, such as a vaccination history, and `reason` says why, naming
+/// no value the record carries. The member answered, so its §11.1 status is
+/// unchanged.
+#[must_use]
+pub fn unavailable(endpoint: &str, document: &str, reason: &str) -> OperationOutcome {
+    OperationOutcome {
+        issue: vec![OperationOutcomeIssue {
+            severity: "warning".into(),
+            code: "incomplete".into(),
+            diagnostics: Some(
+                format!("a {document} of {endpoint} is unavailable: {reason}").into(),
             ),
             ..OperationOutcomeIssue::default()
         }],

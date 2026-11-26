@@ -48,6 +48,7 @@ fn mapped_allergy(relation_code: &str) -> Result<Held, Box<dyn Error>> {
         uid: uid.to_owned(),
         template: eps::TEMPLATE.to_owned(),
         composition: composition.to_string(),
+        attestations: None,
     })
 }
 
@@ -142,6 +143,7 @@ fn locally_coded_allergy() -> Result<Held, Box<dyn Error>> {
         uid: uid.to_owned(),
         template: eps::TEMPLATE.to_owned(),
         composition: composition.to_string(),
+        attestations: None,
     })
 }
 

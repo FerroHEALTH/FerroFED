@@ -639,7 +639,8 @@ fn version_key(uid: &str) -> Option<(String, String)> {
 }
 
 /// The compositions of `rows`, each read from the composition, uid and
-/// template id columns `sources` places in a node row.
+/// template id columns `sources` places in a node row, with the
+/// attestations of a fourth column when the query selects one.
 pub(crate) fn compositions(rows: &[ResultSetRow], sources: &[ColumnSource]) -> Vec<Held> {
     let node = |column: usize| match sources.get(column) {
         Some(ColumnSource::Node(index)) => Some(*index),
@@ -648,6 +649,7 @@ pub(crate) fn compositions(rows: &[ResultSetRow], sources: &[ColumnSource]) -> V
     let (Some(composition), Some(uid), Some(template)) = (node(0), node(1), node(2)) else {
         return Vec::new();
     };
+    let attestations = node(3);
     rows.iter()
         .filter_map(|row| {
             // NOTE: AQL §SELECT; a row without its composition, uid or template id holds
@@ -656,6 +658,9 @@ pub(crate) fn compositions(rows: &[ResultSetRow], sources: &[ColumnSource]) -> V
                 composition: cells::json(row, composition)?,
                 uid: cells::text(row, uid)?.to_owned(),
                 template: cells::text(row, template)?.to_owned(),
+                // NOTE: openEHR RM Common ORIGINAL_VERSION.attestations is 0..1; a version with
+                // none legitimately has no cell, so the composition is kept with none.
+                attestations: attestations.and_then(|column| cells::json(row, column)),
             })
         })
         .collect()

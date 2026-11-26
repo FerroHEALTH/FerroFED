@@ -21,10 +21,9 @@ use eehrxf::document::language::LanguageError;
 use eehrxf::terminology::Terminology;
 use ferrofed_eehrxf::discharge::{self, COMPOSITION, ELEMENT, SLUG, Served};
 use ferrofed_eehrxf::prescriptions::mapped::Template;
-use ferrofed_eehrxf::report::{Report, ServedError, Writes as _};
+use ferrofed_eehrxf::report::ServedError;
 use ferrofed_eehrxf::reserved::{self, NAMESPACE, SAVED, VERSION};
 use ferrofed_eehrxf::section_query::{self, ISSUER, PATIENT};
-use ferrofed_eehrxf::summary::Organisation;
 use ferrofed_identity::role::header::{PatientHeader, PersonName};
 use ferrofed_testkit::discharge as fixture;
 use ferrofed_testkit::fhir_packages;
@@ -100,15 +99,6 @@ fn served() -> Result<Served, Box<dyn Error>> {
         template: &written.template,
         archetypes: &written.archetypes,
     })?)
-}
-
-/// A synthetic organisation named `name`.
-fn organisation(name: &str) -> Organisation {
-    Organisation {
-        id: name.to_lowercase().replace(' ', "-"),
-        name: Some(name.to_owned()),
-        identifiers: Vec::new(),
-    }
 }
 
 /// The synthetic family name the identity binding holds.
@@ -322,22 +312,13 @@ async fn refused(
     composition: &str,
     terminology: &Terminology,
 ) -> Result<Result<fhir_types::r4::bundle::Bundle, ServedError>, Box<dyn Error>> {
-    let (operator, member) = (organisation("o"), organisation("m"));
-    Ok(served()?
-        .document(
-            composition,
-            Report {
-                base: "https://gateway.example.org/fhir",
-                identifier: "urn:uuid:5b0c3f7e-0000-4000-8000-00000000d102",
-                timestamp: "2026-10-21T08:00:00Z",
-                patient: ("urn:oid:2.999.1", "synthetic-patient-0001"),
-                header: &header(),
-                operator: &operator,
-                member: &member,
-            },
-            terminology,
-        )
-        .await)
+    Ok(conforming::attested(
+        &served()?,
+        (composition, "urn:uuid:5b0c3f7e-0000-4000-8000-00000000d102"),
+        (&header(), &[]),
+        terminology,
+    )
+    .await)
 }
 
 #[tokio::test]

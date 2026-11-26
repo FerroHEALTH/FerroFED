@@ -151,6 +151,9 @@ pub struct Held {
     pub template: String,
     /// The composition, as canonical JSON.
     pub composition: String,
+    /// The attestations of its version, as canonical JSON, for a query that
+    /// selects them ([`crate::section_query::attested`]); none otherwise.
+    pub attestations: Option<String>,
 }
 
 /// What one origin answered to one section query.

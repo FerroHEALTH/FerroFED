@@ -29,6 +29,20 @@ use crate::facade::prescriptions::Unprescribed;
 use crate::facade::request::Arrived;
 use crate::federation::Federation;
 
+/// The category of personal electronic health data an access to a
+/// document of `written` is recorded under (Regulation (EU) 2025/327 Annex
+/// II 3.2(c)).
+pub(crate) const fn recorded(written: Written) -> Category {
+    match written {
+        Written::Laboratory => Category::MedicalTestResult,
+        Written::Discharge => Category::DischargeReport,
+        Written::Imaging => Category::MedicalImaging,
+        // NOTE: Regulation (EU) 2025/327 recital 25: vaccination status is part of a patient
+        // summary, and the patient summary's rules apply to it processed separately.
+        Written::Vaccination => Category::PatientSummary,
+    }
+}
+
 /// What each member answered the stored query of each written category, by
 /// category and then in endpoint order.
 pub(crate) type Answers = BTreeMap<Written, Vec<(EndpointId, Answered)>>;
@@ -59,8 +73,7 @@ pub(super) async fn queried(
     };
     let mut answers = Answers::new();
     for category in written {
-        let serving =
-            native::chosen_for(federation.snapshot(), &located.targets, category.category());
+        let serving = native::chosen_for(federation.snapshot(), &located.targets, category.code());
         let answered = reports(
             federation,
             arrived,

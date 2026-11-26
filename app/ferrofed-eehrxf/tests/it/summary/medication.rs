@@ -73,6 +73,7 @@ fn medication_held(uid: &str, used: &[eps::Medicine<'_>], ordered: &[eps::Medici
         uid: uid.to_owned(),
         template: eps::MEDICATION_TEMPLATE.to_owned(),
         composition: eps::medication_composition(uid, used, ordered),
+        attestations: None,
     }
 }
 

@@ -5,8 +5,9 @@
 //! shares.
 //!
 //! The reports are the laboratory report ([`crate::laboratory`]), the
-//! discharge report ([`crate::discharge`]) and the imaging report
-//! ([`crate::imaging`]).
+//! discharge report ([`crate::discharge`]), the imaging report
+//! ([`crate::imaging`]) and the vaccination history
+//! ([`crate::vaccination`]).
 //!
 //! Each is a document the gateway authors with its `Device` and the
 //! operator's `Organization`, about the `Patient` an identifier names and
@@ -23,7 +24,9 @@ use eehrxf::document::authored::recorded_author;
 use eehrxf::document::discharge::HDR_BUNDLE;
 use eehrxf::document::imaging::IMAGING_BUNDLE;
 use eehrxf::document::laboratory::LAB_BUNDLE;
-use eehrxf::document::language::LanguageError;
+use eehrxf::document::language::{DocumentLanguage, LanguageError};
+use eehrxf::document::section::MappedSection;
+use eehrxf::document::vaccination::EUVAC_BUNDLE;
 use eehrxf::document::{Document, DocumentError};
 use eehrxf::mapping::{Mapping, MappingError};
 use eehrxf::mappings::{Project, UnknownContext};
@@ -45,6 +48,7 @@ use openehr_its::rest::stored_query::{QualifiedQueryName, QueryNameError};
 use crate::prescriptions::mapped::{MapModeError, Template};
 use crate::summary::Organisation;
 use crate::summary::resources::{absent, header_patient, human_name, organization, reference};
+use crate::vaccination::{Attester, Unattested, Unnamed};
 
 /// What one served report names beside its composition.
 ///
@@ -69,6 +73,9 @@ pub struct Report<'a> {
     pub operator: &'a Organisation,
     /// The member the composition was read at.
     pub member: &'a Organisation,
+    /// The persons who attested the composition's version, its legal
+    /// authenticators; none for a document that names none.
+    pub attesters: &'a [Attester],
 }
 
 /// Why a report the gateway writes is not served; no variant's text names
@@ -96,6 +103,13 @@ pub enum ServedError {
     /// The composition names no author the report's form takes.
     #[error("the composition names no author the report's form takes")]
     Author(#[source] DocumentError),
+    /// No person attested the composition's version, and the document's
+    /// form requires a legal authenticator.
+    #[error("the composition names no legal authenticator the document's form requires")]
+    Unattested(#[source] Unattested),
+    /// The patient lacks what the document's form requires of its subject.
+    #[error("the patient lacks what the report's form requires of its subject")]
+    Unnamed(#[source] Unnamed),
     /// The composition does not map.
     #[error("the composition does not map")]
     Run(#[source] MappingError),
@@ -161,6 +175,57 @@ pub(crate) fn authored(
     mapping
         .to_fhir_with(composition, &settings, context)
         .map_err(ServedError::Run)
+}
+
+/// Writes `document` in the language-region tag of `composition`, in
+/// canonical JSON, held first to the value set the document's form binds
+/// `Composition.language` to, when it binds one, as `terminology` answers.
+///
+/// # Errors
+///
+/// [`ServedError::Composition`] for a composition that is no JSON,
+/// [`ServedError::Language`] for one whose language is not held, and
+/// [`ServedError::Document`] when the document does not take it.
+pub(crate) async fn languaged(
+    document: &mut Document,
+    composition: &str,
+    terminology: &Terminology,
+) -> Result<(), ServedError> {
+    let record = serde_json::from_str(composition).map_err(ServedError::Composition)?;
+    let language = DocumentLanguage::of_composition(&record).map_err(ServedError::Language)?;
+    match document.form().language.binding {
+        Some(value_set) => document.with_held_language(
+            language
+                .held(terminology, value_set)
+                .await
+                .map_err(ServedError::Language)?,
+        ),
+        None => document.with_language(language),
+    }
+    .map_err(ServedError::Document)
+}
+
+/// Takes into `document` the sections the mapping run `run` wrote, each
+/// entry traced to the member `report` names by one `Provenance`, and
+/// returns them.
+///
+/// # Errors
+///
+/// [`ServedError::Document`] when the document does not take them.
+pub(crate) fn mapped_sections(
+    document: &mut Document,
+    report: Report<'_>,
+    run: &Bundle,
+) -> Result<Vec<MappedSection>, ServedError> {
+    let sections = document
+        .with_mapped_composition(run)
+        .map_err(ServedError::Document)?;
+    let entries: Vec<String> = sections
+        .iter()
+        .flat_map(|section| section.entries.iter().cloned())
+        .collect();
+    sourced(document, report, &entries).map_err(ServedError::Document)?;
+    Ok(sections)
 }
 
 /// Names in `document` the gateway's `Device`, described as `software`, and
@@ -332,16 +397,36 @@ pub enum Written {
     Discharge,
     /// The imaging report, Art 14(1)(d) ([`crate::imaging`]).
     Imaging,
+    /// The vaccination history, MyHealth@EU Requirements Catalogue v10.0.0
+    /// §1.24 ([`crate::vaccination`]).
+    Vaccination,
 }
 
 impl Written {
-    /// Returns the written category of the code `code`, such as
-    /// `Discharge-Reports`.
+    /// Every written category.
+    pub const ALL: [Self; 4] = [
+        Self::Laboratory,
+        Self::Discharge,
+        Self::Imaging,
+        Self::Vaccination,
+    ];
+
+    /// Returns the written category of the priority category code `code`,
+    /// such as `Discharge-Reports`; none for the vaccination history, which
+    /// is of no priority category.
     #[must_use]
     pub fn of_category(code: &str) -> Option<Self> {
-        [Self::Laboratory, Self::Discharge, Self::Imaging]
-            .into_iter()
-            .find(|written| written.category() == code)
+        Self::ALL.into_iter().find(|written| {
+            written
+                .priority()
+                .is_some_and(|priority| priority.code() == code)
+        })
+    }
+
+    /// Returns the written category of the code [`Written::code`] gives.
+    #[must_use]
+    pub fn of_code(code: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|written| written.code() == code)
     }
 
     /// Returns the qualified name of the category's stored query.
@@ -354,6 +439,7 @@ impl Written {
             Self::Laboratory => crate::laboratory::name(),
             Self::Discharge => crate::discharge::name(),
             Self::Imaging => crate::imaging::name(),
+            Self::Vaccination => crate::vaccination::name(),
         }
     }
 
@@ -364,24 +450,30 @@ impl Written {
             Self::Laboratory => crate::laboratory::aql(),
             Self::Discharge => crate::discharge::aql(),
             Self::Imaging => crate::imaging::aql(),
+            Self::Vaccination => crate::vaccination::aql(),
         }
     }
 
-    /// Returns the Art 14(1) priority category of the report.
+    /// Returns the Art 14(1) priority category of the report; none for the
+    /// vaccination history, which MyHealth@EU asks for beside them.
     #[must_use]
-    pub const fn priority(self) -> Category {
+    pub const fn priority(self) -> Option<Category> {
         match self {
-            Self::Laboratory => Category::Laboratory,
-            Self::Discharge => Category::Discharge,
-            Self::Imaging => Category::Imaging,
+            Self::Laboratory => Some(Category::Laboratory),
+            Self::Discharge => Some(Category::Discharge),
+            Self::Imaging => Some(Category::Imaging),
+            Self::Vaccination => None,
         }
     }
 
-    /// Returns the code of the priority category, such as
-    /// `Discharge-Reports`.
+    /// Returns the code a document URL names the category by: the priority
+    /// category code, such as `Discharge-Reports`, or `Vaccination-History`.
     #[must_use]
-    pub const fn category(self) -> &'static str {
-        self.priority().code()
+    pub const fn code(self) -> &'static str {
+        match self.priority() {
+            Some(priority) => priority.code(),
+            None => VACCINATION_HISTORY,
+        }
     }
 
     /// Returns the category's document `Bundle` profile, the format a
@@ -393,6 +485,7 @@ impl Written {
             Self::Laboratory => LAB_BUNDLE,
             Self::Discharge => HDR_BUNDLE,
             Self::Imaging => IMAGING_BUNDLE,
+            Self::Vaccination => EUVAC_BUNDLE,
         }
     }
 
@@ -404,9 +497,14 @@ impl Written {
             Self::Laboratory => "laboratory report",
             Self::Discharge => "discharge report",
             Self::Imaging => "imaging report",
+            Self::Vaccination => "vaccination history",
         }
     }
 }
+
+/// The code [`Written::code`] names the vaccination history by (no
+/// specification governs this: our own design).
+const VACCINATION_HISTORY: &str = "Vaccination-History";
 
 #[cfg(test)]
 mod tests {

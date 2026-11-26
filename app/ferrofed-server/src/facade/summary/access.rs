@@ -18,7 +18,7 @@ use openehr_federation::aql::Analysis;
 use openehr_federation::status::EndpointStatus;
 use secrecy::SecretString;
 
-use super::own::Kind;
+use super::written::recorded;
 use super::{Gathered, LIST, LOOKUP, OPERATION, Scope};
 use crate::access::{Accessed, Asked};
 use crate::facade::mapped::Answered;
@@ -172,7 +172,7 @@ fn written_origins(snapshot: &RegistrySnapshot, gathered: &Gathered) -> Vec<Aske
                 Answered::Silent { .. } => return None,
             };
             let node = node_of(snapshot, endpoint)?;
-            let category = Kind::of_category(written.category())?.category();
+            let category = recorded(written);
             Some(Asked {
                 endpoint: endpoint.as_str().to_owned(),
                 node: Some(node.as_str().to_owned()),
@@ -200,8 +200,7 @@ fn listed_categories(gathered: &Gathered) -> BTreeSet<Category> {
             .written
             .iter()
             .filter(|(_, answers)| !answers.is_empty())
-            .filter_map(|(written, _)| Kind::of_category(written.category()))
-            .map(Kind::category),
+            .map(|(written, _)| recorded(*written)),
     );
     categories.extend(gathered.own.iter().map(|own| own.kind.category()));
     categories

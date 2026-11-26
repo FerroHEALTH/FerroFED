@@ -16,8 +16,8 @@
 //! whose identifier has a system and a value (FHIR R4 `bdl-9`), is a member
 //! in `node-error` (§11.1): it fails the list under all-or-nothing, and
 //! under `partial` is named in an `outcome` entry (§11.3, §11.4). Laboratory
-//! discharge and imaging reports are listed when the gateway maps them
-//! ([`super::written`]),
+//! discharge and imaging reports and the vaccination history are listed when
+//! the gateway maps them ([`super::written`]),
 //! and laboratory, discharge and imaging reports when a member serves them
 //! itself ([`super::own`]).
 
@@ -50,6 +50,7 @@ use crate::access::NoAccess;
 use crate::auth::caller::Caller;
 use crate::config::fhir::FhirSettings;
 use crate::facade::native::{Answer, Native};
+use crate::facade::request::Arrived;
 use crate::facade::summary::own::Wanted;
 use crate::facade::summary::{self as gathered, Gathered, Scope, Unsummarised};
 use crate::federation::Federation;
@@ -117,7 +118,9 @@ async fn answered(asked: Asked, read: Result<ListRequest, ListRefusal>, mode: Mo
             )
             .await
             {
-                Ok(gathered) => found(store, admitted, (&gathered, read, mode), patient).await,
+                Ok(gathered) => {
+                    found(store, (admitted, arrived), (&gathered, read, mode), patient).await
+                }
                 // NOTE: FHIR R4 search, Federation Tier §11.3: a patient no member holds matches no
                 // document, and answers as one no member may disclose does.
                 Err(unsummarised) if unsummarised.reaches_no_member() => {
@@ -152,17 +155,16 @@ async fn answered(asked: Asked, read: Result<ListRequest, ListRefusal>, mode: Mo
 
 /// The documents the list names beside the summaries, as the deployment
 /// declares them.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct Lists {
     /// Whether it lists laboratory reports.
     laboratory: bool,
-    /// Whether the gateway writes laboratory, discharge and imaging reports
-    /// from the members' compositions.
-    written: (bool, bool, bool),
     /// Whether it lists discharge reports.
     discharge: bool,
     /// Whether it lists imaging documents.
     imaging: bool,
+    /// The categories the gateway writes from the members' compositions.
+    written: BTreeSet<Written>,
 }
 
 impl Lists {
@@ -179,54 +181,59 @@ impl Lists {
                     .any(|native| native.serves(category.code()))
             })
         };
-        let laboratory = fhir.is_some_and(|fhir| fhir.laboratory.is_some());
-        let discharge = fhir.is_some_and(|fhir| fhir.discharge.is_some());
-        let imaging = fhir.is_some_and(|fhir| fhir.imaging.is_some());
+        let written: BTreeSet<Written> = Written::ALL
+            .into_iter()
+            .filter(|written| fhir.is_some_and(|fhir| fhir.writes(*written).is_some()))
+            .collect();
         Self {
-            laboratory: laboratory || serves(Category::MedicalTestResult),
-            written: (laboratory, discharge, imaging),
-            discharge: discharge || serves(Category::DischargeReport),
-            imaging: imaging || serves(Category::MedicalImaging),
+            laboratory: written.contains(&Written::Laboratory)
+                || serves(Category::MedicalTestResult),
+            discharge: written.contains(&Written::Discharge) || serves(Category::DischargeReport),
+            imaging: written.contains(&Written::Imaging) || serves(Category::MedicalImaging),
+            written,
         }
     }
 
     /// The documents the search `read` asks the members for beside the
     /// summaries: of each kind the list names, the types it admits.
-    fn wanted(self, read: &ListRequest) -> Wanted {
+    fn wanted(&self, read: &ListRequest) -> Wanted {
         let types = |listed: bool, codes: &[&'static str]| {
             if listed { codes.to_vec() } else { Vec::new() }
         };
         let laboratory = self.laboratory && read.admits_laboratory();
-        let mut written = BTreeSet::new();
-        if self.written.0 && laboratory {
-            written.insert(Written::Laboratory);
-        }
         // NOTE: MyHealth@EU NCPeH API 9.1.1-ci DocumentReference-minimal binds type to
         // eHDSIDocumentTypes (required), so each written report is listed under its one code.
-        if self.written.1 && read.admits_hospital_discharge() {
-            written.insert(Written::Discharge);
-        }
-        if self.written.2 && read.imaging().contains(&IMAGING_STUDY) {
-            written.insert(Written::Imaging);
-        }
+        let admits = |written: Written| match written {
+            Written::Laboratory => laboratory,
+            Written::Discharge => read.admits_hospital_discharge(),
+            Written::Imaging => read.imaging().contains(&IMAGING_STUDY),
+            Written::Vaccination => read.admits_vaccination(),
+        };
         Wanted {
             laboratory,
             discharge: types(self.discharge, read.discharge()),
             imaging: types(self.imaging, read.imaging()),
-            written,
+            written: self
+                .written
+                .iter()
+                .copied()
+                .filter(|written| admits(*written))
+                .collect(),
             narrowing: read.narrowing().to_vec(),
         }
     }
 }
 
-/// The list `gathered` gives for `patient` on the request `admitted`, the
-/// patient's id recorded in `store` first, since the list names it.
+/// The list `gathered` gives for `patient` on the request `admitted` that
+/// `arrived`, the patient's id recorded in `store` first, since the list
+/// names it.
 async fn found(
     store: Option<&crate::store::Store>,
-    admitted: &super::admission::Admitted<'_>,
+    (admitted, arrived): (&super::admission::Admitted<'_>, Arrived<'_>),
     (gathered, read, mode): (&Gathered, &ListRequest, Mode),
     (system, value): (&str, &str),
 ) -> Response {
+    let subject = super::written::subject(admitted, &arrived, gathered, (system, value)).await;
     let id = admitted.fhir.ids.patient((system, value));
     let date = jiff::Timestamp::now()
         .strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -241,7 +248,7 @@ async fn found(
         &admitted.federation,
         (admitted.fhir, admitted.caller),
         (gathered, read, mode),
-        listing,
+        (listing, subject.as_ref()),
         &admitted.logged,
     );
     ids.push(id);
@@ -274,12 +281,13 @@ pub(super) enum Mode {
 
 /// The answer `gathered` gives for the patient of `listing` on the face
 /// `fhir` in the mode `mode`, with the access it records, and the id of
-/// every document it names.
+/// every document it names; `subject` says whether the patient can be a
+/// vaccination history's subject, when the list names one.
 fn listed(
     federation: &Federation,
     (fhir, caller): (&FhirSettings, &Caller),
     (gathered, read, mode): (&Gathered, &ListRequest, Mode),
-    listing: Listing<'_>,
+    (listing, subject): (Listing<'_>, Option<&Result<(), String>>),
     logged: &str,
 ) -> (Response, Vec<FaceId>) {
     let (system, value) = (listing.system, listing.value);
@@ -287,7 +295,7 @@ fn listed(
         federation,
         (fhir, caller),
         (gathered, read),
-        listing,
+        (listing, subject),
         logged,
     ) {
         Ok(entries) => entries,
@@ -345,7 +353,8 @@ fn listed(
 /// `listing`: the summary its operator has the gateway write when the
 /// patient resolved at a member, each member's own document at a URL signed
 /// for `caller`, the written and the members' own reports, and an `outcome`
-/// entry for each member that did not answer.
+/// entry for each member that did not answer and each vaccination history
+/// `subject` or its record makes unavailable.
 ///
 /// # Errors
 ///
@@ -358,7 +367,7 @@ fn entries(
     federation: &Federation,
     (fhir, caller): (&FhirSettings, &Caller),
     (gathered, read): (&Gathered, &ListRequest),
-    listing: Listing<'_>,
+    (listing, subject): (Listing<'_>, Option<&Result<(), String>>),
     logged: &str,
 ) -> Result<super::written::Listed, Response> {
     let (system, value) = (listing.system, listing.value);
@@ -418,7 +427,7 @@ fn entries(
         }
     }
     let Some((reports, silent)) =
-        super::written::listed(federation, (fhir, caller), gathered, listing)
+        super::written::listed(federation, (fhir, caller), gathered, (listing, subject))
     else {
         tracing::error!(
             request_id = logged,
