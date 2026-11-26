@@ -16,14 +16,15 @@
 //! archetype, since the template's entries, a problem or diagnosis, a
 //! procedure and a medication order, are those every other record holds too.
 //!
-//! [`Served`] writes one such composition as an HL7 Europe Hospital
-//! Discharge Report 1.0.0 `bundle-eu-hdr` document
-//! (`DISCHARGE_REPORT_FORM`), through the shipped discharge mapping
+//! [`Served`] writes one such composition as a MyHealth@EU Hospital
+//! Discharge Report 9.2.0 `bundle-hdr-myhealtheu` document
+//! (`MYHEALTHEU_DISCHARGE_REPORT_FORM`), the form a national contact point
+//! sends, through the shipped discharge mapping
 //! (`eehrxf::mappings::HDR`) compiled against the deployment's template, for
 //! the document list of the FHIR face (Regulation (EU) 2025/327 Annex II
 //! 2.1).
 
-use eehrxf::document::discharge::{DISCHARGE_REPORT_FORM, HDR_SLOTS};
+use eehrxf::document::discharge::{HDR_SLOTS, MYHEALTHEU_DISCHARGE_REPORT_FORM};
 use eehrxf::document::section::Section;
 use eehrxf::document::{Document, DocumentError};
 use eehrxf::mapping::Mapping;
@@ -32,10 +33,12 @@ use ferrofed_registry::definition::{StoredDefinition, query_name};
 use fhir_types::r4::bundle::Bundle;
 use openehr_its::rest::stored_query::{QualifiedQueryName, QueryNameError};
 use openehr_query::printer;
-use serde::Deserialize;
 
 use crate::prescriptions::mapped::Template;
-use crate::report::{self, Report, ServedError, Writes};
+use crate::report::{self, Author, Report, ServedError, Writes};
+use async_trait::async_trait;
+use eehrxf::document::language::DocumentLanguage;
+use eehrxf::terminology::Terminology;
 use crate::reserved::{NAMESPACE, SAVED, VERSION};
 use crate::section_query;
 
@@ -93,19 +96,6 @@ pub struct Served {
     mapping: Mapping,
 }
 
-/// The language of a canonical JSON composition (RM 1.1.0
-/// `COMPOSITION.language`).
-#[derive(Deserialize)]
-struct Written {
-    language: Language,
-}
-
-/// A `CODE_PHRASE` of ISO 639-1.
-#[derive(Deserialize)]
-struct Language {
-    code_string: String,
-}
-
 impl Served {
     /// Compiles the shipped discharge mapping (`eehrxf::mappings::HDR`)
     /// against `template`.
@@ -122,15 +112,18 @@ impl Served {
     }
 }
 
+#[async_trait]
 impl Writes for Served {
     /// Writes `composition`, a discharge composition in canonical JSON, as
-    /// the `bundle-eu-hdr` document `report` names, in the composition's
-    /// language.
+    /// the MyHealth@EU `bundle-hdr-myhealtheu` document `report` names, the
+    /// one a national contact point sends.
     ///
-    /// The document's `Composition` is authored by the gateway's `Device`
-    /// and the operator's `Organization`, its custodian the member's
-    /// `Organization`, its subject the `Patient` the identifier names and
-    /// its encounter the stay the mapping writes. It
+    /// The document's `Composition` is authored by the author the record
+    /// names (its identified composer, or else its health care facility),
+    /// written in the language-region tag of the record's language and
+    /// territory once `terminology` answers that eHDSILanguage holds it, its
+    /// custodian the member's `Organization`, its subject the `Patient` the
+    /// identifier names and its encounter the stay the mapping writes. It
     /// holds each section the mapping writes, with its entries, and a
     /// hospital course that says the record holds none the gateway writes,
     /// which `composition-eu-hdr` `cmp-hdr-2` requires. One `Provenance`
@@ -138,25 +131,41 @@ impl Writes for Served {
     ///
     /// # Errors
     ///
-    /// [`ServedError::Language`] when the composition names no language,
+    /// [`ServedError::Composition`] when the composition is no JSON,
+    /// [`ServedError::Language`] when its language is not held,
+    /// [`ServedError::Author`] when it records no author,
     /// [`ServedError::Run`] when it does not map, and
     /// [`ServedError::Document`] when the document cannot be assembled.
-    fn document(&self, composition: &str, report: Report<'_>) -> Result<Bundle, ServedError> {
-        let written: Written = serde_json::from_str(composition).map_err(ServedError::Language)?;
+    async fn document(
+        &self,
+        composition: &str,
+        report: Report<'_>,
+        terminology: &Terminology,
+    ) -> Result<Bundle, ServedError> {
+        let record: serde_json::Value =
+            serde_json::from_str(composition).map_err(ServedError::Composition)?;
         let mut document = Document::of(
-            &DISCHARGE_REPORT_FORM,
+            &MYHEALTHEU_DISCHARGE_REPORT_FORM,
             report.base,
             report.identifier.to_owned(),
             report.timestamp.to_owned(),
             String::from("Discharge report"),
         );
-        // NOTE: HL7 Europe HDR 1.0.0 bundle-eu-hdr: Bundle.language is 1..1, the language the
-        // member's composition is written in (RM 1.1.0 COMPOSITION.language).
-        document.with_language(written.language.code_string);
+        let language = DocumentLanguage::of_composition(&record).map_err(ServedError::Language)?;
+        match MYHEALTHEU_DISCHARGE_REPORT_FORM.language.binding {
+            Some(value_set) => document.with_held_language(
+                language
+                    .held(terminology, value_set)
+                    .await
+                    .map_err(ServedError::Language)?,
+            ),
+            None => document.with_language(language),
+        }
+        .map_err(ServedError::Document)?;
         let mapped = report::authored(
             &mut document,
             report,
-            "Software that writes the discharge report from the member's record automatically",
+            Author::Record(&record),
             (&self.mapping, composition),
         )?;
         let withheld = report::withheld(mapped.bundle());

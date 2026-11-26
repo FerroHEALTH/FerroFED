@@ -132,7 +132,7 @@ ehds-logging = { version = "0.28.0", default-features = false }
 # (#1895), and 0.17.0 the release on ferrobridge-term 0.13, fhirconnect 0.5
 # and openehr-mapping-core 0.4 (#1899). Verified against crates.io on
 # 2026-11-17.
-eehrxf = { version = "0.40.0", default-features = false }
+eehrxf = { version = "0.42.0", default-features = false }
 ferrofed-registry = { path = "app/ferrofed-registry" }
 # The operator and console wire documents, which the gateway writes and the
 # console reads (#1489).
@@ -584,4 +584,3 @@ deref_by_slicing = "warn"
 panic = "unwind"
 overflow-checks = true
 debug = "line-tables-only"
-

@@ -328,7 +328,7 @@ async fn document(
         member: &custodian,
     };
     let body = String::from_utf8_lossy(body);
-    let bundle = served.document(&body, report);
+    let bundle = served.document(&body, report, &fhir.terminology).await;
     match bundle {
         Ok(bundle) => Provenance::member(snapshot, &member.via, &member.node)
             .stamp(fhir_json(StatusCode::OK, &bundle)),

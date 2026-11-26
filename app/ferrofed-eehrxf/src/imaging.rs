@@ -33,7 +33,9 @@ use openehr_its::rest::stored_query::{QualifiedQueryName, QueryNameError};
 use openehr_query::printer;
 
 use crate::prescriptions::mapped::Template;
-use crate::report::{self, Report, ServedError, Writes};
+use crate::report::{self, Author, Report, ServedError, Writes};
+use async_trait::async_trait;
+use eehrxf::terminology::Terminology;
 use crate::reserved::{NAMESPACE, SAVED, VERSION};
 use crate::section_query::{self, Archetype};
 
@@ -108,6 +110,7 @@ impl Served {
     }
 }
 
+#[async_trait]
 impl Writes for Served {
     /// Writes `composition`, an imaging composition in canonical JSON, as
     /// the `BundleReportEuImaging` document `report` names.
@@ -126,7 +129,12 @@ impl Writes for Served {
     ///
     /// [`ServedError::Run`] when the composition does not map, and
     /// [`ServedError::Document`] when the document cannot be assembled.
-    fn document(&self, composition: &str, report: Report<'_>) -> Result<Bundle, ServedError> {
+    async fn document(
+        &self,
+        composition: &str,
+        report: Report<'_>,
+        _terminology: &Terminology,
+    ) -> Result<Bundle, ServedError> {
         let mut document = Document::of(
             &IMAGING_REPORT_FORM,
             report.base,
@@ -137,7 +145,7 @@ impl Writes for Served {
         let mapped = report::authored(
             &mut document,
             report,
-            "Software that writes the imaging report from the member's record automatically",
+            Author::Gateway("Software that writes the imaging report from the member's record automatically"),
             (&self.mapping, composition),
         )?;
         let withheld = report::withheld(mapped.bundle());
