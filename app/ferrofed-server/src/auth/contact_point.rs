@@ -46,12 +46,12 @@ use ferrohealth_smart::federation::{Attribute, External, Field, Source};
 use http::HeaderMap;
 use secrecy::{ExposeSecret, SecretString};
 
-use crate::auth::caller::PurposeOfUse;
 use crate::auth::refusal::Refusal;
 use crate::config::auth::AuthSettings;
 use crate::config::auth::contact_point::ContactPoint;
 use crate::config::emergency::EmergencyLimit;
 use crate::federation::describe::NATIONAL_CONTACT_POINT;
+use ferrofed_identity::role::behalf::Purpose;
 use openehr_federation::error::WireError;
 use openehr_federation::options::OptionsRoot;
 
@@ -206,10 +206,10 @@ pub fn relayed(issuer: &str, external: &External) -> Option<Relayed> {
 
 /// The purposes of use a contact point's token asserts.
 #[must_use]
-pub fn purposes(external: &External) -> Vec<PurposeOfUse> {
-    let mut purposes: Vec<PurposeOfUse> = codes(external, Field::PurposeOfUse)
+pub fn purposes(external: &External) -> Vec<Purpose> {
+    let mut purposes: Vec<Purpose> = codes(external, Field::PurposeOfUse)
         .into_iter()
-        .map(|role| PurposeOfUse {
+        .map(|role| Purpose {
             system: role.system,
             code: role.code,
         })

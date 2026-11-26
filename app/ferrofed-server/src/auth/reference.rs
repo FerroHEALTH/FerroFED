@@ -69,9 +69,9 @@ impl References {
         tracing::info!(
             target: TARGET,
             event = "edge-identity-asserted",
-            issuer = caller.issuer(),
-            subject_ref = self.of("subject", caller.subject()),
-            client_ref = self.of("client", caller.client_id()),
+            issuer = caller.identity().issuer(),
+            subject_ref = self.of("subject", caller.identity().subject()),
+            client_ref = self.of("client", caller.identity().client_id()),
             request_id,
             "the edge asserted the caller's identity, and the gateway verified the assertion"
         );

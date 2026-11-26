@@ -101,6 +101,7 @@ pub(super) async fn held(
     let federation = state.federation()?;
     let log = federation.access_log();
     let declared: Vec<Purpose> = caller
+        .identity()
         .purposes()
         .iter()
         .map(|purpose| Purpose {

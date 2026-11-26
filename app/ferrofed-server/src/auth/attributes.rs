@@ -23,7 +23,8 @@ use ferrohealth_smart::federation::person::Attributes;
 use ferrohealth_smart::federation::{Attribute, Code, External, Field};
 use ferrohealth_smart::resource::Caller as SmartCaller;
 
-use crate::auth::caller::{Professional, PurposeOfUse};
+use crate::auth::caller::Professional;
+use ferrofed_identity::role::behalf::Purpose;
 
 /// Where a caller's statement about its professional was read.
 #[derive(Clone, Copy)]
@@ -75,14 +76,14 @@ impl<'caller> Statement<'caller> {
 
     /// Returns every purpose of use the token declares, sorted and without
     /// duplicates.
-    pub(super) fn purposes(self) -> Vec<PurposeOfUse> {
+    pub(super) fn purposes(self) -> Vec<Purpose> {
         let codes = match self {
             Self::Persons(attributes) => attributes.purposes(),
             Self::Federation(_) | Self::None => self.codes(Field::PurposeOfUse),
         };
-        let mut purposes: Vec<PurposeOfUse> = codes
+        let mut purposes: Vec<Purpose> = codes
             .iter()
-            .map(|purpose| PurposeOfUse {
+            .map(|purpose| Purpose {
                 system: purpose.system.clone(),
                 code: purpose.code.clone(),
             })

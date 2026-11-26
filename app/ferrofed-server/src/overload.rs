@@ -41,8 +41,8 @@ pub async fn caller_key(mut request: Request, next: Next) -> Response {
     let key = request.extensions().get::<Caller>().map(|caller| {
         CallerKey(Arc::from(format!(
             "{} {}",
-            caller.issuer(),
-            caller.client_id()
+            caller.identity().issuer(),
+            caller.identity().client_id()
         )))
     });
     if let Some(key) = key {

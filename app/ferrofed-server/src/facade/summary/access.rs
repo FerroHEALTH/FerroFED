@@ -344,21 +344,7 @@ pub(crate) fn subject(
             namespace: Some(system.to_owned()),
             value: SecretString::from(value.to_owned()),
         }),
-        ehrs: gathered
-            .resolved
-            .iter()
-            .filter_map(|(node, ehr_id)| {
-                let sent = gathered.sent.iter().find(|sent| {
-                    snapshot
-                        .endpoint(sent)
-                        .is_some_and(|endpoint| endpoint.node() == node)
-                })?;
-                Some(EhrAt {
-                    endpoint: sent.as_str().to_owned(),
-                    ehr_id: ehr_id.as_str().to_owned(),
-                    patient: PatientLookup::RequestNamed,
-                })
-            })
+        ehrs: crate::access::reached(snapshot, &gathered.resolved, &gathered.sent)
             .chain(native::ehrs(&gathered.natives))
             .chain(
                 gathered
