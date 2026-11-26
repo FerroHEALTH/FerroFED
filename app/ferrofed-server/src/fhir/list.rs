@@ -219,6 +219,7 @@ impl Lists {
                 .copied()
                 .filter(|written| admits(*written))
                 .collect(),
+            narrowing: read.narrowing().to_vec(),
         }
     }
 }

@@ -109,6 +109,11 @@ const SINGLE: [&str; 4] = [
     IMMUNIZATION_HISTORY,
 ];
 
+/// The parameters a member that serves its own documents is asked with as
+/// a narrowing, the ones IHE MHD 4.2.2 ITI-67 defines beside `type`
+/// (#1950).
+const NARROWING: [&str; 5] = ["category", "creation", "date", "period", "status"];
+
 /// The `_format` values that ask for FHIR JSON.
 const JSON_FORMATS: [&str; 3] = ["json", "application/json", FHIR_JSON];
 
@@ -121,6 +126,7 @@ pub struct ListRequest {
     discharge: Vec<&'static str>,
     imaging: Vec<&'static str>,
     criteria: Criteria,
+    narrowing: Vec<(String, String)>,
 }
 
 impl std::fmt::Debug for ListRequest {
@@ -130,6 +136,7 @@ impl std::fmt::Debug for ListRequest {
             .field("discharge", &self.discharge)
             .field("imaging", &self.imaging)
             .field("criteria", &self.criteria)
+            .field("narrowing", &self.narrowing.len())
             .finish_non_exhaustive()
     }
 }
@@ -245,6 +252,17 @@ impl ListRequest {
         &self.imaging
     }
 
+    /// Returns each parameter of the search a member that serves its own
+    /// documents is asked with as a narrowing, its name and its value as
+    /// given: `category`, `creation`, `date`, `period` and `status`, the
+    /// ones IHE MHD 4.2.2 ITI-67 defines beside `type`, which the member's
+    /// search names by the codes the search admits. The gateway evaluates
+    /// each again on every entry it lists ([`ListRequest::selects`]).
+    #[must_use]
+    pub fn narrowing(&self) -> &[(String, String)] {
+        &self.narrowing
+    }
+
     /// Returns whether `document`, a listed `DocumentReference` as JSON,
     /// meets every national contact point API parameter the search gives,
     /// the instant `now`
@@ -266,6 +284,7 @@ impl ListRequest {
         let mut discharge = DISCHARGE_REPORTS.to_vec();
         let mut imaging = IMAGING_DOCUMENTS.to_vec();
         let mut criteria = Criteria::default();
+        let mut narrowing = Vec::new();
         let mut ids = Vec::new();
         for (name, value) in pairs {
             match &*name {
@@ -303,6 +322,9 @@ impl ListRequest {
                     if !criteria.read(other, &value)? {
                         return Err(ListRefusal::Parameter);
                     }
+                    if NARROWING.contains(&other) {
+                        narrowing.push((other.to_owned(), value.clone().into_owned()));
+                    }
                 }
             }
         }
@@ -319,6 +341,7 @@ impl ListRequest {
             discharge,
             imaging,
             criteria,
+            narrowing,
         })
     }
 }
@@ -340,6 +363,7 @@ impl ListRequest {
             discharge: DISCHARGE_REPORTS.to_vec(),
             imaging: IMAGING_DOCUMENTS.to_vec(),
             criteria,
+            narrowing: Vec::new(),
         })
     }
 }

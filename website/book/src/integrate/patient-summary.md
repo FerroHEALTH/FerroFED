@@ -298,6 +298,13 @@ Authorization: Bearer <token>
   one are alternatives, and an entry without the element a parameter reads
   does not match it. A value outside its grammar is a `400` naming the
   parameter and no value.
+- A member that serves its own documents is asked with `category`,
+  `creation`, `date`, `period` and `status` as you sent them, the
+  parameters IHE MHD 4.2.2 ITI-67 defines, so less data travels; its `type`
+  names the codes your search admits. The gateway still evaluates each one
+  on what the member answers, so a member that ignores one changes nothing
+  the list names. `contenttype`, `modality` and `bodysite` are never sent,
+  since ITI-67 defines none of them.
 - `_format`, when sent, is `json`, `application/json` or
   `application/fhir+json`. Any other parameter or modifier is a `400`.
 
