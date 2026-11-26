@@ -651,7 +651,7 @@ it.
 | FerroPIX PIX Manager image | `ghcr.io/ferrohealth/ferropix:0.0.45@sha256:e688ac42a9f57afb6d22a8db22fd042c331de4d425e6d78a7e83a08f0930636b` | `compose.yaml`, the `FERROPIX` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | FerroFED store database image | `postgres:19.0@sha256:aaa10f7ba7328b4a221a6c3184d83eef885bd16bf1f6de864757863156b0a4d1` | the `POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | FerroPIX database image | `postgres:19.0@sha256:aaa10f7ba7328b4a221a6c3184d83eef885bd16bf1f6de864757863156b0a4d1` | `compose.yaml`, the `FERROPIX_POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
-| Quickstart FerroPIX token issuer image | `ghcr.io/navikt/mock-oauth2-server:7.0.1@sha256:eb07a0a65007c34c40c7b849592a47e6299128a514a5c6c582a53451cc6e3390` | `compose.yaml` |
+| Quickstart FerroPIX token issuer image | `ghcr.io/navikt/mock-oauth2-server:7.0.2@sha256:95966a61e512c003daa3c884623665c2bbf04f46f85ce97d7ee659384d804202` | `compose.yaml` |
 | Quickstart FerroPIX seed image | `curlimages/curl:8.23.0@sha256:3fb7e13e5d179a845c97d78204f3f1064d1907037f26a3ebf91710571151fd93` | `compose.yaml` |
 | SanteMPI PIX Manager image | `santesuite/santedb-mpi:2.5.12@sha256:608484de046a932ec2f92e9991a32507fc8ec89d53d7639cbab886a63dbf6207` | the `SANTEMPI` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | SanteMPI database image | `postgres:15.20@sha256:91b9edc40277faf94bc1e3d7ae621b185fa70f3099b94309c4731a8296114870` | the `SANTEMPI_POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |

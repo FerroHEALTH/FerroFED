@@ -262,7 +262,7 @@ services:
   # node the gateway asks for (its `resource`) as `aud` and the gateway as its
   # client, typed at+jwt (RFC 9068). `$$` is a literal `$` to compose.
   issuer:
-    image: ghcr.io/navikt/mock-oauth2-server:7.0.1@sha256:eb07a0a65007c34c40c7b849592a47e6299128a514a5c6c582a53451cc6e3390
+    image: ghcr.io/navikt/mock-oauth2-server:7.0.2@sha256:95966a61e512c003daa3c884623665c2bbf04f46f85ce97d7ee659384d804202
     restart: unless-stopped
     networks:
       default:
@@ -455,7 +455,7 @@ services:
   # issuer FerroPIX reads on loopback.
   # `$$` is a literal `$` to compose.
   ferropix-issuer:
-    image: ghcr.io/navikt/mock-oauth2-server:7.0.1@sha256:eb07a0a65007c34c40c7b849592a47e6299128a514a5c6c582a53451cc6e3390
+    image: ghcr.io/navikt/mock-oauth2-server:7.0.2@sha256:95966a61e512c003daa3c884623665c2bbf04f46f85ce97d7ee659384d804202
     restart: unless-stopped
     networks:
       default:
