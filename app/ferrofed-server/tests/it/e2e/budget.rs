@@ -13,8 +13,10 @@
 //! a real PostgreSQL 19, so the case runs only when `FERROFED_E2E=1` admits
 //! the harness. The allocations are counted by `allocation-counter`, the
 //! global allocator of this test binary, on the polling thread alone; a
-//! store call is a trace event of `CALL_TARGET` sent inside the request's
-//! span. Of [`MEASURED`] requests after [`WARM`] unmeasured ones, the least
+//! store call is a trace event of `CALL_TARGET`, counted on every thread,
+//! since a definition is read on a blocking thread, between the start and
+//! the end of the request, the requests being sent one at a time. Of
+//! [`MEASURED`] requests after [`WARM`] unmeasured ones, the least
 //! allocations and the most store calls are judged. The CPU instructions of
 //! the in-process work are counted apart by callgrind
 //! (`scripts/perf/instructions.sh`). No specification governs the cost of a
@@ -39,9 +41,7 @@ use ferrofed_server::state::AppState;
 use ferrofed_server::store::connection::CALL_TARGET;
 use ferrofed_testkit::containers::{self, database};
 use http::{Request, StatusCode, header};
-use tracing::Instrument as _;
 use tracing_subscriber::layer::{Context, SubscriberExt as _};
-use tracing_subscriber::registry::LookupSpan;
 
 use super::TestResult;
 use super::store::store_toml;
@@ -58,9 +58,6 @@ const WARM: usize = 2;
 
 /// The measured requests of each path.
 const MEASURED: usize = 5;
-
-/// The span each measured request runs in.
-const REQUEST_SPAN: &str = "hot_path_budget_request";
 
 /// The stored query the stored-query paths read and run.
 const NAME: &str = "org.example::budget_compositions";
@@ -87,26 +84,27 @@ struct Budget {
     store_calls: u64,
 }
 
-// NOTE: no specification governs these ceilings: our own design (#2003).
+// NOTE: no specification governs these ceilings: our own design; each is the Linux CI figure
+// plus 2% (#2003).
 const BUDGETS: [Budget; 4] = [
     Budget {
         path: HotPath::Query,
-        allocations: 0,
+        allocations: 1218,
         store_calls: 0,
     },
     Budget {
         path: HotPath::Definition,
-        allocations: 0,
+        allocations: 474,
         store_calls: 0,
     },
     Budget {
         path: HotPath::Stored,
-        allocations: 0,
+        allocations: 1195,
         store_calls: 0,
     },
     Budget {
         path: HotPath::List,
-        allocations: 0,
+        allocations: 6882,
         store_calls: 0,
     },
 ];
@@ -118,22 +116,13 @@ struct Cost {
     store_calls: u64,
 }
 
-/// Counts the store-call events sent inside a [`REQUEST_SPAN`] span.
+/// Counts the store-call events, sent on any thread.
 #[derive(Clone, Default)]
 struct StoreCalls(Arc<AtomicU64>);
 
-impl<S> tracing_subscriber::Layer<S> for StoreCalls
-where
-    S: tracing::Subscriber + for<'a> LookupSpan<'a>,
-{
-    fn on_event(&self, event: &tracing::Event<'_>, ctx: Context<'_, S>) {
-        if event.metadata().target() != CALL_TARGET {
-            return;
-        }
-        if ctx
-            .event_scope(event)
-            .is_some_and(|mut scope| scope.any(|span| span.name() == REQUEST_SPAN))
-        {
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for StoreCalls {
+    fn on_event(&self, event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
+        if event.metadata().target() == CALL_TARGET {
             self.0.fetch_add(1, Ordering::Relaxed);
         }
     }
@@ -158,8 +147,8 @@ impl<F: Future> Future for Counted<F> {
     }
 }
 
-/// Sends `request` to `app` in a [`REQUEST_SPAN`] span, refusing an answer
-/// other than `200`, and returns what it cost.
+/// Sends `request` to `app`, refusing an answer other than `200`, and
+/// returns what it cost.
 async fn costed(
     calls: &StoreCalls,
     app: &Router,
@@ -168,7 +157,7 @@ async fn costed(
     let allocations = Rc::new(Cell::new(0));
     let before = calls.0.load(Ordering::Relaxed);
     let answer = Counted {
-        inner: Box::pin(call(app.clone(), request).instrument(tracing::info_span!(REQUEST_SPAN))),
+        inner: Box::pin(call(app.clone(), request)),
         allocations: Rc::clone(&allocations),
     }
     .await;
@@ -282,7 +271,9 @@ async fn every_hot_path_holds_its_allocation_and_store_call_budget() -> TestResu
     let face = tokio::task::block_in_place(|| members.gateway(dir.path(), ("", &face_store)))?;
     let calls = StoreCalls::default();
     let subscriber = tracing_subscriber::registry().with(calls.clone());
-    let _default = tracing::subscriber::set_default(subscriber);
+    // NOTE: nextest runs each test in a process of its own, so the global subscriber sees this
+    // test's store calls alone.
+    tracing::subscriber::set_global_default(subscriber)?;
     let costs = measure(&calls, (&federation, &face)).await?;
     let mut report = String::from("path        allocations (budget)   store calls (budget)\n");
     let mut over = Vec::new();

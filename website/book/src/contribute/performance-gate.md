@@ -308,8 +308,8 @@ change cannot exceed, whatever its base did:
   query and the document list of the FHIR face, each over `wiremock`
   members and a real PostgreSQL 19 store, five times after two warm
   requests. `allocation-counter` counts the allocations of the thread that
-  polls the request, and a store call is a trace event the store sends from
-  the request's task. The least allocations and the most store calls of
+  polls the request, and a store call is a trace event the store sends on
+  every call, counted while the request runs. The least allocations and the most store calls of
   each path are held to `BUDGETS` in
   `app/ferrofed-server/tests/it/e2e/budget.rs`. Run it with
   `FERROFED_E2E=1 cargo nextest run -p ferrofed-server -E 'test(/^e2e::budget/)'`

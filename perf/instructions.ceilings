@@ -5,5 +5,5 @@
 # path, as `<path> <ceiling>`, each the Linux CI count plus 2%. A ceiling is
 # lowered in a normal change and raised only with its cause stated in the
 # pull request; `report` measures a path without judging it.
-aql_rewrite report
-merge report
+aql_rewrite 411000
+merge 10030000
