@@ -36,11 +36,11 @@ use openehr_query::printer;
 
 use crate::prescriptions::mapped::Template;
 use crate::report::{self, Author, Report, ServedError, Writes};
+use crate::reserved::{NAMESPACE, SAVED, VERSION};
+use crate::section_query;
 use async_trait::async_trait;
 use eehrxf::document::language::DocumentLanguage;
 use eehrxf::terminology::Terminology;
-use crate::reserved::{NAMESPACE, SAVED, VERSION};
-use crate::section_query;
 
 /// The query's name in the reserved namespace.
 pub const SLUG: &str = "discharge-report";

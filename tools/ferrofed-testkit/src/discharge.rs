@@ -16,6 +16,7 @@ use std::error::Error;
 use std::path::PathBuf;
 
 use eehrxf::document::discharge::{DISCHARGE_REPORT_FORM, HDR_SLOTS};
+use eehrxf::document::language::DocumentLanguage;
 use eehrxf::document::section::Section;
 use eehrxf::mapping::Mapping;
 use eehrxf::mappings::HDR;
@@ -371,7 +372,8 @@ fn composed(uid: &str, sections: &[(&str, Vec<String>)]) -> String {
   }},
   "content": [{content}]
 }}"#,
-        held = held(uid),
+        // NOTE: eHDSILanguage holds nl-NL, the language-region tag of a record written in the Netherlands.
+        held = held(uid, "nl"),
         start = instant(ADMITTED),
         end = instant(DISCHARGED),
         content = content.join(","),
@@ -516,9 +518,12 @@ pub fn received_document(
             ("hospital", "Synthetic hospital"),
         ),
     )?;
-    document.with_language(String::from("en"));
+    let composition =
+        full_composition("5b0c3f7e-0000-4000-8000-00000000d1c2::hospital.example.org::1");
+    let record: serde_json::Value = serde_json::from_str(&composition)?;
+    document.with_language(DocumentLanguage::of_composition(&record)?)?;
     let run = Mapping::compile_project(source, &HDR)?.to_fhir_with(
-        &full_composition("5b0c3f7e-0000-4000-8000-00000000d1c2::hospital.example.org::1"),
+        &composition,
         &Settings::new(device.clone(), SENT_AT),
         CallContext::new()
             .with_patient(reference(&subject))

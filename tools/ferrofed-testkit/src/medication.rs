@@ -408,17 +408,17 @@ fn summary_holding(uid: &str, medication: String, vaccine: &str) -> String {
   }},
   "content": [{content}]
 }}"#,
-        held = held(uid),
+        held = held(uid, "en"),
     )
 }
 
 /// The uid, language, territory, category and composer of a synthetic
-/// event composition in English of the Netherlands, under the version id
-/// `uid`, as members of a canonical JSON object.
-pub(crate) fn held(uid: &str) -> String {
+/// event composition written in `language` (ISO 639-1) in the Netherlands,
+/// under the version id `uid`, as members of a canonical JSON object.
+pub(crate) fn held(uid: &str, language: &str) -> String {
     format!(
         r#""uid": {{ "_type": "OBJECT_VERSION_ID", "value": "{uid}" }},
-  "language": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "ISO_639-1" }}, "code_string": "en" }},
+  "language": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "ISO_639-1" }}, "code_string": "{language}" }},
   "territory": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "ISO_3166-1" }}, "code_string": "NL" }},
   "category": {{ "_type": "DV_CODED_TEXT", "value": "event", "defining_code": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "openehr" }}, "code_string": "433" }} }},
   "composer": {{ "_type": "PARTY_IDENTIFIED", "name": "Synthetic composer" }},"#

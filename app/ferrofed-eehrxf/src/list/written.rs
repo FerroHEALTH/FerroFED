@@ -8,6 +8,7 @@
 //! ([`DocumentMetadata::describe_at`]).
 
 use eehrxf::document::DocumentError;
+use eehrxf::document::language::{DocumentLanguage, LanguageError};
 use eehrxf::document::metadata::{DocumentMetadata, Header};
 use fhir_types::r4::attachment::Attachment;
 use fhir_types::r4::codeable_concept::CodeableConcept;
@@ -31,6 +32,10 @@ pub enum Undescribed {
     /// The component refused the description.
     #[error("the composition cannot be described")]
     Document(#[source] DocumentError),
+    /// The composition names no language and territory that make a
+    /// language-region tag.
+    #[error("the composition names no language the description takes")]
+    Language(#[source] LanguageError),
 }
 
 /// A member's composition the gateway writes as a report.
@@ -60,8 +65,9 @@ pub struct Writing<'a> {
 ///
 /// # Errors
 ///
-/// [`Undescribed`] for a composition that is not JSON, or that carries no
-/// `uid` naming a version, which draft `EEHRxF` Annex III requires.
+/// [`Undescribed`] for a composition that is not JSON, that carries no
+/// `uid` naming a version, which draft `EEHRxF` Annex III requires, or no
+/// language and territory.
 pub fn entry(
     writing: Writing<'_>,
     (id, unique): (&str, &str),
@@ -117,7 +123,8 @@ pub fn entry(
         title.to_owned(),
         super::organisation(writing.operator),
     )
-    .with_custodian(super::organisation(writing.custodian));
+    .with_custodian(super::organisation(writing.custodian))
+    .with_language(&DocumentLanguage::of_composition(&composition).map_err(Undescribed::Language)?);
     metadata
         .describe_at(
             &header,

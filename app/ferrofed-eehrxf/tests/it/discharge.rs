@@ -13,8 +13,12 @@
 
 use std::error::Error;
 
-use eehrxf::crosswalk::discharge::{DISCHARGE, HDR_COMPOSITION};
-use eehrxf::document::discharge::{HDR_BUNDLE, HDR_ENCOUNTER};
+use eehrxf::crosswalk::discharge::DISCHARGE;
+use eehrxf::document::discharge::{
+    HDR_BUNDLE, HDR_ENCOUNTER, MYHEALTHEU_HDR_BUNDLE, MYHEALTHEU_HDR_COMPOSITION,
+};
+use eehrxf::document::language::LanguageError;
+use eehrxf::terminology::Terminology;
 use ferrofed_eehrxf::discharge::{self, COMPOSITION, ELEMENT, SLUG, Served};
 use ferrofed_eehrxf::prescriptions::mapped::Template;
 use ferrofed_eehrxf::report::{Report, ServedError, Writes as _};
@@ -84,8 +88,8 @@ fn the_query_sits_under_its_reserved_name_at_the_immutable_version() -> TestResu
     Ok(())
 }
 
-#[test]
-fn the_query_feeds_a_row_of_the_discharge_report_crosswalk() {
+#[tokio::test]
+async fn the_query_feeds_a_row_of_the_discharge_report_crosswalk() {
     assert!(DISCHARGE.row(ELEMENT).is_some(), "{ELEMENT}");
 }
 
@@ -130,13 +134,14 @@ fn header() -> PatientHeader {
 }
 
 /// The document the gateway writes from the synthetic composition, as JSON.
-fn written() -> Result<Value, Box<dyn Error>> {
-    written_with(&header())
+async fn written() -> Result<Value, Box<dyn Error>> {
+    written_with(&header()).await
 }
 
 /// The document the gateway writes from the synthetic composition about the
 /// patient the identity binding describes with `header`, as JSON.
-fn written_with(header: &PatientHeader) -> Result<Value, Box<dyn Error>> {
+async fn written_with(header: &PatientHeader) -> Result<Value, Box<dyn Error>> {
+    let (_server, terminology) = conforming::language_terminology().await?;
     let bundle = conforming::written(
         &served()?,
         (
@@ -144,7 +149,9 @@ fn written_with(header: &PatientHeader) -> Result<Value, Box<dyn Error>> {
             "urn:uuid:5b0c3f7e-0000-4000-8000-00000000d101",
         ),
         header,
-    )?;
+        &terminology,
+    )
+    .await?;
     Ok(serde_json::to_value(&bundle)?)
 }
 
@@ -159,16 +166,29 @@ fn of_type<'a>(bundle: &'a Value, kind: &str) -> Vec<&'a Value> {
         .collect()
 }
 
-#[test]
-fn a_discharge_composition_is_written_as_a_hospital_discharge_report() -> TestResult {
-    let bundle = written()?;
-    assert_eq!(bundle["meta"]["profile"][0], HDR_BUNDLE);
+#[tokio::test]
+async fn a_discharge_composition_is_written_as_a_hospital_discharge_report() -> TestResult {
+    let bundle = written().await?;
+    assert_eq!(bundle["meta"]["profile"][0], MYHEALTHEU_HDR_BUNDLE);
     assert_eq!(bundle["type"], "document");
-    assert_eq!(bundle["language"], "en");
+    assert_eq!(bundle["language"], "nl-NL");
     let [composition] = of_type(&bundle, "Composition")[..] else {
         return Err("one Composition".into());
     };
-    assert_eq!(composition["meta"]["profile"][0], HDR_COMPOSITION);
+    assert_eq!(
+        composition["meta"]["profile"][0],
+        MYHEALTHEU_HDR_COMPOSITION
+    );
+    assert_eq!(composition["language"], "nl-NL");
+    let authors = composition["author"].as_array().ok_or("the authors")?;
+    assert_eq!(authors.len(), 1, "{authors:?}");
+    let author = authors[0]["reference"]
+        .as_str()
+        .ok_or("the author's reference")?;
+    assert!(
+        author.contains("/Practitioner/"),
+        "the record's composer, never the gateway: {author}"
+    );
     assert_eq!(composition["type"]["coding"][0]["code"], "34105-7");
     let [encounter] = of_type(&bundle, "Encounter")[..] else {
         return Err("one Encounter".into());
@@ -196,9 +216,10 @@ fn a_discharge_composition_is_written_as_a_hospital_discharge_report() -> TestRe
     Ok(())
 }
 
-#[test]
-fn the_patient_is_named_by_identifier_and_header_and_the_member_by_provenance() -> TestResult {
-    let bundle = written()?;
+#[tokio::test]
+async fn the_patient_is_named_by_identifier_and_header_and_the_member_by_provenance() -> TestResult
+{
+    let bundle = written().await?;
     let [patient] = of_type(&bundle, "Patient")[..] else {
         return Err("one Patient".into());
     };
@@ -237,9 +258,9 @@ fn the_patient_is_named_by_identifier_and_header_and_the_member_by_provenance() 
     Ok(())
 }
 
-#[test]
-fn a_name_and_birth_date_the_binding_does_not_hold_are_written_absent() -> TestResult {
-    let bundle = written_with(&PatientHeader::default())?;
+#[tokio::test]
+async fn a_name_and_birth_date_the_binding_does_not_hold_are_written_absent() -> TestResult {
+    let bundle = written_with(&PatientHeader::default()).await?;
     let [patient] = of_type(&bundle, "Patient")[..] else {
         return Err("one Patient".into());
     };
@@ -277,7 +298,7 @@ async fn breaks(document: &Value) -> Result<Vec<String>, Box<dyn Error>> {
 
 #[tokio::test]
 async fn a_written_discharge_report_conforms_to_bundle_eu_hdr() -> TestResult {
-    let report = written()?;
+    let report = written().await?;
     let breaks = breaks(&report).await?;
     assert!(breaks.is_empty(), "{breaks:#?}");
     ferrofed_testkit::emit::document(
@@ -291,40 +312,86 @@ async fn a_written_discharge_report_conforms_to_bundle_eu_hdr() -> TestResult {
 #[tokio::test]
 async fn a_report_of_a_patient_the_binding_holds_nothing_of_conforms_to_bundle_eu_hdr() -> TestResult
 {
-    let breaks = breaks(&written_with(&PatientHeader::default())?).await?;
+    let breaks = breaks(&written_with(&PatientHeader::default()).await?).await?;
     assert!(breaks.is_empty(), "{breaks:#?}");
     Ok(())
 }
 
-#[test]
-fn a_composition_with_no_language_is_refused() -> TestResult {
-    let composition = fixture::composition(UID).replace(r#""language": { "_type": "CODE_PHRASE", "terminology_id": { "_type": "TERMINOLOGY_ID", "value": "ISO_639-1" }, "code_string": "en" },
-  "territory""#, r#""territory""#);
+/// What `served` answers for `composition`, asking `terminology`.
+async fn refused(
+    composition: &str,
+    terminology: &Terminology,
+) -> Result<Result<fhir_types::r4::bundle::Bundle, ServedError>, Box<dyn Error>> {
     let (operator, member) = (organisation("o"), organisation("m"));
-    let refused = served()?.document(
-        &composition,
-        Report {
-            base: "https://gateway.example.org/fhir",
-            identifier: "urn:uuid:5b0c3f7e-0000-4000-8000-00000000d102",
-            timestamp: "2026-10-21T08:00:00Z",
-            patient: ("urn:oid:2.999.1", "synthetic-patient-0001"),
-            header: &header(),
-            operator: &operator,
-            member: &member,
-        },
-    );
+    Ok(served()?
+        .document(
+            composition,
+            Report {
+                base: "https://gateway.example.org/fhir",
+                identifier: "urn:uuid:5b0c3f7e-0000-4000-8000-00000000d102",
+                timestamp: "2026-10-21T08:00:00Z",
+                patient: ("urn:oid:2.999.1", "synthetic-patient-0001"),
+                header: &header(),
+                operator: &operator,
+                member: &member,
+            },
+            terminology,
+        )
+        .await)
+}
+
+#[tokio::test]
+async fn a_composition_with_no_language_is_refused() -> TestResult {
+    let composition = fixture::composition(UID).replace(r#""language": { "_type": "CODE_PHRASE", "terminology_id": { "_type": "TERMINOLOGY_ID", "value": "ISO_639-1" }, "code_string": "nl" },
+  "territory""#, r#""territory""#);
+    let (_server, terminology) = conforming::language_terminology().await?;
+    let answer = refused(&composition, &terminology).await?;
     assert!(
-        matches!(refused, Err(ServedError::Language(_))),
-        "{refused:?}"
+        matches!(
+            answer,
+            Err(ServedError::Language(LanguageError::Unrecorded {
+                attribute: "language"
+            }))
+        ),
+        "{answer:?}"
+    );
+    Ok(())
+}
+
+// NOTE: composition-hdr-myhealtheu binds Composition.language required to eHDSILanguage, which holds no en-NL.
+#[tokio::test]
+async fn a_language_ehdsi_language_does_not_hold_is_refused() -> TestResult {
+    let composition = fixture::composition(UID).replace(
+        r#""value": "ISO_639-1" }, "code_string": "nl" }"#,
+        r#""value": "ISO_639-1" }, "code_string": "en" }"#,
+    );
+    let (_server, terminology) = conforming::language_terminology().await?;
+    let answer = refused(&composition, &terminology).await?;
+    assert!(
+        matches!(answer, Err(ServedError::Language(LanguageError::Unheld { ref tag, .. })) if tag == "en-NL"),
+        "{answer:?}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn no_terminology_server_refuses_the_report() -> TestResult {
+    let answer = refused(&fixture::composition(UID), &Terminology::none()).await?;
+    assert!(
+        matches!(
+            answer,
+            Err(ServedError::Language(LanguageError::Terminology { .. }))
+        ),
+        "{answer:?}"
     );
     Ok(())
 }
 
 // NOTE: hazard I-19 of the clinical safety risk file: an element of an entry the HDR mapping does not
 // carry is named in the report by its openEHR path, never by its value.
-#[test]
-fn an_element_the_mapping_leaves_out_is_named_in_the_report_by_path() -> TestResult {
-    let bundle = written()?;
+#[tokio::test]
+async fn an_element_the_mapping_leaves_out_is_named_in_the_report_by_path() -> TestResult {
+    let bundle = written().await?;
     let [composition] = of_type(&bundle, "Composition")[..] else {
         return Err("one Composition".into());
     };

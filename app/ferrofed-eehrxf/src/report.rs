@@ -17,17 +17,17 @@
 
 use std::collections::BTreeSet;
 
-use eehrxf::category::Category;
 use async_trait::async_trait;
+use eehrxf::category::Category;
 use eehrxf::document::authored::recorded_author;
-use eehrxf::document::discharge::MYHEALTHEU_HDR_BUNDLE;
-use eehrxf::document::language::LanguageError;
-use eehrxf::terminology::Terminology;
+use eehrxf::document::discharge::HDR_BUNDLE;
 use eehrxf::document::imaging::IMAGING_BUNDLE;
 use eehrxf::document::laboratory::LAB_BUNDLE;
+use eehrxf::document::language::LanguageError;
 use eehrxf::document::{Document, DocumentError};
 use eehrxf::mapping::{Mapping, MappingError};
 use eehrxf::mappings::{Project, UnknownContext};
+use eehrxf::terminology::Terminology;
 use ferrofed_identity::role::header::{PatientHeader, PersonName};
 use fhir_types::r4::bundle::Bundle;
 use fhir_types::r4::codeable_concept::CodeableConcept;
@@ -382,12 +382,14 @@ impl Written {
         self.priority().code()
     }
 
-    /// Returns the document `Bundle` profile the report is written in.
+    /// Returns the category's document `Bundle` profile, the format a
+    /// listing names; the discharge report's MyHealth@EU `Bundle` profile is
+    /// derived from it.
     #[must_use]
     pub const fn bundle(self) -> &'static str {
         match self {
             Self::Laboratory => LAB_BUNDLE,
-            Self::Discharge => MYHEALTHEU_HDR_BUNDLE,
+            Self::Discharge => HDR_BUNDLE,
             Self::Imaging => IMAGING_BUNDLE,
         }
     }

@@ -34,10 +34,10 @@ use openehr_query::printer;
 
 use crate::prescriptions::mapped::Template;
 use crate::report::{self, Author, Report, ServedError, Writes};
-use async_trait::async_trait;
-use eehrxf::terminology::Terminology;
 use crate::reserved::{NAMESPACE, SAVED, VERSION};
 use crate::section_query::{self, Archetype};
+use async_trait::async_trait;
+use eehrxf::terminology::Terminology;
 
 /// The query's name in the reserved namespace.
 pub const SLUG: &str = "imaging-report";
@@ -145,7 +145,9 @@ impl Writes for Served {
         let mapped = report::authored(
             &mut document,
             report,
-            Author::Gateway("Software that writes the imaging report from the member's record automatically"),
+            Author::Gateway(
+                "Software that writes the imaging report from the member's record automatically",
+            ),
             (&self.mapping, composition),
         )?;
         let withheld = report::withheld(mapped.bundle());

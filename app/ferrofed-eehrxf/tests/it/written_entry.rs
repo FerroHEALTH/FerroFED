@@ -67,12 +67,14 @@ fn entry(written: Written, composition: &str) -> Result<DocumentReference, Undes
     )
 }
 
-/// A synthetic composition at version 2, in English, of one service period.
+/// A synthetic composition at version 2, in Dutch of the Netherlands, of
+/// one service period.
 fn composition() -> String {
     json!({
         "_type": "COMPOSITION",
         "uid": {"value": "7c4e1d20-0000-4000-8000-0000000008b1::cdr-a.example.org::2"},
-        "language": {"code_string": "en"},
+        "language": {"code_string": "nl"},
+        "territory": {"code_string": "NL"},
         "context": {
             "start_time": {"value": "2026-11-20T09:00:00Z"},
             "end_time": {"value": "2026-11-20T11:00:00Z"}
@@ -123,7 +125,15 @@ fn each_written_entry_is_the_components_description_of_its_composition()
         assert_eq!(reference["meta"]["profile"][0], EEHRXF_MHD);
         assert_eq!(
             reference["masterIdentifier"],
-            json!({"system": "urn:ietf:rfc:3986", "use": "usual", "value": "urn:uuid:7c4e1d20-0000-4000-8000-0000000008b1"})
+            json!({
+                "system": "urn:ietf:rfc:3986",
+                "type": {"coding": [{
+                    "system": "https://profiles.ihe.net/ITI/MHD/CodeSystem/IHE.MHD.MHDIdentifierType",
+                    "code": "uniqueId"
+                }]},
+                "use": "usual",
+                "value": "urn:uuid:7c4e1d20-0000-4000-8000-0000000008b1"
+            })
         );
         assert_eq!(reference["type"]["coding"][0]["code"], code);
         assert_eq!(
@@ -137,7 +147,7 @@ fn each_written_entry_is_the_components_description_of_its_composition()
             reference["extension"][0],
             json!({"url": DOCUMENT_REFERENCE_VERSION, "valueString": "2"})
         );
-        assert_eq!(reference["content"][0]["attachment"]["language"], "en");
+        assert_eq!(reference["content"][0]["attachment"]["language"], "nl-NL");
         assert_eq!(
             reference["content"][0]["attachment"]["url"],
             "Binary/synthetic-token"
