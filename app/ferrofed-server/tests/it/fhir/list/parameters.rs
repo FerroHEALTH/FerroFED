@@ -6,8 +6,9 @@
 //! gateway evaluates on every entry it lists (`myhealth.eu.fhir.ncp-api`
 //! 9.1.1-ci, `CapabilityStatementMyHealthEu`; #1975): each one selecting a
 //! member's own imaging report it describes and excluding it otherwise,
-//! repetitions all required, and a malformed value refused with nothing
-//! sent.
+//! repetitions all required, a malformed value refused with nothing sent,
+//! and the parameters IHE MHD 4.2.2 ITI-67 defines passed to the member as
+//! a narrowing the gateway evaluates again (#1982).
 
 use eehrxf::document::imaging::IMAGING_BUNDLE;
 use http::StatusCode;
@@ -112,5 +113,46 @@ async fn a_malformed_value_or_a_modifier_is_refused_and_nothing_is_sent() -> Tes
         assert!(!text.contains(PATIENT_TAIL), "{text}");
     }
     assert!(members.proxy.journal().is_empty(), "nothing is sent");
+    Ok(())
+}
+
+#[tokio::test]
+async fn the_narrowing_reaches_the_member_and_the_gateway_still_decides() -> TestResult {
+    let members = Members::holding(IMAGING, DOCUMENT).await?;
+    let query = "category=Medical-Imaging&creation=ge2026-10-01&date=ge2026-10-21&period=2026-10\
+                 &status=superseded&modality=MR&contenttype=application%2Fpdf&bodysite=72696002";
+    assert!(
+        !names_the_report(&members, query).await?,
+        "the member answers its current report whatever it is asked, and status=superseded excludes it"
+    );
+    let asked = members.asked();
+    let (_, search) = asked
+        .iter()
+        .find(|(path, _)| path == "/fhir/DocumentReference")
+        .ok_or("the member's DocumentReference search")?;
+    for (name, value) in [
+        ("category", "Medical-Imaging"),
+        ("creation", "ge2026-10-01"),
+        ("date", "ge2026-10-21"),
+        ("period", "2026-10"),
+        ("status", "superseded"),
+    ] {
+        assert!(
+            search.contains(&(name.to_owned(), value.to_owned())),
+            "{name}={value} reaches the member: {search:?}"
+        );
+    }
+    for name in [
+        "modality",
+        "contenttype",
+        "bodysite",
+        "patient.identifier",
+        "_id",
+    ] {
+        assert!(
+            !search.iter().any(|(asked, _)| asked == name),
+            "ITI-67 defines no {name}, or it names the patient: {search:?}"
+        );
+    }
     Ok(())
 }
