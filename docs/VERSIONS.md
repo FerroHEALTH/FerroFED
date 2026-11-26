@@ -461,7 +461,7 @@ and the root `Cargo.toml` `[workspace.dependencies]` disagree.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `fhir-types` | 0.2.0 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
+| `fhir-types` | 0.3.0 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
 | `fhir-search` | 0.1.131 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 The `pixm` feature takes `r4` and `terminology`: that root set holds every
@@ -497,11 +497,11 @@ received document is validated in full by FerroBRIDGE's `ferrobridge-validator`
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `eehrxf` | 0.42.0 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
-| `fhirconnect` | 0.13.0 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `openehr-mapping-core` | 0.9.0 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-term` | 0.21.0 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-validator` | 0.22.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `eehrxf` | 0.45.0 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
+| `fhirconnect` | 0.14.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `openehr-mapping-core` | 0.9.1 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-term` | 0.22.1 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-validator` | 0.23.1 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Audit crates (crates.io)
 
@@ -514,8 +514,8 @@ where FerroFED's own code, tests or guards still read them.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `ihe-atna` | 0.28.0 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ehds-logging` | 0.28.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ihe-atna` | 0.29.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ehds-logging` | 0.29.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Metrics crates (crates.io)
 
