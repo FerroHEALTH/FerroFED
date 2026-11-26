@@ -265,9 +265,7 @@ fn config(
     let _written: std::fmt::Result = write!(
         text,
         "\n[auth.tls]\ntrust_roots_file = \"{ROOTS_TARGET}\"\n\n\
-         [auth.issuer.harness]\nissuer = \"{issuer}\"\nkind = \"persons\"\npreset = \"rfc9068\"\n\
-         audience = [\"{AUDIENCE}\"]\n\n\
-         [auth.issuer.harness.profile]\nclient_claims = [\"client_id\"]\n\n\
+         [auth.issuer.harness]\nissuer = \"{issuer}\"\naudience = [\"{AUDIENCE}\"]\n\n\
          [[trust.issuer]]\nissuer = \"harness\"\nclients = [\"{}\"]\n",
         SOURCE.id
     );
@@ -279,7 +277,7 @@ fn config(
         let _written: std::fmt::Result = write!(
             text,
             "\n[[domain]]\nsystem = \"{system}\"\nname = \"Harness domain {index}\"\n\
-             kind = \"{kind}\"\nsource_client_id = \"{}\"\n",
+             kind = \"{kind}\"\nidentifier_type = \"PI\"\nsource_client_id = \"{}\"\n",
             SOURCE.id
         );
     }

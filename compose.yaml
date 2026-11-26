@@ -450,8 +450,9 @@ services:
 
   # The development token issuer of FerroPIX's machines, and the owner of the
   # network namespace FerroPIX joins (THE PATIENT INDEX above). The client
-  # credentials grant: the client as `sub` and `client_id`, FerroPIX's
-  # audience, the scope asked for, and the issuer FerroPIX reads on loopback.
+  # credentials grant, signed as an RFC 9068 `at+jwt` access token: the client
+  # as `sub` and `client_id`, FerroPIX's audience, the scope asked for, and the
+  # issuer FerroPIX reads on loopback.
   # `$$` is a literal `$` to compose.
   ferropix-issuer:
     image: ghcr.io/navikt/mock-oauth2-server:7.0.1@sha256:eb07a0a65007c34c40c7b849592a47e6299128a514a5c6c582a53451cc6e3390
@@ -465,7 +466,7 @@ services:
       JSON_CONFIG: >-
         {"tokenCallbacks":[{"issuerId":"ferrofed",
         "requestMappings":[{"requestParam":"grant_type","match":"client_credentials",
-        "claims":{"iss":"http://localhost:8180/ferrofed","sub":"$${clientId}",
+        "typeHeader":"at+jwt","claims":{"iss":"http://localhost:8180/ferrofed","sub":"$${clientId}",
         "client_id":"$${clientId}","aud":["http://ferropix:8080/fhir"],
         "scope":"$${scope}"}}]}]}
     read_only: true
@@ -1378,20 +1379,13 @@ configs:
       # namespace and reaches it on localhost, and the issuer names itself so in
       # every token, whoever asks for it. It
       # signs the client credentials tokens of the seed, the Patient Identity Source
-      # of every domain, and of the gateway, the PIXm Consumer: a token whose `sub`
-      # is its client is a machine's (RFC 9068 §2.2). It signs with `typ` JWT and
-      # names the client in `client_id`, so the issuer takes the claims it carries.
+      # of every domain, and of the gateway, the PIXm Consumer, as RFC 9068 `at+jwt`
+      # access tokens: a token whose `sub` is its client is a machine's (RFC 9068
+      # §2.2), so the entry names only the issuer and its audience.
       # A development issuer, NOT for anything real.
       [auth.issuer.ferrofed]
       issuer = "http://localhost:8180/ferrofed"
-      kind = "persons"
-      preset = "rfc9068"
       audience = ["http://ferropix:8080/fhir"]
-
-      [auth.issuer.ferrofed.profile]
-      token_types = ["JWT"]
-      required_claims = ["iss", "exp", "aud", "sub"]
-      client_claims = ["client_id", "azp"]
 
       # The client the development issuer may vouch for as the Source of each
       # domain (PIXm 3.1.0 §2:3.104.5).
@@ -1405,30 +1399,35 @@ configs:
       system = "urn:oid:2.999.1.1"
       name = "Quickstart patients"
       kind = "authoritative"
+      identifier_type = "PI"
       source_client_id = "quickstart-source"
 
       [[domain]]
       system = "urn:oid:2.999.2.1"
       name = "Node A ehr_ids"
       kind = "local"
+      identifier_type = "PI"
       source_client_id = "quickstart-source"
 
       [[domain]]
       system = "urn:oid:2.999.2.2"
       name = "Node B ehr_ids"
       kind = "local"
+      identifier_type = "PI"
       source_client_id = "quickstart-source"
 
       [[domain]]
       system = "urn:oid:2.999.2.3"
       name = "Node C ehr_ids"
       kind = "local"
+      identifier_type = "PI"
       source_client_id = "quickstart-source"
 
       [[domain]]
       system = "urn:oid:2.999.2.4"
       name = "Node D ehr_ids"
       kind = "local"
+      identifier_type = "PI"
       source_client_id = "quickstart-source"
 
       [usage_report]
