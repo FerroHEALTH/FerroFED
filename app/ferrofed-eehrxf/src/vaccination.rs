@@ -27,7 +27,6 @@
 use async_trait::async_trait;
 use eehrxf::document::Document;
 use eehrxf::document::authored::MYHEALTHEU_PRACTITIONER;
-use eehrxf::document::language::DocumentLanguage;
 use eehrxf::document::metadata::{Attestation as Authentication, DocumentMetadata};
 use eehrxf::document::vaccination::{IMMUNIZATION_HISTORY, VACCINATION_HISTORY_FORM};
 use eehrxf::mapping::Mapping;
@@ -326,17 +325,7 @@ impl Writes for Served {
             report.timestamp.to_owned(),
             String::from("Vaccination history"),
         );
-        let language = DocumentLanguage::of_composition(&record).map_err(ServedError::Language)?;
-        if let Some(value_set) = VACCINATION_HISTORY_FORM.language.binding {
-            document
-                .with_held_language(
-                    language
-                        .held(terminology, value_set)
-                        .await
-                        .map_err(ServedError::Language)?,
-                )
-                .map_err(ServedError::Document)?;
-        }
+        report::languaged(&mut document, composition, terminology).await?;
         let mapped = report::authored(
             &mut document,
             report,
@@ -346,14 +335,7 @@ impl Writes for Served {
             (&self.mapping, composition),
         )?;
         let withheld = report::withheld(mapped.bundle());
-        let sections = document
-            .with_mapped_composition(mapped.bundle())
-            .map_err(ServedError::Document)?;
-        let entries: Vec<String> = sections
-            .iter()
-            .flat_map(|section| section.entries.iter().cloned())
-            .collect();
-        report::sourced(&mut document, report, &entries).map_err(ServedError::Document)?;
+        let sections = report::mapped_sections(&mut document, report, mapped.bundle())?;
         for section in sections {
             let paragraphs = std::iter::once(String::from(
                 "The immunisations as the member records them, written by the gateway.",

@@ -24,7 +24,8 @@ use eehrxf::document::authored::recorded_author;
 use eehrxf::document::discharge::HDR_BUNDLE;
 use eehrxf::document::imaging::IMAGING_BUNDLE;
 use eehrxf::document::laboratory::LAB_BUNDLE;
-use eehrxf::document::language::LanguageError;
+use eehrxf::document::language::{DocumentLanguage, LanguageError};
+use eehrxf::document::section::MappedSection;
 use eehrxf::document::vaccination::EUVAC_BUNDLE;
 use eehrxf::document::{Document, DocumentError};
 use eehrxf::mapping::{Mapping, MappingError};
@@ -174,6 +175,57 @@ pub(crate) fn authored(
     mapping
         .to_fhir_with(composition, &settings, context)
         .map_err(ServedError::Run)
+}
+
+/// Writes `document` in the language-region tag of `composition`, in
+/// canonical JSON, held first to the value set the document's form binds
+/// `Composition.language` to, when it binds one, as `terminology` answers.
+///
+/// # Errors
+///
+/// [`ServedError::Composition`] for a composition that is no JSON,
+/// [`ServedError::Language`] for one whose language is not held, and
+/// [`ServedError::Document`] when the document does not take it.
+pub(crate) async fn languaged(
+    document: &mut Document,
+    composition: &str,
+    terminology: &Terminology,
+) -> Result<(), ServedError> {
+    let record = serde_json::from_str(composition).map_err(ServedError::Composition)?;
+    let language = DocumentLanguage::of_composition(&record).map_err(ServedError::Language)?;
+    match document.form().language.binding {
+        Some(value_set) => document.with_held_language(
+            language
+                .held(terminology, value_set)
+                .await
+                .map_err(ServedError::Language)?,
+        ),
+        None => document.with_language(language),
+    }
+    .map_err(ServedError::Document)
+}
+
+/// Takes into `document` the sections the mapping run `run` wrote, each
+/// entry traced to the member `report` names by one `Provenance`, and
+/// returns them.
+///
+/// # Errors
+///
+/// [`ServedError::Document`] when the document does not take them.
+pub(crate) fn mapped_sections(
+    document: &mut Document,
+    report: Report<'_>,
+    run: &Bundle,
+) -> Result<Vec<MappedSection>, ServedError> {
+    let sections = document
+        .with_mapped_composition(run)
+        .map_err(ServedError::Document)?;
+    let entries: Vec<String> = sections
+        .iter()
+        .flat_map(|section| section.entries.iter().cloned())
+        .collect();
+    sourced(document, report, &entries).map_err(ServedError::Document)?;
+    Ok(sections)
 }
 
 /// Names in `document` the gateway's `Device`, described as `software`, and

@@ -332,6 +332,17 @@ fn administered(code: &str) -> String {
 /// A synthetic medication action named `name` recording a dose of the
 /// medicine `display`, coded `code`, administered.
 fn action(name: &str, (display, code): (&str, &str)) -> String {
+    dose(name, &coded(display, code), &[])
+}
+
+/// A synthetic medication action named `name` recording a dose of
+/// `medicine`, a canonical JSON `DV_CODED_TEXT`, administered, its
+/// description holding `more` beside the medication item.
+pub(crate) fn dose(name: &str, medicine: &str, more: &[String]) -> String {
+    let more: String = more
+        .iter()
+        .map(|item| [",\n      ", item].concat())
+        .collect();
     format!(
         r#"{{
   "_type": "ACTION",
@@ -349,12 +360,11 @@ fn action(name: &str, (display, code): (&str, &str)) -> String {
     "name": {{ "_type": "DV_TEXT", "value": "Tree" }},
     "archetype_node_id": "at0017",
     "items": [
-      {{ "_type": "ELEMENT", "name": {{ "_type": "DV_TEXT", "value": "Medication item" }}, "archetype_node_id": "at0020", "value": {medicine} }}
+      {{ "_type": "ELEMENT", "name": {{ "_type": "DV_TEXT", "value": "Medication item" }}, "archetype_node_id": "at0020", "value": {medicine} }}{more}
     ]
   }}
 }}"#,
         details = details("openEHR-EHR-ACTION.medication.v1"),
-        medicine = coded(display, code),
     )
 }
 
@@ -365,7 +375,7 @@ fn action(name: &str, (display, code): (&str, &str)) -> String {
 /// medication action in its vaccination list section.
 #[must_use]
 pub fn summary_composition(uid: &str, (medicine, vaccine): (&str, &str)) -> String {
-    summary_holding(uid, summary_order(medicine), vaccine)
+    summary_holding(uid, &summary_order(medicine), vaccine)
 }
 
 /// Returns a synthetic composition of [`PATIENT_SUMMARY_TEMPLATE`].
@@ -378,7 +388,7 @@ pub fn summary_composition(uid: &str, (medicine, vaccine): (&str, &str)) -> Stri
 pub fn summary_composition_taken(uid: &str, (medicine, vaccine): (&str, &str)) -> String {
     summary_holding(
         uid,
-        action("Medication taken", ("Synthetic tablet 500 mg", medicine)),
+        &action("Medication taken", ("Synthetic tablet 500 mg", medicine)),
         vaccine,
     )
 }
@@ -386,13 +396,7 @@ pub fn summary_composition_taken(uid: &str, (medicine, vaccine): (&str, &str)) -
 /// A synthetic composition of [`PATIENT_SUMMARY_TEMPLATE`] under the version
 /// id `uid`, its medication summary section holding `medication` and its
 /// vaccination list the vaccine `vaccine` administered.
-fn summary_holding(uid: &str, medication: String, vaccine: &str) -> String {
-    let section = |name: &str, archetype: &str, item: String| {
-        format!(
-            r#"{{ "_type": "SECTION", "name": {{ "_type": "DV_TEXT", "value": "{name}" }}, {}, "items": [{item}] }}"#,
-            details(archetype)
-        )
-    };
+fn summary_holding(uid: &str, medication: &str, vaccine: &str) -> String {
     let content = [
         section(
             "Medication summary",
@@ -402,10 +406,26 @@ fn summary_holding(uid: &str, medication: String, vaccine: &str) -> String {
         section(
             "Immunisations",
             "openEHR-EHR-SECTION.immunisation_list.v0",
-            administered(vaccine),
+            &administered(vaccine),
         ),
     ]
     .join(",");
+    patient_summary(uid, "en", &content)
+}
+
+/// A synthetic section named `name` of the archetype `archetype`, holding
+/// `item`.
+pub(crate) fn section(name: &str, archetype: &str, item: &str) -> String {
+    format!(
+        r#"{{ "_type": "SECTION", "name": {{ "_type": "DV_TEXT", "value": "{name}" }}, {}, "items": [{item}] }}"#,
+        details(archetype)
+    )
+}
+
+/// A synthetic composition of [`PATIENT_SUMMARY_TEMPLATE`] under the version
+/// id `uid`, written in `language` (ISO 639-1) in the Netherlands, holding
+/// `content`, its sections joined.
+pub(crate) fn patient_summary(uid: &str, language: &str, content: &str) -> String {
     format!(
         r#"{{
   "_type": "COMPOSITION",
@@ -425,7 +445,7 @@ fn summary_holding(uid: &str, medication: String, vaccine: &str) -> String {
   }},
   "content": [{content}]
 }}"#,
-        held = held(uid, "en"),
+        held = held(uid, language),
     )
 }
 

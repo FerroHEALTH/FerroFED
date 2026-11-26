@@ -39,7 +39,6 @@ use crate::report::{self, Author, Report, ServedError, Writes};
 use crate::reserved::{NAMESPACE, SAVED, VERSION};
 use crate::section_query;
 use async_trait::async_trait;
-use eehrxf::document::language::DocumentLanguage;
 use eehrxf::terminology::Terminology;
 
 /// The query's name in the reserved namespace.
@@ -142,7 +141,6 @@ impl Writes for Served {
         report: Report<'_>,
         terminology: &Terminology,
     ) -> Result<Bundle, ServedError> {
-        let record = serde_json::from_str(composition).map_err(ServedError::Composition)?;
         let mut document = Document::of(
             &MYHEALTHEU_DISCHARGE_REPORT_FORM,
             report.base,
@@ -150,17 +148,7 @@ impl Writes for Served {
             report.timestamp.to_owned(),
             String::from("Discharge report"),
         );
-        let language = DocumentLanguage::of_composition(&record).map_err(ServedError::Language)?;
-        match MYHEALTHEU_DISCHARGE_REPORT_FORM.language.binding {
-            Some(value_set) => document.with_held_language(
-                language
-                    .held(terminology, value_set)
-                    .await
-                    .map_err(ServedError::Language)?,
-            ),
-            None => document.with_language(language),
-        }
-        .map_err(ServedError::Document)?;
+        report::languaged(&mut document, composition, terminology).await?;
         let mapped = report::authored(
             &mut document,
             report,
@@ -168,14 +156,7 @@ impl Writes for Served {
             (&self.mapping, composition),
         )?;
         let withheld = report::withheld(mapped.bundle());
-        let sections = document
-            .with_mapped_composition(mapped.bundle())
-            .map_err(ServedError::Document)?;
-        let entries: Vec<String> = sections
-            .iter()
-            .flat_map(|section| section.entries.iter().cloned())
-            .collect();
-        report::sourced(&mut document, report, &entries).map_err(ServedError::Document)?;
+        let sections = report::mapped_sections(&mut document, report, mapped.bundle())?;
         // NOTE: HL7 Europe HDR 1.0.0 composition-eu-hdr cmp-hdr-2: a discharge summary or a
         // hospital course section is required, and the template records neither.
         let course = HDR_SLOTS

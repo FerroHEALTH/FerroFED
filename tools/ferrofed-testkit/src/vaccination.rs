@@ -10,7 +10,7 @@
 //! code, since MyHealth@EU binds `Immunization.vaccineCode` required to
 //! `eHDSIVaccine`; the dose, the attester and the record are invented.
 
-use crate::medication::{ENTRY, OTHER_CARE, PATIENT_SUMMARY_TEMPLATE, details, held};
+use crate::medication::{dose, patient_summary, section};
 
 /// The vaccine's SNOMED CT code, which MVC 10.1.0 `eHDSIVaccine` lists.
 pub const VACCINE: &str = "836398006";
@@ -25,60 +25,34 @@ pub const ATTESTED: &str = "2026-10-01T09:00:00Z";
 pub const ATTESTER: &str = "Synthetic Attester";
 
 /// A dose of [`VACCINE`] administered at [`GIVEN`], its sequence number 1.
-fn dose() -> String {
-    format!(
-        r#"{{
-  "_type": "ACTION",
-  "name": {{ "_type": "DV_TEXT", "value": "Vaccination administered" }},
-  {details},
-  {ENTRY},
-  "time": {{ "_type": "DV_DATE_TIME", "value": "{GIVEN}" }},
-  "ism_transition": {{
-    "_type": "ISM_TRANSITION",
-    "current_state": {{ "_type": "DV_CODED_TEXT", "value": "active", "defining_code": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "openehr" }}, "code_string": "245" }} }},
-    "careflow_step": {{ "_type": "DV_CODED_TEXT", "value": "Dose administered", "defining_code": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "local" }}, "code_string": "at0006" }} }}
-  }},
-  "description": {{
-    "_type": "ITEM_TREE",
-    "name": {{ "_type": "DV_TEXT", "value": "Tree" }},
-    "archetype_node_id": "at0017",
-    "items": [
-      {{ "_type": "ELEMENT", "name": {{ "_type": "DV_TEXT", "value": "Medication item" }}, "archetype_node_id": "at0020", "value": {{ "_type": "DV_CODED_TEXT", "value": "Streptococcus pneumoniae antigen-containing vaccine product", "defining_code": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "http://snomed.info/sct" }}, "code_string": "{VACCINE}" }} }} }},
-      {{ "_type": "ELEMENT", "name": {{ "_type": "DV_TEXT", "value": "Sequence number" }}, "archetype_node_id": "at0025", "value": {{ "_type": "DV_COUNT", "magnitude": 1 }} }}
-    ]
-  }}
-}}"#,
-        details = details("openEHR-EHR-ACTION.medication.v1"),
+fn administered() -> String {
+    let vaccine = format!(
+        r#"{{ "_type": "DV_CODED_TEXT", "value": "Streptococcus pneumoniae antigen-containing vaccine product", "defining_code": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "http://snomed.info/sct" }}, "code_string": "{VACCINE}" }} }}"#
+    );
+    dose(
+        "Vaccination administered",
+        &vaccine,
+        &[String::from(
+            r#"{ "_type": "ELEMENT", "name": { "_type": "DV_TEXT", "value": "Sequence number" }, "archetype_node_id": "at0025", "value": { "_type": "DV_COUNT", "magnitude": 1 } }"#,
+        )],
     )
 }
 
 /// Returns a synthetic composition of [`PATIENT_SUMMARY_TEMPLATE`] under the
 /// version id `uid`, in Dutch in the Netherlands, whose immunisations
 /// section records one dose of [`VACCINE`].
+///
+/// [`PATIENT_SUMMARY_TEMPLATE`]: crate::medication::PATIENT_SUMMARY_TEMPLATE
 #[must_use]
 pub fn composition(uid: &str) -> String {
-    format!(
-        r#"{{
-  "_type": "COMPOSITION",
-  "name": {{ "_type": "DV_TEXT", "value": "Patient summary" }},
-  "archetype_node_id": "openEHR-EHR-COMPOSITION.health_summary.v1",
-  "archetype_details": {{
-    "_type": "ARCHETYPED",
-    "archetype_id": {{ "_type": "ARCHETYPE_ID", "value": "openEHR-EHR-COMPOSITION.health_summary.v1" }},
-    "template_id": {{ "_type": "TEMPLATE_ID", "value": "{PATIENT_SUMMARY_TEMPLATE}" }},
-    "rm_version": "1.1.0"
-  }},
-  {held}
-  "context": {{
-    "_type": "EVENT_CONTEXT",
-    "start_time": {{ "_type": "DV_DATE_TIME", "value": "2026-10-01T08:00:00Z" }},
-    "setting": {OTHER_CARE}
-  }},
-  "content": [{{ "_type": "SECTION", "name": {{ "_type": "DV_TEXT", "value": "Immunisations" }}, {section}, "items": [{dose}] }}]
-}}"#,
-        held = held(uid, "nl"),
-        section = details("openEHR-EHR-SECTION.immunisation_list.v0"),
-        dose = dose(),
+    patient_summary(
+        uid,
+        "nl",
+        &section(
+            "Immunisations",
+            "openEHR-EHR-SECTION.immunisation_list.v0",
+            &administered(),
+        ),
     )
 }
 
