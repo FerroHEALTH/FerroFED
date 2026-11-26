@@ -390,6 +390,45 @@ pub(crate) async fn composition_at(
     chosen: &Chosen,
     (uid, deadline): (&str, Instant),
 ) -> Result<Composition, Failure> {
+    let path = format!(
+        "/ehr/{}/composition/{}",
+        path_segment(&chosen.ehr_id.as_str()),
+        path_segment(&uid)
+    );
+    read_at(federation, arrived, chosen, (path, deadline)).await
+}
+
+/// Reads the `ORIGINAL_VERSION` of the version `version` of the versioned
+/// composition `object` at the member `chosen`, by its own `ehr_id` alone,
+/// by the deadline `deadline`, which carries the composition and the
+/// attestations of the version (ITS-REST 1.1.0 EHR API,
+/// `GET /ehr/{ehr_id}/versioned_composition/{versioned_object_uid}/version/{version_uid}`).
+///
+/// # Errors
+///
+/// [`Failure::FanOut`] when the member has no client.
+pub(crate) async fn version_at(
+    federation: &Federation,
+    arrived: &Arrived<'_>,
+    chosen: &Chosen,
+    ((object, version), deadline): ((&str, &str), Instant),
+) -> Result<Composition, Failure> {
+    let path = format!(
+        "/ehr/{}/versioned_composition/{}/version/{}",
+        path_segment(&chosen.ehr_id.as_str()),
+        path_segment(&object),
+        path_segment(&version)
+    );
+    read_at(federation, arrived, chosen, (path, deadline)).await
+}
+
+/// Reads `path` at the member `chosen` by the deadline `deadline`.
+async fn read_at(
+    federation: &Federation,
+    arrived: &Arrived<'_>,
+    chosen: &Chosen,
+    (path, deadline): (String, Instant),
+) -> Result<Composition, Failure> {
     let Some(client) = federation.clients().get(&chosen.via) else {
         return Err(Failure::FanOut(FanOutError::UnknownEndpoint {
             endpoint: chosen.via.clone(),
@@ -404,11 +443,7 @@ pub(crate) async fn composition_at(
     headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
     let request = ClientRequest {
         method: Method::GET,
-        path: format!(
-            "/ehr/{}/composition/{}",
-            path_segment(&chosen.ehr_id.as_str()),
-            path_segment(&uid)
-        ),
+        path,
         query: None,
         headers,
         body: Vec::new(),

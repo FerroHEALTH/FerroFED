@@ -17,7 +17,8 @@ use fhir_types::r4::document_reference::DocumentReference;
 use fhir_types::r4::identifier::Identifier;
 
 use super::{
-    HOSPITAL_DISCHARGE_SUMMARY, IMAGING_STUDY, LABORATORY_REPORT, LOINC, Listing, URI_SYSTEM,
+    HOSPITAL_DISCHARGE_SUMMARY, IMAGING_STUDY, IMMUNIZATION_HISTORY, LABORATORY_REPORT, LOINC,
+    Listing, URI_SYSTEM,
 };
 use crate::face::FHIR_JSON;
 use crate::report::Written;
@@ -59,7 +60,8 @@ pub struct Writing<'a> {
 /// ([`Written::bundle`]) and of the type the list names it by, a code of
 /// MyHealth@EU `eHDSIDocumentTypes`, which `DocumentReference-minimal` binds
 /// as required: LOINC `11502-2` for a laboratory report, `34105-7` for a
-/// discharge report and `18748-4` for an imaging report. Its
+/// discharge report, `18748-4` for an imaging report and `11369-6` for a
+/// vaccination history, which names no priority category. Its
 /// version, language and period are the composition's (openEHR RM 1.1.0
 /// `COMPOSITION`).
 ///
@@ -90,6 +92,11 @@ pub fn entry(
             "Laboratory report",
             "Laboratory report written by the gateway from the member's record",
         ),
+        Written::Vaccination => (
+            IMMUNIZATION_HISTORY,
+            "History of Immunization note",
+            "Vaccination history written by the gateway from the member's record",
+        ),
     };
     let concept = |display: Option<&str>| CodeableConcept {
         coding: vec![Coding {
@@ -103,12 +110,9 @@ pub fn entry(
     let composition = serde_json::from_str(writing.composition).map_err(Undescribed::Json)?;
     // NOTE: draft EEHRxF Annex III Table 1 documentCategory names no value set, so the category is
     // the LOINC document type the list names the report by.
-    let metadata = DocumentMetadata::from_composition(
-        &composition,
-        concept(None),
-        Some(writing.written.priority()),
-    )
-    .map_err(Undescribed::Document)?;
+    let metadata =
+        DocumentMetadata::from_composition(&composition, concept(None), writing.written.priority())
+            .map_err(Undescribed::Document)?;
     // NOTE: no specification governs this: our own design; the operator writes the report on read,
     // so it is the author the description names.
     let header = Header::new(

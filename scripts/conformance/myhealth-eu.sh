@@ -50,7 +50,8 @@ readonly BADGES="\
 search	docs/specs/ehdsi/myhealth.eu.fhir.ncp-api-9.1.1-ci.tgz	MyHealth@EU NCP API	 DocumentReference search
 core	docs/specs/ehdsi-core/myhealth.eu.fhir.core-1.0.1.tgz	MyHealth@EU Core	 (CI)
 laboratory	docs/specs/ehdsi-laboratory/myhealth.eu.fhir.laboratory-9.2.0.tgz	MyHealth@EU Laboratory	 (CI)
-discharge	docs/specs/ehdsi-hdr/myhealth.eu.fhir.hdr-9.2.0.tgz	MyHealth@EU HDR	 (CI)"
+discharge	docs/specs/ehdsi-hdr/myhealth.eu.fhir.hdr-9.2.0.tgz	MyHealth@EU HDR	 (CI)
+vaccination	docs/specs/ehdsi-euvac/myhealth.eu.fhir.euvac-10.0.0-preview.tgz	MyHealth@EU Vaccination	"
 
 die() {
   echo "myhealth-eu: $*" >&2

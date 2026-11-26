@@ -25,6 +25,13 @@
 //! the report on read, and naming it by its composition, are our own
 //! design: no specification governs them.
 //!
+//! The vaccination history (MyHealth@EU Requirements Catalogue v10.0.0
+//! §1.24) is listed the same way from `eu.ferrofed.eehrxf::vaccination-history`,
+//! one per attested immunisation list per member, and read from the
+//! version's `ORIGINAL_VERSION`, whose attesters are its legal authenticators
+//! ([`ferrofed_eehrxf::vaccination`]); one that cannot be written is listed
+//! unavailable with its reason.
+//!
 //! A member that serves its reports itself has them listed as it holds them
 //! ([`super::own`]).
 
@@ -32,11 +39,11 @@ use std::collections::BTreeMap;
 use std::time::Instant;
 
 use axum::response::Response;
-use ehds_logging::category::Category;
 use ferrofed_eehrxf::list::written::Writing;
 use ferrofed_eehrxf::list::{self, Listing, Match};
-use ferrofed_eehrxf::report::{Report, Writes, Written};
+use ferrofed_eehrxf::report::{Report, ServedError, Writes, Written};
 use ferrofed_eehrxf::summary::Held;
+use ferrofed_eehrxf::vaccination;
 use ferrofed_identity::role::header::PatientHeader;
 use ferrofed_registry::id::EndpointId;
 use fhir_types::r4::operation_outcome::OperationOutcome;
@@ -55,6 +62,7 @@ use crate::facade::mapped::{self, Answered, Composition};
 use crate::facade::native::Chosen;
 use crate::facade::provenance::Provenance;
 use crate::facade::request::Arrived;
+use crate::facade::summary::written::recorded;
 use crate::facade::summary::{Gathered, organisation};
 use crate::federation::Federation;
 use crate::fhir_wire::fhir_json;
@@ -71,13 +79,15 @@ pub(super) fn minted_urn() -> String {
 /// The entries the list names for the written reports `gathered` holds,
 /// on the face `fhir`, for `caller`: each composition's
 /// `DocumentReference`, each by its `fullUrl`, and an `OperationOutcome`
-/// for each member that did not answer the query; `None` when a URL cannot
-/// be signed.
+/// for each member that did not answer the query and for each vaccination
+/// history that cannot be written, because `subject` says why the patient
+/// cannot be its subject or no person attested the record; `None` when a
+/// URL cannot be signed.
 pub(super) fn listed(
     federation: &Federation,
     (fhir, caller): (&FhirSettings, &Caller),
     gathered: &Gathered,
-    listing: Listing<'_>,
+    (listing, subject): (Listing<'_>, Option<&Result<(), String>>),
 ) -> Option<Listed> {
     let snapshot = federation.snapshot();
     let (mut matches, mut outcomes): Listed = (Vec::new(), Vec::new());
@@ -85,6 +95,15 @@ pub(super) fn listed(
         let Some(chosen) = member(federation, gathered, &endpoint) else {
             continue;
         };
+        if written == Written::Vaccination
+            && let Some(reason) = unwritable(&held, subject)
+        {
+            outcomes.push((
+                minted_urn(),
+                list::unavailable(endpoint.as_str(), written.named(), &reason),
+            ));
+            continue;
+        }
         let Ok(version) = ObjectVersionId::new(&held.uid) else {
             continue;
         };
@@ -144,6 +163,55 @@ pub(super) fn listed(
         }
     }
     Some((matches, outcomes))
+}
+
+/// Why the vaccination history of `held` cannot be written, when it cannot:
+/// `subject` says why the patient cannot be its subject, or no person
+/// attested the version.
+fn unwritable(held: &Held, subject: Option<&Result<(), String>>) -> Option<String> {
+    if let Some(Err(reason)) = subject {
+        return Some(reason.clone());
+    }
+    // NOTE: openEHR RM Common ORIGINAL_VERSION.attestations is 0..1, so a version with no cell,
+    // or one whose cell is no JSON, is legitimately one no person attested.
+    let attested = match held
+        .attestations
+        .as_deref()
+        .map(serde_json::from_str::<serde_json::Value>)
+    {
+        Some(Ok(attestations)) => vaccination::attesters(&attestations),
+        Some(Err(_)) | None => Err(vaccination::Unattested::None),
+    };
+    attested.err().map(|unattested| unattested.to_string())
+}
+
+/// Whether the identity binding names the patient `patient` as a
+/// vaccination history's subject must be named, asked once for a list
+/// `gathered` holds a vaccination history of: `None` when it holds none,
+/// else `Ok`, or why not.
+pub(super) async fn subject(
+    admitted: &Admitted<'_>,
+    arrived: &Arrived<'_>,
+    gathered: &Gathered,
+    patient: (&str, &str),
+) -> Option<Result<(), String>> {
+    let held = gathered
+        .written
+        .get(&Written::Vaccination)?
+        .iter()
+        .any(|(_, answered)| matches!(answered, Answered::Rows(rows) if !rows.is_empty()));
+    if !held {
+        return None;
+    }
+    Some(match header(admitted, arrived, patient).await {
+        Ok(header) => vaccination::named(&header).map_err(|unnamed| unnamed.to_string()),
+        Err(Unheaded::Ambiguous(_)) => Err(String::from(
+            "the identity binding names no one patient for the identifier",
+        )),
+        Err(_) => Err(String::from(
+            "the identity binding could not answer for the patient",
+        )),
+    })
 }
 
 /// Every composition of each written category `gathered` holds, once: a
@@ -226,8 +294,24 @@ pub(super) async fn read(
     let deadline = Instant::now()
         .checked_add(federation.budget().per_node())
         .unwrap_or_else(Instant::now);
-    let fetched =
-        mapped::composition_at(federation, arrived, member, (composition, deadline)).await;
+    // NOTE: openEHR RM Common: attestations live on the ORIGINAL_VERSION, not the composition, so
+    // the vaccination history's legal authenticators are read with the version.
+    let fetched = match written {
+        Written::Vaccination => {
+            let object = ObjectVersionId::new(composition).map_or_else(
+                |_| composition.to_owned(),
+                |version| version.object_id().value().into_owned(),
+            );
+            mapped::version_at(
+                federation,
+                arrived,
+                member,
+                ((&object, composition), deadline),
+            )
+            .await
+        }
+        _ => mapped::composition_at(federation, arrived, member, (composition, deadline)).await,
+    };
     let (status, left) = match &fetched {
         Ok(Composition::Body(_) | Composition::Absent) => ("active", true),
         Ok(Composition::Silent { status, left }) => (status.as_str(), *left),
@@ -257,19 +341,10 @@ pub(super) async fn read(
         super::own::accessed(
             federation,
             (member, &member.via),
-            (category(written), status, left, delivered),
+            (recorded(written), status, left, delivered),
         ),
     );
     response
-}
-
-/// The priority category `written` is recorded under.
-const fn category(written: Written) -> Category {
-    match written {
-        Written::Laboratory => Category::MedicalTestResult,
-        Written::Discharge => Category::DischargeReport,
-        Written::Imaging => Category::MedicalImaging,
-    }
 }
 
 /// The document the composition `body` of the version `composition` at
@@ -326,12 +401,44 @@ async fn document(
         header: &header,
         operator: &fhir.operator,
         member: &custodian,
+        attesters: &[],
     };
     let body = String::from_utf8_lossy(body);
+    let (body, attesters) = match written {
+        Written::Vaccination => match vaccination::original_version(&body) {
+            Ok(versioned) => versioned,
+            Err(unversioned) => {
+                tracing::warn!(
+                    request_id = %admitted.outbound,
+                    error = %crate::chain(&unversioned),
+                    "a member's version was not written as a vaccination history"
+                );
+                return outcome(
+                    StatusCode::FAILED_DEPENDENCY,
+                    "processing",
+                    &format!("the vaccination history could not be written: {unversioned}"),
+                );
+            }
+        },
+        _ => (body.into_owned(), Vec::new()),
+    };
+    let report = Report {
+        attesters: &attesters,
+        ..report
+    };
     let bundle = served.document(&body, report, &fhir.terminology).await;
     match bundle {
         Ok(bundle) => Provenance::member(snapshot, &member.via, &member.node)
             .stamp(fhir_json(StatusCode::OK, &bundle)),
+        Err(refusal @ (ServedError::Unnamed(_) | ServedError::Unattested(_))) => outcome(
+            StatusCode::FAILED_DEPENDENCY,
+            "processing",
+            &format!(
+                "the {} could not be written: {}",
+                written.named(),
+                crate::chain(&refusal)
+            ),
+        ),
         Err(refusal) => {
             tracing::warn!(
                 request_id = %admitted.outbound,

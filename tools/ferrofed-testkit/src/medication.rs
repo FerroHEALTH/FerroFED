@@ -221,6 +221,23 @@ const SUMMARY_BESIDE: [&str; 7] = [
     "openEHR-EHR-ACTION.procedure.v1.adl",
 ];
 
+/// Returns the path of FerroBRIDGE's vendored ADL 2 patient summary
+/// template.
+#[must_use]
+pub fn patient_summary_template_path() -> PathBuf {
+    PathBuf::from(ROOT).join("docs/specs/ferrobridge-medication/ferrobridge_patient_summary.adlt")
+}
+
+/// Returns the paths of every archetype the patient summary template
+/// specialises.
+#[must_use]
+pub fn patient_summary_archetype_paths() -> Vec<PathBuf> {
+    let root = PathBuf::from(ROOT).join("docs/specs/ferrobridge-medication");
+    let mut paths = archetype_paths();
+    paths.extend(SUMMARY_BESIDE.iter().map(|file| root.join(file)));
+    paths
+}
+
 /// Returns FerroBRIDGE's ADL 2 patient summary template and every archetype
 /// it specialises, each as its file name and text.
 ///
@@ -230,7 +247,7 @@ const SUMMARY_BESIDE: [&str; 7] = [
 pub fn patient_summary_template() -> Result<Written, Box<dyn Error>> {
     let root = PathBuf::from(ROOT).join("docs/specs/ferrobridge-medication");
     let mut written = template()?;
-    written.template = std::fs::read_to_string(root.join("ferrobridge_patient_summary.adlt"))?;
+    written.template = std::fs::read_to_string(patient_summary_template_path())?;
     for file in SUMMARY_BESIDE {
         written
             .archetypes

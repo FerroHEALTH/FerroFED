@@ -22,6 +22,7 @@ mod laboratory_grant;
 mod refused;
 mod representative;
 mod start;
+mod vaccination;
 mod write;
 
 use std::collections::BTreeMap;

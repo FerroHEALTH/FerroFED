@@ -12,8 +12,9 @@
 #                  `answered` or `refused`, and a test function of the tree
 #                  as evidence;
 #   the verdicts   conformance/myhealth-eu-validation.tsv holds guide,
-#                  document and verdict rows, each guide core, laboratory or
-#                  discharge and each verdict valid or invalid; the
+#                  document and verdict rows, each guide core, laboratory,
+#                  discharge or vaccination and each verdict valid or
+#                  invalid; the
 #                  validator lane holds the rows to its run;
 #   the badges     every badge scripts/conformance/myhealth-eu.sh renders
 #                  equals its file, and each CI-line badge carries the EU
@@ -88,7 +89,7 @@ check_verdicts() {
     return
   }
   while IFS=$'\t' read -r guide document verdict; do
-    case "$guide" in core | laboratory | discharge) ;; *) fail "$VALIDATION: '$guide' is no MyHealth@EU guide the lane checks." ;; esac
+    case "$guide" in core | laboratory | discharge | vaccination) ;; *) fail "$VALIDATION: '$guide' is no MyHealth@EU guide the lane checks." ;; esac
     case "$verdict" in valid | invalid) ;; *) fail "$VALIDATION: $document has verdict '$verdict', not valid or invalid." ;; esac
     [[ "$document" == *.json ]] || fail "$VALIDATION: '$document' is no emitted document."
   done < <(rows "$VALIDATION")

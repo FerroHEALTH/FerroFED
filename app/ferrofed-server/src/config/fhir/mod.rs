@@ -80,6 +80,9 @@ pub struct Fhir {
     /// The categories the gateway writes reports of from the members'
     /// compositions, each with the template they are of.
     pub report: Vec<report::ReportEntry>,
+    /// The template the vaccination history is written from, or none when
+    /// the face writes none (`[fhir.vaccination]`).
+    pub vaccination: Option<report::VaccinationEntry>,
     /// How long the URL of a member's document in the
     /// document list stays valid.
     pub document_url_lifetime: units::Duration,
@@ -103,6 +106,7 @@ impl Default for Fhir {
             receive: Vec::new(),
             serve: Vec::new(),
             report: Vec::new(),
+            vaccination: None,
             document_url_lifetime: units::Duration::from_mins(5),
             id_key: None,
             id_key_file: None,
@@ -205,6 +209,10 @@ pub struct FhirSettings {
     /// composition with, compiled against the template of the
     /// `Medical-Imaging` `[[fhir.report]]` entry, or none when there is none.
     pub imaging: Option<Arc<ferrofed_eehrxf::imaging::Served>>,
+    /// The vaccination mapping the document list writes a member's
+    /// immunisation list with, compiled against the template of
+    /// `[fhir.vaccination]`, or none when there is none.
+    pub vaccination: Option<Arc<ferrofed_eehrxf::vaccination::Served>>,
     /// The members that serve prescriptions in the map mode, each by its node
     /// id with its mapping.
     pub mapped: Arc<BTreeMap<String, MapMode>>,
@@ -397,6 +405,23 @@ pub enum FhirError {
     /// the `Medical-Imaging` `[[fhir.report]]` entry.
     #[error("the imaging mapping the document list writes reports with is refused")]
     Imaging {
+        /// Why.
+        #[source]
+        source: Box<ServedError>,
+    },
+    /// A file `[fhir.vaccination]` names cannot be read.
+    #[error("fhir.vaccination {} cannot be read", path.display())]
+    VaccinationFile {
+        /// The path.
+        path: PathBuf,
+        /// Why.
+        #[source]
+        source: std::io::Error,
+    },
+    /// The shipped vaccination mapping does not compile against the
+    /// template of `[fhir.vaccination]`.
+    #[error("the vaccination mapping the document list writes histories with is refused")]
+    Vaccination {
         /// Why.
         #[source]
         source: Box<ServedError>,
@@ -619,6 +644,7 @@ impl Fhir {
             laboratory: self.laboratory()?.map(Arc::new),
             discharge: self.discharge()?.map(Arc::new),
             imaging: self.imaging()?.map(Arc::new),
+            vaccination: self.vaccination()?.map(Arc::new),
             document_url_lifetime: std::time::Duration::from_secs(
                 self.document_url_lifetime.as_secs(),
             ),

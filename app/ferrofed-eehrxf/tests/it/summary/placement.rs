@@ -103,6 +103,7 @@ fn one_composition_holding_a_medicine_and_a_vaccine_lists_each_in_its_own_sectio
         uid: uid.to_owned(),
         template: medication::PATIENT_SUMMARY_TEMPLATE.to_owned(),
         composition: medication::summary_composition(uid, (MEDICINE, VACCINE)),
+        attestations: None,
     };
     let assembled = document_mapped(&answers(&held), header(), &[], &mappings(dir.path())?)?;
     let bundle = serde_json::to_value(&assembled.bundle)?;
@@ -131,6 +132,7 @@ fn a_medication_action_under_the_medication_summary_is_a_medication_summary_entr
         uid: uid.to_owned(),
         template: medication::PATIENT_SUMMARY_TEMPLATE.to_owned(),
         composition: medication::summary_composition_taken(uid, (MEDICINE, VACCINE)),
+        attestations: None,
     };
     let assembled = document_mapped(&answers(&held), header(), &[], &mappings(dir.path())?)?;
     let bundle = serde_json::to_value(&assembled.bundle)?;
@@ -169,6 +171,7 @@ fn an_element_the_run_leaves_unread_is_counted_and_named() -> Result<(), Box<dyn
         uid: uid.to_owned(),
         template: medication::PATIENT_SUMMARY_TEMPLATE.to_owned(),
         composition: medication::summary_composition(uid, (MEDICINE, VACCINE)),
+        attestations: None,
     };
     let assembled = document_mapped(&answers(&held), header(), &[], &mappings(dir.path())?)?;
     let [report] = assembled.transformations.as_slice() else {
@@ -205,6 +208,7 @@ fn the_patient_summary_project_builds_and_maps_on_a_default_stack() -> Result<()
             uid: uid.to_owned(),
             template: medication::PATIENT_SUMMARY_TEMPLATE.to_owned(),
             composition: medication::summary_composition(uid, (MEDICINE, VACCINE)),
+            attestations: None,
         };
         let mappings = mappings(dir.path()).map_err(|error| error.to_string())?;
         let assembled = document_mapped(&answers(&held), header(), &[], &mappings)

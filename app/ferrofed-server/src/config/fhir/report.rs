@@ -8,7 +8,10 @@
 //! `Discharge-Reports` or `Medical-Imaging`, with the operational template those compositions
 //! are of: an OPT 1.4, or an ADL 2 template with the archetypes it
 //! specialises or fills a slot with. A laboratory report without an entry
-//! is written with the template of its `[[fhir.receive]]` entry. No
+//! is written with the template of its `[[fhir.receive]]` entry. The
+//! `[fhir.vaccination]` table names the template of the members'
+//! compositions that hold the immunisations section, which the vaccination
+//! history is written from; without it the list offers none. No
 //! specification governs the configuration: our own design.
 
 use std::path::PathBuf;
@@ -30,6 +33,19 @@ pub struct ReportEntry {
     pub category: String,
     /// The operational template the members' compositions of the category
     /// are of: an OPT 1.4 `.opt`, or an ADL 2 template beside `archetypes`.
+    pub template: PathBuf,
+    /// The archetypes an ADL 2 `template` specialises or fills a slot with,
+    /// each an ADL file.
+    pub archetypes: Vec<PathBuf>,
+}
+
+/// The `[fhir.vaccination]` table.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct VaccinationEntry {
+    /// The operational template of the members' compositions that hold the
+    /// immunisations section: an OPT 1.4 `.opt`, or an ADL 2 template beside
+    /// `archetypes`.
     pub template: PathBuf,
     /// The archetypes an ADL 2 `template` specialises or fills a slot with,
     /// each an ADL file.
@@ -83,6 +99,25 @@ pub(super) struct Declared {
 }
 
 impl Declared {
+    /// Reads `template` and its `archetypes` with `read`.
+    fn read<E>(
+        template: &PathBuf,
+        archetypes: &[PathBuf],
+        read: impl Fn(&PathBuf) -> Result<String, E>,
+    ) -> Result<Self, E> {
+        let archetypes = super::archetypes(archetypes, &read)?;
+        // NOTE: no specification governs this: our own design; an OPT 1.4 is named `.opt`, and any
+        // other template is read as ADL 2 with its archetypes, as `[[fhir.serve]]` reads one.
+        let opt14 = template
+            .extension()
+            .is_some_and(|extension| extension == "opt");
+        Ok(Self {
+            text: read(template)?,
+            archetypes,
+            opt14,
+        })
+    }
+
     /// The template as the shipped mappings compile against it.
     pub(super) fn template(&self) -> Template<'_> {
         if self.opt14 {
@@ -112,13 +147,13 @@ impl Fhir {
                     position,
                     category: entry.category.clone(),
                 })?;
-            if written.category() != category.code() {
+            if written.code() != category.code() {
                 continue;
             }
             if found.is_some() {
                 return Err(ReportError::Twice {
                     position,
-                    category: written.category(),
+                    category: written.code(),
                 }
                 .into());
             }
@@ -134,18 +169,39 @@ impl Fhir {
                 source,
             })
         };
-        let archetypes = super::archetypes(&entry.archetypes, read)?;
-        // NOTE: no specification governs this: our own design; an OPT 1.4 is named `.opt`, and any
-        // other template is read as ADL 2 with its archetypes, as `[[fhir.serve]]` reads one.
-        let opt14 = entry
-            .template
-            .extension()
-            .is_some_and(|extension| extension == "opt");
-        Ok(Some(Declared {
-            text: read(&entry.template)?,
-            archetypes,
-            opt14,
-        }))
+        Ok(Some(Declared::read(
+            &entry.template,
+            &entry.archetypes,
+            read,
+        )?))
+    }
+
+    /// Compiles the shipped vaccination mapping against the template of the
+    /// `[fhir.vaccination]` table, when there is one.
+    ///
+    /// # Errors
+    ///
+    /// [`FhirError::VaccinationFile`] for a file that cannot be read, and
+    /// [`FhirError::Vaccination`] when the mapping does not compile against
+    /// the template.
+    pub(super) fn vaccination(
+        &self,
+    ) -> Result<Option<ferrofed_eehrxf::vaccination::Served>, FhirError> {
+        let Some(entry) = &self.vaccination else {
+            return Ok(None);
+        };
+        let read = |path: &PathBuf| {
+            std::fs::read_to_string(path).map_err(|source| FhirError::VaccinationFile {
+                path: path.clone(),
+                source,
+            })
+        };
+        let declared = Declared::read(&entry.template, &entry.archetypes, read)?;
+        ferrofed_eehrxf::vaccination::Served::compile(declared.template())
+            .map(Some)
+            .map_err(|source| FhirError::Vaccination {
+                source: Box::new(source),
+            })
     }
 
     /// Compiles the shipped discharge mapping against the template of the
@@ -249,6 +305,7 @@ impl FhirSettings {
             Written::Laboratory => Some(self.laboratory.as_deref()?),
             Written::Discharge => Some(self.discharge.as_deref()?),
             Written::Imaging => Some(self.imaging.as_deref()?),
+            Written::Vaccination => Some(self.vaccination.as_deref()?),
         };
         served
     }

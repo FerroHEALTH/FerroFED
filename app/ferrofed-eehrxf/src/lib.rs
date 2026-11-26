@@ -17,6 +17,8 @@
 //! - [`laboratory`]: the stored query of the laboratory report;
 //! - [`discharge`]: the stored query of the discharge report;
 //! - [`imaging`]: the stored query of the imaging report;
+//! - [`vaccination`]: the stored query of the vaccination history, and the
+//!   persons who attested a record, its legal authenticators;
 //! - [`report`]: what the reports the gateway writes from one member's
 //!   composition share;
 //! - [`medication`]: the stored queries of the medication orders and
@@ -82,3 +84,4 @@ pub mod serving;
 pub mod summary;
 pub mod terminology;
 pub mod transformation;
+pub mod vaccination;

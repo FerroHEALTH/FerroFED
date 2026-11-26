@@ -30,4 +30,5 @@ mod sheet;
 mod summary;
 mod template;
 mod terminology;
+mod vaccination;
 mod written_entry;

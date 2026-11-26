@@ -20,7 +20,8 @@ publish = false
 # document, and the FHIRconnect mapping each composition runs through; the
 # prescription and dispensation profiles the members serve them in; the
 # imaging and discharge document profiles a member receives (#1694); the
-# component itself links nothing of FerroFED.
+# vaccination history the face writes (#1980); the component itself links
+# nothing of FerroFED.
 eehrxf = { workspace = true, features = [
   "patient-summary",
   "imaging",
@@ -28,6 +29,7 @@ eehrxf = { workspace = true, features = [
   "discharge",
   "prescription",
   "dispensation",
+  "vaccination",
   "openehr",
 ] }
 # The FHIR R4 search value grammar of the document list's parameters (#1975).

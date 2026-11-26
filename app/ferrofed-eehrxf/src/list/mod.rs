@@ -87,6 +87,11 @@ pub const IMAGING_REPORT: &str = "85430-7";
 /// MyHealth@EU `eHDSIMedicalImagingReportType`.
 pub const IMAGING_STUDY: &str = "18748-4";
 
+/// The LOINC code a vaccination history is listed under, `11369-6`
+/// "History of Immunization note", which `composition-euvac-myhealtheu`
+/// fixes as its type and MyHealth@EU `eHDSIDocumentCode` holds.
+pub const IMMUNIZATION_HISTORY: &str = eehrxf::document::vaccination::IMMUNIZATION_HISTORY;
+
 /// The canonical URL of the document `Bundle` profile the gateway's own
 /// summary follows.
 pub const EPS_BUNDLE: &str = "http://hl7.eu/fhir/eps/StructureDefinition/bundle-eu-eps";
@@ -105,6 +110,7 @@ pub struct ListRequest {
     summaries: bool,
     laboratory: bool,
     hospital_discharge: bool,
+    vaccination: bool,
     discharge: Vec<&'static str>,
     imaging: Vec<&'static str>,
     criteria: Criteria,
@@ -116,6 +122,7 @@ impl std::fmt::Debug for ListRequest {
             .field("summaries", &self.summaries)
             .field("laboratory", &self.laboratory)
             .field("hospital_discharge", &self.hospital_discharge)
+            .field("vaccination", &self.vaccination)
             .field("discharge", &self.discharge)
             .field("imaging", &self.imaging)
             .field("criteria", &self.criteria)
@@ -211,6 +218,13 @@ impl ListRequest {
         self.hospital_discharge
     }
 
+    /// Returns whether every `type` the search gives admits a vaccination
+    /// history ([`IMMUNIZATION_HISTORY`]).
+    #[must_use]
+    pub fn admits_vaccination(&self) -> bool {
+        self.vaccination
+    }
+
     /// Returns the codes of [`DISCHARGE_REPORTS`] every `type` the search
     /// gives admits, in their order; none when it admits no discharge
     /// report.
@@ -247,6 +261,7 @@ impl ListRequest {
         let mut summaries = true;
         let mut laboratory = true;
         let mut hospital_discharge = true;
+        let mut vaccination = true;
         let mut discharge = DISCHARGE_REPORTS.to_vec();
         let mut imaging = IMAGING_DOCUMENTS.to_vec();
         let mut criteria = Criteria::default();
@@ -278,6 +293,9 @@ impl ListRequest {
                     hospital_discharge &= value
                         .split(',')
                         .any(|token| admits(token, HOSPITAL_DISCHARGE_SUMMARY));
+                    vaccination &= value
+                        .split(',')
+                        .any(|token| admits(token, IMMUNIZATION_HISTORY));
                     for codes in [&mut discharge, &mut imaging] {
                         codes.retain(|code| value.split(',').any(|token| admits(token, code)));
                     }
@@ -309,6 +327,7 @@ impl ListRequest {
             summaries,
             laboratory,
             hospital_discharge,
+            vaccination,
             discharge,
             imaging,
             criteria,
@@ -332,6 +351,7 @@ impl ListRequest {
             summaries: true,
             laboratory: true,
             hospital_discharge: true,
+            vaccination: true,
             discharge: DISCHARGE_REPORTS.to_vec(),
             imaging: IMAGING_DOCUMENTS.to_vec(),
             criteria,
@@ -773,6 +793,29 @@ pub fn unread(endpoint: &str, documents: &str, reason: &str) -> OperationOutcome
                      the list cannot pass through: {reason} (§11.3)"
                 )
                 .into(),
+            ),
+            ..OperationOutcomeIssue::default()
+        }],
+        ..OperationOutcome::default()
+    }
+}
+
+/// Returns the `OperationOutcome` that names a document the gateway would
+/// write from a member's record and cannot, so the list names it
+/// unavailable in its place.
+///
+/// The member's Query API endpoint is `endpoint`, the document is named
+/// `document`, such as a vaccination history, and `reason` says why, naming
+/// no value the record carries. The member answered, so its §11.1 status is
+/// unchanged.
+#[must_use]
+pub fn unavailable(endpoint: &str, document: &str, reason: &str) -> OperationOutcome {
+    OperationOutcome {
+        issue: vec![OperationOutcomeIssue {
+            severity: "warning".into(),
+            code: "incomplete".into(),
+            diagnostics: Some(
+                format!("a {document} of {endpoint} is unavailable: {reason}").into(),
             ),
             ..OperationOutcomeIssue::default()
         }],

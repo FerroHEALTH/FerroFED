@@ -16,8 +16,8 @@
 //! whose identifier has a system and a value (FHIR R4 `bdl-9`), is a member
 //! in `node-error` (§11.1): it fails the list under all-or-nothing, and
 //! under `partial` is named in an `outcome` entry (§11.3, §11.4). Laboratory
-//! discharge and imaging reports are listed when the gateway maps them
-//! ([`super::written`]),
+//! discharge and imaging reports and the vaccination history are listed when
+//! the gateway maps them ([`super::written`]),
 //! and laboratory, discharge and imaging reports when a member serves them
 //! itself ([`super::own`]).
 
@@ -50,6 +50,7 @@ use crate::access::NoAccess;
 use crate::auth::caller::Caller;
 use crate::config::fhir::FhirSettings;
 use crate::facade::native::{Answer, Native};
+use crate::facade::request::Arrived;
 use crate::facade::summary::own::Wanted;
 use crate::facade::summary::{self as gathered, Gathered, Scope, Unsummarised};
 use crate::federation::Federation;
@@ -117,7 +118,9 @@ async fn answered(asked: Asked, read: Result<ListRequest, ListRefusal>, mode: Mo
             )
             .await
             {
-                Ok(gathered) => found(store, admitted, (&gathered, read, mode), patient).await,
+                Ok(gathered) => {
+                    found(store, (admitted, arrived), (&gathered, read, mode), patient).await
+                }
                 // NOTE: FHIR R4 search, Federation Tier §11.3: a patient no member holds matches no
                 // document, and answers as one no member may disclose does.
                 Err(unsummarised) if unsummarised.reaches_no_member() => {
@@ -163,6 +166,8 @@ struct Lists {
     discharge: bool,
     /// Whether it lists imaging documents.
     imaging: bool,
+    /// Whether the gateway writes the vaccination history.
+    vaccination: bool,
 }
 
 impl Lists {
@@ -187,6 +192,7 @@ impl Lists {
             written: (laboratory, discharge, imaging),
             discharge: discharge || serves(Category::DischargeReport),
             imaging: imaging || serves(Category::MedicalImaging),
+            vaccination: fhir.is_some_and(|fhir| fhir.vaccination.is_some()),
         }
     }
 
@@ -209,6 +215,9 @@ impl Lists {
         if self.written.2 && read.imaging().contains(&IMAGING_STUDY) {
             written.insert(Written::Imaging);
         }
+        if self.vaccination && read.admits_vaccination() {
+            written.insert(Written::Vaccination);
+        }
         Wanted {
             laboratory,
             discharge: types(self.discharge, read.discharge()),
@@ -218,14 +227,16 @@ impl Lists {
     }
 }
 
-/// The list `gathered` gives for `patient` on the request `admitted`, the
-/// patient's id recorded in `store` first, since the list names it.
+/// The list `gathered` gives for `patient` on the request `admitted` that
+/// `arrived`, the patient's id recorded in `store` first, since the list
+/// names it.
 async fn found(
     store: Option<&crate::store::Store>,
-    admitted: &super::admission::Admitted<'_>,
+    (admitted, arrived): (&super::admission::Admitted<'_>, Arrived<'_>),
     (gathered, read, mode): (&Gathered, &ListRequest, Mode),
     (system, value): (&str, &str),
 ) -> Response {
+    let subject = super::written::subject(admitted, &arrived, gathered, (system, value)).await;
     let id = admitted.fhir.ids.patient((system, value));
     let date = jiff::Timestamp::now()
         .strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -240,7 +251,7 @@ async fn found(
         &admitted.federation,
         (admitted.fhir, admitted.caller),
         (gathered, read, mode),
-        listing,
+        (listing, subject.as_ref()),
         &admitted.logged,
     );
     ids.push(id);
@@ -273,12 +284,13 @@ pub(super) enum Mode {
 
 /// The answer `gathered` gives for the patient of `listing` on the face
 /// `fhir` in the mode `mode`, with the access it records, and the id of
-/// every document it names.
+/// every document it names; `subject` says whether the patient can be a
+/// vaccination history's subject, when the list names one.
 fn listed(
     federation: &Federation,
     (fhir, caller): (&FhirSettings, &Caller),
     (gathered, read, mode): (&Gathered, &ListRequest, Mode),
-    listing: Listing<'_>,
+    (listing, subject): (Listing<'_>, Option<&Result<(), String>>),
     logged: &str,
 ) -> (Response, Vec<FaceId>) {
     let (system, value) = (listing.system, listing.value);
@@ -286,7 +298,7 @@ fn listed(
         federation,
         (fhir, caller),
         (gathered, read),
-        listing,
+        (listing, subject),
         logged,
     ) {
         Ok(entries) => entries,
@@ -344,7 +356,8 @@ fn listed(
 /// `listing`: the summary its operator has the gateway write when the
 /// patient resolved at a member, each member's own document at a URL signed
 /// for `caller`, the written and the members' own reports, and an `outcome`
-/// entry for each member that did not answer.
+/// entry for each member that did not answer and each vaccination history
+/// `subject` or its record makes unavailable.
 ///
 /// # Errors
 ///
@@ -357,7 +370,7 @@ fn entries(
     federation: &Federation,
     (fhir, caller): (&FhirSettings, &Caller),
     (gathered, read): (&Gathered, &ListRequest),
-    listing: Listing<'_>,
+    (listing, subject): (Listing<'_>, Option<&Result<(), String>>),
     logged: &str,
 ) -> Result<super::written::Listed, Response> {
     let (system, value) = (listing.system, listing.value);
@@ -417,7 +430,7 @@ fn entries(
         }
     }
     let Some((reports, silent)) =
-        super::written::listed(federation, (fhir, caller), gathered, listing)
+        super::written::listed(federation, (fhir, caller), gathered, (listing, subject))
     else {
         tracing::error!(
             request_id = logged,
