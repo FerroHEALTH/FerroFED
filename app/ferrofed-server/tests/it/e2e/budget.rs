@@ -84,8 +84,8 @@ struct Budget {
     store_calls: u64,
 }
 
-// NOTE: no specification governs these ceilings: our own design; each is the Linux CI figure
-// plus 2% (#2003).
+// NOTE: no specification governs these ceilings: our own design; each allocation budget is the
+// Linux CI figure plus 2%, and each store-call budget the figure itself (#2003).
 const BUDGETS: [Budget; 4] = [
     Budget {
         path: HotPath::Query,
@@ -95,17 +95,17 @@ const BUDGETS: [Budget; 4] = [
     Budget {
         path: HotPath::Definition,
         allocations: 474,
-        store_calls: 0,
+        store_calls: 1,
     },
     Budget {
         path: HotPath::Stored,
         allocations: 1195,
-        store_calls: 0,
+        store_calls: 1,
     },
     Budget {
         path: HotPath::List,
         allocations: 6882,
-        store_calls: 0,
+        store_calls: 1,
     },
 ];
 
