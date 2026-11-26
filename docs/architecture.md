@@ -90,7 +90,7 @@ the ground for each, and `scripts/checks/versions.sh` holds the two in step.
 | PostgreSQL | 19 | only behind the optional high-availability backend of the stored-query store (section 8); a single gateway needs no database |
 
 The `openehr-*` rows are the lockstep 0.5.0, the line the published
-`eehrxf` 0.40.0 and `fhirconnect` 0.13.0 require (#813, #1581, #1722, #1742, #1754, #1799, #1805, #1785, #1891, #1895, #1899, #1915, #1946). The
+`eehrxf` 0.42.0 and `fhirconnect` 0.13.0 require (#813, #1581, #1722, #1742, #1754, #1799, #1805, #1785, #1891, #1895, #1899, #1915, #1946). The
 gaps FerroEHR #3505 to #3514 closed in 0.0.74, which v0.0.2 coded against,
 0.0.76 closes FerroEHR #3526, the open ITS-REST `Error`, 0.0.77 closes
 FerroEHR #3529, the function classification the rewrite reads, 0.0.78

@@ -497,7 +497,7 @@ received document is validated in full by FerroBRIDGE's `ferrobridge-validator`
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `eehrxf` | 0.40.0 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
+| `eehrxf` | 0.42.0 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
 | `fhirconnect` | 0.13.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `openehr-mapping-core` | 0.9.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `ferrobridge-term` | 0.21.0 | the root `Cargo.toml` `[workspace.dependencies]` |
