@@ -25,20 +25,13 @@ data_key_file = "/etc/ferropix/data-key"
 # namespace and reaches it on localhost, and the issuer names itself so in
 # every token, whoever asks for it. It
 # signs the client credentials tokens of the seed, the Patient Identity Source
-# of every domain, and of the gateway, the PIXm Consumer: a token whose `sub`
-# is its client is a machine's (RFC 9068 §2.2). It signs with `typ` JWT and
-# names the client in `client_id`, so the issuer takes the claims it carries.
+# of every domain, and of the gateway, the PIXm Consumer, as RFC 9068 `at+jwt`
+# access tokens: a token whose `sub` is its client is a machine's (RFC 9068
+# §2.2), so the entry names only the issuer and its audience.
 # A development issuer, NOT for anything real.
 [auth.issuer.ferrofed]
 issuer = "http://localhost:8180/ferrofed"
-kind = "persons"
-preset = "rfc9068"
 audience = ["http://ferropix:8080/fhir"]
-
-[auth.issuer.ferrofed.profile]
-token_types = ["JWT"]
-required_claims = ["iss", "exp", "aud", "sub"]
-client_claims = ["client_id", "azp"]
 
 # The client the development issuer may vouch for as the Source of each
 # domain (PIXm 3.1.0 §2:3.104.5).
@@ -52,30 +45,35 @@ clients = ["quickstart-source"]
 system = "urn:oid:2.999.1.1"
 name = "Quickstart patients"
 kind = "authoritative"
+identifier_type = "PI"
 source_client_id = "quickstart-source"
 
 [[domain]]
 system = "urn:oid:2.999.2.1"
 name = "Node A ehr_ids"
 kind = "local"
+identifier_type = "PI"
 source_client_id = "quickstart-source"
 
 [[domain]]
 system = "urn:oid:2.999.2.2"
 name = "Node B ehr_ids"
 kind = "local"
+identifier_type = "PI"
 source_client_id = "quickstart-source"
 
 [[domain]]
 system = "urn:oid:2.999.2.3"
 name = "Node C ehr_ids"
 kind = "local"
+identifier_type = "PI"
 source_client_id = "quickstart-source"
 
 [[domain]]
 system = "urn:oid:2.999.2.4"
 name = "Node D ehr_ids"
 kind = "local"
+identifier_type = "PI"
 source_client_id = "quickstart-source"
 
 [usage_report]

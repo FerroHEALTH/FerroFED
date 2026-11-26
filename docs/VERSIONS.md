@@ -648,7 +648,7 @@ it.
 | FerroEHR node database image | `ghcr.io/ferrohealth/ferroehr-postgres:5.7.0@sha256:3b7dbfce603b4ff3c8a29366655f195baf2bfeaf903a1bf1be851ba69293743a` | `compose.yaml`, the `FERROEHR_POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | EHRbase node image | `ehrbase/ehrbase:2.38.0@sha256:b265855956270f028b7e457340d87c96290a007252ac5a52dffed3321a6ce93a` | the `EHRBASE` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | EHRbase node database image | `ehrbase/ehrbase-v2-postgres:16.2@sha256:abe14e8f9ba33cabc9946c6c17c5aa95b64b35387f266cd20a894149203196d7` | the `EHRBASE_POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
-| FerroPIX PIX Manager image | `ghcr.io/ferrohealth/ferropix:0.0.39@sha256:b91cff886b9ec1413706630c25e80c08c6bf09a223e1916704a2421f7071a674` | `compose.yaml`, the `FERROPIX` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
+| FerroPIX PIX Manager image | `ghcr.io/ferrohealth/ferropix:0.0.45@sha256:e688ac42a9f57afb6d22a8db22fd042c331de4d425e6d78a7e83a08f0930636b` | `compose.yaml`, the `FERROPIX` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | FerroFED store database image | `postgres:19.0@sha256:aaa10f7ba7328b4a221a6c3184d83eef885bd16bf1f6de864757863156b0a4d1` | the `POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | FerroPIX database image | `postgres:19.0@sha256:aaa10f7ba7328b4a221a6c3184d83eef885bd16bf1f6de864757863156b0a4d1` | `compose.yaml`, the `FERROPIX_POSTGRES` constant in `tools/ferrofed-testkit/src/containers/images.rs` |
 | Quickstart FerroPIX token issuer image | `ghcr.io/navikt/mock-oauth2-server:7.0.1@sha256:eb07a0a65007c34c40c7b849592a47e6299128a514a5c6c582a53451cc6e3390` | `compose.yaml` |
