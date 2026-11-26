@@ -49,6 +49,7 @@ use ferrofed_registry::id::{EhrId, EndpointId};
 use http::header::{CONNECTION, CONTENT_LENGTH, TE, TRAILER, TRANSFER_ENCODING, UPGRADE};
 use http::{HeaderMap, HeaderName, Method, StatusCode};
 use openehr_federation::outcome::ErrorDetail;
+use openehr_federation::status::EndpointStatus;
 use openehr_its::rest::client::{
     Answer, ClientError, ErrorBody, Request, Transport, TransportError, path_segment,
 };
@@ -294,6 +295,18 @@ pub enum ForwardError {
 }
 
 impl ForwardError {
+    /// The §11.1 status of a member whose request failed so: `time-out`
+    /// when it did not answer in time or never got a slot, `offline` when
+    /// it could not be reached, and `node-error` otherwise.
+    #[must_use]
+    pub fn status(&self) -> EndpointStatus {
+        match self {
+            Self::TimeOut { .. } | Self::Expired(_) | Self::Capped(_) => EndpointStatus::TimeOut,
+            Self::Unreachable { .. } => EndpointStatus::Offline,
+            _ => EndpointStatus::NodeError,
+        }
+    }
+
     /// The error of a request to `endpoint` whose call options could not
     /// be built: the caller's identity unsigned, or a header the client
     /// refuses.
