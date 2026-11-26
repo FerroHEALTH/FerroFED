@@ -140,7 +140,7 @@ pub enum By<'a> {
         /// The type token, `system|code`.
         kind: &'a str,
         /// Each further search parameter, its name and its value, sent as
-        /// given (FHIR R4 search §3.1.1.4.2: repeated parameters are ANDed).
+        /// given (FHIR R4 search §3.1.1.4.2: every repeated parameter must match).
         narrowing: &'a [(String, String)],
     },
     /// `{type}/<id>`: the read of the one resource of the logical id `id`
