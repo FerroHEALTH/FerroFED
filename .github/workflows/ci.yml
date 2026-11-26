@@ -1106,6 +1106,27 @@ jobs:
     with:
       base: ${{ github.event.pull_request.base.sha || github.event.before }}
 
+  # The CPU instructions of each hot path's in-process work (#2003), counted
+  # by callgrind in a release build and held to perf/instructions.ceilings.
+  # The per-request allocations and store calls are the e2e lane's
+  # `e2e::budget` case.
+  instructions:
+    name: hot path instructions (callgrind)
+    needs: detect
+    if: github.event_name != 'merge_group' && needs.detect.outputs.cargo == 'true' && needs.detect.outputs.perf == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+      - name: Install valgrind
+        run: sudo apt-get update && sudo apt-get install -y valgrind
+      - run: bash scripts/perf/instructions.sh
+
   # The conformance report of section 16.4 (#92; no specification governs its
   # form: our own design): every section 16.3 track and section 17 point as
   # pass, fail, not-run, deferred or open, joined from the conformance
@@ -1629,6 +1650,7 @@ jobs:
       - binding-tests
       - e2e
       - perf
+      - instructions
       - conformance-report
       - fhir-validator
       - release-compose

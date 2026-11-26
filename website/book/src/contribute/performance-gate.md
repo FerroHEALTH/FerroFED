@@ -296,3 +296,32 @@ rendering, the registry rewrite, the base resolution with the release
 base, each arm's overrides from `perf/arm.env` and from an older tree's
 gate, the move of the base's services and configuration to its own
 address, the base's refusals and the two plans' idle limits on any machine.
+
+## The fixed budgets of the hot paths
+
+Beside the comparison with the base, each hot path has a fixed budget a
+change cannot exceed, whatever its base did:
+
+- **Allocations and store calls per request:** the `e2e::budget` case of
+  the server's test binary, in the e2e lane. It sends the federated AQL
+  query, the read of a stored query's definition, the run of that stored
+  query and the document list of the FHIR face, each over `wiremock`
+  members and a real PostgreSQL 19 store, five times after two warm
+  requests. `allocation-counter` counts the allocations of the thread that
+  polls the request, and a store call is a trace event the store sends from
+  the request's task. The least allocations and the most store calls of
+  each path are held to `BUDGETS` in
+  `app/ferrofed-server/tests/it/e2e/budget.rs`. Run it with
+  `FERROFED_E2E=1 cargo nextest run -p ferrofed-server -E 'test(/^e2e::budget/)'`
+  where containers can run.
+- **CPU instructions:** `scripts/perf/instructions.sh` builds the example
+  `hot_path_instructions` in release, counts the in-process work of the
+  AQL analysis and rewrite (`aql_rewrite`) and of the merge of two members'
+  answers (`merge`) with callgrind, and holds each count to
+  `perf/instructions.ceilings`. The CI job `hot path instructions
+  (callgrind)` runs it whenever a change reaches the gateway; it needs
+  valgrind, so it runs on Linux.
+
+Each budget is set from the Linux CI figures. A budget is lowered in a
+normal change when a path gets cheaper, and raised only with its cause
+stated in the pull request; it is never loosened to let a change pass.

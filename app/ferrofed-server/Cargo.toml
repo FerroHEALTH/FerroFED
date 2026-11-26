@@ -192,6 +192,10 @@ uuid.workspace = true
 ferrobridge-term.workspace = true
 
 [dev-dependencies]
+# The allocations of one request, counted by the hot-path budget (#2003).
+allocation-counter.workspace = true
+# The rewrite and the merge the hot-path instruction count runs (#2003).
+openehr-federation = { workspace = true, features = ["aql", "merge"] }
 # The partner's professional the caller-kind tests of auth::kind_tests build
 # (#1615).
 ferrohealth-smart = { workspace = true, features = ["test-support"] }

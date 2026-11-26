@@ -94,6 +94,7 @@ use crate::support::settings;
 mod admission;
 mod aggregate;
 mod attributes;
+mod budget;
 mod commit;
 mod conformance_run;
 mod crossref;
