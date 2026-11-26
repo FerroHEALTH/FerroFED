@@ -99,7 +99,7 @@ which `scripts/checks/support-periods.sh` holds to this one.
 | v0.0.19 | 2026-11-11 | 2031-11-11 |
 | v0.0.20 | 2026-11-12 | 2031-11-12 |
 | v0.0.21 | 2026-11-25 | 2031-11-25 |
-| v0.0.22 | 2026-11-26 | 2031-11-26 |
+| v0.0.22 | 2026-11-27 | 2031-11-27 |
 <!-- support periods: rows above this line -->
 
 A withdrawn release gets no fix of its own either. It is listed under

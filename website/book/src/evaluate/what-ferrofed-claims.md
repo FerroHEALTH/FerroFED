@@ -638,7 +638,7 @@ Released on 2026-11-25.
 
 ### v0.0.22: the national contact point API, the vaccination history and measured speed
 
-Released on 2026-11-26.
+Released on 2026-11-27.
 
 - The document list answers the MyHealth@EU national contact point API:
   stable patient and document ids under `fhir.id_key`, `patient=Patient/{id}`,
