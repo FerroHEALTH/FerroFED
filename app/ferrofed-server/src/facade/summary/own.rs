@@ -113,6 +113,9 @@ pub(crate) struct Wanted {
     /// The categories the gateway writes reports of from every other
     /// member's compositions.
     pub(crate) written: BTreeSet<Written>,
+    /// The search parameters a member that serves its own documents is
+    /// asked with as a narrowing, each its name and its value.
+    pub(crate) narrowing: Vec<(String, String)>,
 }
 
 impl Wanted {
@@ -133,6 +136,8 @@ pub(crate) struct Asking {
     pub(crate) kind: Kind,
     /// The codes, each of the LOINC system.
     pub(crate) codes: Vec<&'static str>,
+    /// The search parameters it is asked with as a narrowing.
+    pub(crate) narrowing: Vec<(String, String)>,
     /// The member.
     pub(crate) chosen: Chosen,
 }
@@ -152,6 +157,7 @@ pub(super) fn asking(
         .map(|chosen| Asking {
             kind: Kind::Laboratory,
             codes: vec![LABORATORY_REPORT],
+            narrowing: wanted.narrowing.clone(),
             chosen,
         })
         .collect();
@@ -166,6 +172,7 @@ pub(super) fn asking(
         asking.extend(chosen.into_iter().map(|chosen| Asking {
             kind,
             codes: codes.clone(),
+            narrowing: wanted.narrowing.clone(),
             chosen,
         }));
     }
@@ -284,9 +291,12 @@ async fn documents(
         .map(|code| format!("{LOINC}|{code}"))
         .collect::<Vec<_>>()
         .join(",");
+    // NOTE: IHE MHD 4.2.2 ITI-67 defines each narrowing parameter; the list evaluates each again
+    // on every entry, so a member that ignores one changes nothing the list answers.
     let by = By::Patient {
         patient: &patient,
         kind: &kind,
+        narrowing: &asking.narrowing,
     };
     let documents = paged(federation, (member, RESOURCE, by), options, until).await?;
     let Held::Found(pages) = &documents else {

@@ -214,6 +214,7 @@ impl Lists {
             discharge: types(self.discharge, read.discharge()),
             imaging: types(self.imaging, read.imaging()),
             written,
+            narrowing: read.narrowing().to_vec(),
         }
     }
 }

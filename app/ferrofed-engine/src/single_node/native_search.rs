@@ -132,12 +132,16 @@ pub enum By<'a> {
     Identifier,
     /// `{type}?patient=<patient>&type=<kind>`: the resources of the member's
     /// `Patient` of the logical id `patient`, of the type token `kind`
-    /// (FHIR R4 `DocumentReference` `patient` and `type`).
+    /// (FHIR R4 `DocumentReference` `patient` and `type`), narrowed by each
+    /// parameter of `narrowing` as the caller gave it.
     Patient {
         /// The logical id of the member's `Patient`.
         patient: &'a str,
         /// The type token, `system|code`.
         kind: &'a str,
+        /// Each further search parameter, its name and its value, sent as
+        /// given (FHIR R4 search §3.1.1.4.2: repeated parameters are ANDed).
+        narrowing: &'a [(String, String)],
     },
     /// `{type}/<id>`: the read of the one resource of the logical id `id`
     /// (FHIR R4 `http.html` §3.1.0.2), which a member answers with no page.
@@ -264,9 +268,16 @@ fn search_outgoing(asked: SearchAsked<'_>) -> Request {
                     }
                 }
                 By::Identifier => outgoing.query(IDENTIFIER, own),
-                By::Patient { patient, kind } => {
+                By::Patient {
+                    patient,
+                    kind,
+                    narrowing,
+                } => {
                     outgoing.query(PATIENT, patient);
                     outgoing.query(TYPE, kind);
+                    for (name, value) in narrowing {
+                        outgoing.query(name, value);
+                    }
                 }
                 By::Read(_) => {}
             }
