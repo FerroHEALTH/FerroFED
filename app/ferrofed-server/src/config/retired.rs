@@ -25,7 +25,7 @@ use crate::config::Config;
 /// `removed::stale` holds every declaration to it
 /// (FerroHEALTH/FerroSYS#339). The workspace version moves only at the cut,
 /// so the first pull request after each cut moves this on.
-pub const PREPARING: &str = "0.0.21";
+pub const PREPARING: &str = "0.0.22";
 
 /// Every declaration of this module, for the one-release check.
 #[cfg(test)]
