@@ -48,6 +48,8 @@
 [![CRA Annex VII](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fbadges%2Fcra-annex-vii.json)](https://ferrofed.eu/docs/evaluate/conformance.html#the-readme-badges)
 <!-- compliance:end -->
 <!-- myhealth-eu:begin -->
+<br>
+**MyHealth@EU**<br>
 [![MyHealth@EU self-assessed](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fmyhealth-eu-badge.json)](https://ferrofed.eu/docs/evaluate/myhealth-eu.html)
 [![MyHealth@EU search, self-tested](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fmyhealth-eu%2Fsearch.json)](https://ferrofed.eu/docs/evaluate/myhealth-eu.html)
 [![MyHealth@EU core, self-tested](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fmyhealth-eu%2Fcore.json)](https://ferrofed.eu/docs/evaluate/myhealth-eu.html)
