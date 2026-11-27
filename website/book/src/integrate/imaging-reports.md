@@ -161,7 +161,11 @@ an attachment URL that names no `Binary` under the member's endpoint, or a
 all-or-nothing, `424` or `504` naming it, and is named in an `outcome`
 entry under `partial`. Each list and read is recorded under
 `Medical-Imaging` in the access log, naming the member's own endpoint and
-its `ehr_id` (`fhir/list/own_imaging.rs`).
+its `ehr_id` (`fhir/list/own_imaging.rs`). The gateway checks the header data
+and the format of each document as it does a laboratory report's, and
+reads a DICOM file of this category alone
+(`a_members_dicom_file_is_read_byte_for_byte`,
+`bytes_that_are_no_image_of_their_media_type_are_refused`).
 
 ## The component behind the category
 

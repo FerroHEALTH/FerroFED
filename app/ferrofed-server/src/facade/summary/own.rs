@@ -62,13 +62,18 @@ impl Kind {
         }
     }
 
+    /// The priority category, as the interoperability component names it.
+    pub(crate) const fn component(self) -> eehrxf::category::Category {
+        match self {
+            Self::Laboratory => eehrxf::category::Category::Laboratory,
+            Self::Discharge => eehrxf::category::Category::Discharge,
+            Self::Imaging => eehrxf::category::Category::Imaging,
+        }
+    }
+
     /// The code of the priority category, such as `Discharge-Reports`.
     pub(crate) const fn code(self) -> &'static str {
-        match self {
-            Self::Laboratory => eehrxf::category::Category::Laboratory.code(),
-            Self::Discharge => eehrxf::category::Category::Discharge.code(),
-            Self::Imaging => eehrxf::category::Category::Imaging.code(),
-        }
+        self.component().code()
     }
 
     /// The document `Bundle` profile the member's documents are asked in.

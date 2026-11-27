@@ -48,7 +48,7 @@ const BOTH: &str = "http://loinc.org|18842-5,http://loinc.org|100719-4";
 /// The member's own `DocumentReference`, its members in the order the
 /// gateway's serialiser writes them, with a decimal of two places, so the
 /// listed bytes can be compared whole.
-const DOCUMENT: &str = r#"{"category":[{"coding":[{"code":"Discharge-Reports","system":"http://hl7.eu/fhir/health-data-api/CodeSystem/eehrxf-document-priority-category-cs"}]}],"content":[{"attachment":{"contentType":"application/fhir+json","size":63,"url":"Binary/hdr-1"}}],"extension":[{"url":"urn:oid:2.999.9.2","valueDecimal":2.50}],"id":"doc-hdr-1","masterIdentifier":{"system":"urn:ietf:rfc:3986","value":"urn:uuid:4d200000-0000-4000-8000-0000000000b1"},"resourceType":"DocumentReference","status":"current","subject":{"reference":"Patient/pat-a"},"type":{"coding":[{"code":"18842-5","system":"http://loinc.org"}]}}"#;
+const DOCUMENT: &str = r#"{"category":[{"coding":[{"code":"Discharge-Reports","system":"http://hl7.eu/fhir/health-data-api/CodeSystem/eehrxf-document-priority-category-cs"}]}],"content":[{"attachment":{"contentType":"application/fhir+json","size":63,"url":"Binary/hdr-1"}}],"date":"2026-10-21T08:00:00Z","description":"Synthetic discharge report","extension":[{"url":"urn:oid:2.999.9.2","valueDecimal":2.50}],"id":"doc-hdr-1","masterIdentifier":{"system":"urn:ietf:rfc:3986","value":"urn:uuid:4d200000-0000-4000-8000-0000000000b1"},"resourceType":"DocumentReference","status":"current","subject":{"reference":"Patient/pat-a"},"type":{"coding":[{"code":"18842-5","system":"http://loinc.org"}]}}"#;
 
 /// Node A's own endpoint, serving discharge reports.
 const DISCHARGE: Declared = Declared {

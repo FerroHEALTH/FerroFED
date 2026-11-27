@@ -560,9 +560,12 @@ stay with the contact point:
   document or an image a member serves itself passes through the gateway
   byte for byte, with the media type the member sent
   ([A member's own laboratory reports](laboratory-reports.md#a-members-own-laboratory-reports)).
-  The gateway does not check that it is a PDF, JPG or PNG, and does not
-  fill its header data; wrapping it for the cross-border exchange is the
-  contact point's (Requirements Catalogue v10.0.0, 08 and 08.01). A report
+  The gateway lists it only when its `DocumentReference` carries the header
+  data of MyHealth@EU `DocumentReference-minimal-myhealtheu` and a media
+  type, and serves the bytes only as a PDF/A-1, JPEG or PNG, or DICOM for
+  imaging, that matches that media type (Requirements Catalogue v10.0.0,
+  08 and 08.01). Wrapping it for the cross-border exchange is the contact
+  point's. A report
   the gateway writes from an openEHR composition is a new document in the
   exchange format, and no original.
 - **Transcoding and translation.** Implementing Regulation (EU) 2026/2083
