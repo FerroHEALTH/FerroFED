@@ -16,6 +16,7 @@
     reason = "the test seam: the written document is read back as JSON"
 )]
 
+mod back_translation;
 mod conforming;
 mod crosswalk;
 mod discharge;

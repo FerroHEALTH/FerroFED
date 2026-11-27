@@ -138,6 +138,12 @@ pub enum TerminologyFault {
     /// The client cannot be built.
     #[error("the client of [eehrxf.terminology] cannot be built")]
     Client(#[source] Box<TermError>),
+    /// A `[[fhir.serve]]` member names the code systems it records, which
+    /// only `transcode = "myhealth-eu"` translates into.
+    #[error(
+        "[[fhir.serve]] names a member's code systems, which need [eehrxf.terminology] transcode = \"myhealth-eu\""
+    )]
+    Untranscoded,
 }
 
 impl Config {
@@ -147,14 +153,26 @@ impl Config {
     ///
     /// # Errors
     /// The errors of [`crate::config::endpoint::checked`],
-    /// [`Error::Cleartext`] for the URL, and [`TerminologyFault::Unused`]
-    /// with no `[fhir]`.
+    /// [`Error::Cleartext`] for the URL, [`TerminologyFault::Unused`] with
+    /// no `[fhir]`, and [`TerminologyFault::Untranscoded`] for a member's
+    /// code systems without `transcode = "myhealth-eu"`.
     pub(crate) fn resolve_terminology(&self) -> Result<Option<TerminologySettings>, Error> {
+        let declares = self
+            .fhir
+            .as_ref()
+            .is_some_and(crate::config::fhir::Fhir::declares_systems);
         let Some(table) = &self.eehrxf.terminology else {
-            return Ok(None);
+            return if declares {
+                Err(TerminologyFault::Untranscoded.into())
+            } else {
+                Ok(None)
+            };
         };
         if self.fhir.is_none() {
             return Err(TerminologyFault::Unused.into());
+        }
+        if declares && table.transcode != Transcode::MyhealthEu {
+            return Err(TerminologyFault::Untranscoded.into());
         }
         let url = crate::config::endpoint::checked(ENDPOINT, &table.endpoint)?;
         let url_key = format!("{ENDPOINT}.url");

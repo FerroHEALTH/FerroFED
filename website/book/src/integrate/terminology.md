@@ -135,7 +135,10 @@ Network's preferred systems for a summary and nothing for a report.
 Transcoding does not apply to a received document. Of the reports, only the
 discharge report writes an element these two bindings name (the diagnosis
 `Condition.code`); the laboratory, imaging and vaccination reports are
-written as recorded.
+written as recorded. A received dispensation is translated the other way,
+into the code systems its owner records, when its `[[fhir.serve]]` entry
+names them
+([Translating a dispensation](prescriptions.md#translating-a-dispensation-into-the-members-code-systems)).
 
 FerroTERM is the terminology server of the Ferro family. The gateway reaches
 it, or any other FHIR R4 terminology server, over HTTP, and links no part of

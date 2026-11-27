@@ -20,8 +20,9 @@
 //! dispensations by before it writes, so a dispensation a client sends again
 //! after a time-out is refused, never written twice (hazard I-12 of the
 //! clinical safety risk file). The resource itself travels on as its
-//! text, never rewritten, so a prescription named by the face's reference
-//! alone, which the member cannot resolve, is refused. A withdrawal,
+//! text, rewritten only by the codings a translation into the owner's code
+//! systems adds ([`crate::back_translation`]), so a prescription named by
+//! the face's reference alone, which the member cannot resolve, is refused. A withdrawal,
 //! `PUT {fhir-base}/MedicationDispense/{id}` with `status`
 //! `entered-in-error`, is read the same way, and travels on with its
 //! top-level `id` alone replaced by the member's own ([`with_id`]), since

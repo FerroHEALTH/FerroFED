@@ -35,6 +35,7 @@ use crate::support::{call, send};
 mod duplicate;
 #[cfg(feature = "binding-ihe")]
 pub(super) mod recorded;
+mod translated;
 
 /// The `[[fhir.serve]]` tables declaring both members for both categories.
 pub(super) const SERVED_BOTH: &str = "\n[[fhir.serve]]\ncategory = \"Electronic-Prescriptions\"\nmembers = [\"node-a\", \"node-b\"]\n\n\

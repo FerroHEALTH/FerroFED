@@ -16,10 +16,11 @@
 //! a member. Every such member must answer, since a silent one could be the
 //! owner. The dispensation is then created at the owner's own endpoint, once
 //! ([`ferrofed_engine::single_node::native_create`]), its body as the client
-//! sent it (§5.4 scope note, N22). Before that, the owner is asked for the
-//! patient's dispensations of the received one's business identifier, and a
-//! dispensation it already holds is refused `409` with nothing written
-//! ([`duplicate`]). The member decides whether its state still admits the
+//! sent it but for the codings a translation into the owner's own code
+//! systems adds, when `[[fhir.serve]]` names any (`back_translated`). Before
+//! that, the owner is asked for the patient's dispensations of the received
+//! one's business identifier, and a dispensation it already holds is refused
+//! `409` with nothing written ([`duplicate`]). The member decides whether its state still admits the
 //! dispensation; the gateway holds no lock and never sends a write again.
 //!
 //! An `openEHR-federation-endpoint` header is a check only: one that names an
@@ -40,6 +41,7 @@ use std::time::Instant;
 
 use axum::response::Response;
 use eehrxf::category::Category;
+use ferrofed_eehrxf::back_translation::{self, Untranslated};
 use ferrofed_eehrxf::dispensations::{RESOURCE, Received};
 use ferrofed_engine::dispatch::DispatchOptions;
 use ferrofed_engine::hygiene::Withheld;
@@ -257,6 +259,12 @@ async fn owned(
     if let Some(refusal) = held_to(federation, arrived, (lookup, targeted), &member.chosen) {
         return refusal;
     }
+    let translated =
+        match back_translated((federation, fhir, arrived), lookup, &member.chosen, body).await {
+            Ok(translated) => translated,
+            Err(refusal) => return refusal,
+        };
+    let body = translated.as_deref().map_or(body, str::as_bytes);
     if member.composed.is_some() {
         return mapped::written(
             (federation, fhir, arrived),
@@ -313,6 +321,69 @@ async fn owned(
         fhir,
         &logged,
     )
+}
+
+/// `body` with its codes translated into the code systems the owner
+/// `owner` records, when `fhir` names any, before anything reaches it
+/// ([`ferrofed_eehrxf::back_translation`]); `None` when no coding was
+/// added, so the body travels as it came.
+///
+/// # Errors
+///
+/// The `422` naming the element path and the code systems of a concept no
+/// exact translation reaches, and the `502` of a terminology server that
+/// refuses or does not answer, each after the lookup `lookup`, with nothing
+/// written.
+#[expect(
+    clippy::result_large_err,
+    reason = "the refusal is the handler's answer, returned at most once per request"
+)]
+async fn back_translated(
+    (federation, fhir, arrived): (&Arc<Federation>, &FhirSettings, &Arrived<'_>),
+    lookup: &Lookup<'_>,
+    owner: &Chosen,
+    body: &[u8],
+) -> Result<Option<String>, Response> {
+    let Some(systems) = fhir.translating.get(owner.node.as_str()) else {
+        return Ok(None);
+    };
+    let Ok(text) = std::str::from_utf8(body) else {
+        return Err(refused_after(
+            federation,
+            lookup,
+            (StatusCode::BAD_REQUEST, "invalid"),
+            "the dispensation is no UTF-8 text",
+        ));
+    };
+    let systems: Vec<&str> = systems.iter().map(String::as_str).collect();
+    let untranslated = match back_translation::translated(text, &fhir.terminology, &systems).await {
+        Ok(translated) => return Ok(translated),
+        Err(untranslated) => untranslated,
+    };
+    Outcome::Failed.record();
+    let (status, code) = match &untranslated {
+        Untranslated::Unreached { .. } => (StatusCode::UNPROCESSABLE_ENTITY, "code-invalid"),
+        // NOTE: no specification governs this: our own design; the terminology server is
+        // the gateway's upstream, so its refusal or silence is a 502 naming its status.
+        Untranslated::Terminology(_) => (StatusCode::BAD_GATEWAY, "transient"),
+        _ => {
+            tracing::error!(
+                request_id = %arrived.outbound,
+                error = %crate::chain(&untranslated),
+                "a dispensation's codes could not be translated"
+            );
+            (StatusCode::UNPROCESSABLE_ENTITY, "processing")
+        }
+    };
+    Err(refused_after(
+        federation,
+        lookup,
+        (status, code),
+        &format!(
+            "the dispensation was not written: {}",
+            crate::chain(&untranslated)
+        ),
+    ))
 }
 
 /// The refusal of a write to the owner `owner` that the targeting headers
