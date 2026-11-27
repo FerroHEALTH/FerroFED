@@ -81,6 +81,45 @@ The start and `ferrofed config check` are refused, naming the entry, for:
   `a_member_whose_endpoint_serves_another_category_refuses_the_start`,
   `an_endpoint_without_the_mpd_profile_refuses_the_start`).
 
+### Translating a dispensation into the member's code systems
+
+A national contact point sends a dispensation coded in the systems the
+MyHealth@EU Master Value Sets Catalogue draws from, which the member that
+owns the prescription may not record. Under
+`[eehrxf.terminology] transcode = "myhealth-eu"`
+([Transcoding for MyHealth@EU](terminology.md#transcoding-for-myhealtheu)),
+you name the code systems a member records on its
+`Electronic-Dispensations` entry:
+
+```toml
+[[fhir.serve]]
+category = "Electronic-Dispensations"
+members = [
+  { member = "node-a", systems = ["http://snomed.info/sct"] },
+  "node-b",                                # receives the body as it came
+]
+```
+
+Each `CodeableConcept` of a dispensation that member owns, in the
+`MedicationDispense` or a contained `Medication`, that carries a coding and
+none in those systems is asked of the terminology server's
+`ConceptMap/$translate` for each of them. Only an `equivalent` or `equal`
+match becomes a coding, after the recorded ones, and the added codings are
+the only change to the body; in the map mode the translation runs before
+the mapping (`fhir/prescriptions/dispense/translated.rs`:
+`a_medicine_coded_in_atc_reaches_the_owner_with_its_snomed_ct_coding`;
+`fhir/prescriptions/mapped_dispense.rs`:
+`a_medicine_coded_in_atc_is_translated_before_it_is_mapped`). A concept no
+such match reaches refuses the dispensation `422` `code-invalid`, naming
+its element path and its code systems and never a code, and a terminology
+server that refuses or does not answer `502`; in both nothing reaches the
+member (`a_concept_no_exact_translation_reaches_is_refused_with_nothing_sent_to_the_owner`,
+`a_terminology_server_that_refuses_writes_nothing`). The start and
+`config check` are refused for `systems` on another category and for
+`systems` without that transcoding (`fhir/serving/start.rs`:
+`code_systems_named_on_a_prescriptions_entry_are_refused`,
+`code_systems_without_the_myhealth_eu_transcoding_are_refused`).
+
 `config check` prints one `note:` line per declared category, naming its
 members, and one per category declared for no member
 ([Running it](../operate/configuration.md#running-it)). A change to
