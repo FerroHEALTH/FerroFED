@@ -67,12 +67,12 @@ password_file = "/run/secrets/pix-password"
   name, and a name the registry does not hold each refuse the configuration.
 - Each domain, and each value of `[pixm.namespaces]`, is an absolute URI.
 - `[pixm.manager.endpoint]` is the Manager's
-  [endpoint table](configuration.md#the-endpoint-table-of-a-service). Its
+  [endpoint table](service-endpoints.md#the-endpoint-table-of-a-service). Its
   `url` is the Manager's FHIR base, `https`, with no query or fragment. The
   Manager is asked for patient identifiers, so `http` is refused naming
   `pixm.manager[N].endpoint.url`, with or without credentials, unless the
   profile is `development`
-  ([What must travel encrypted](configuration.md#what-must-travel-encrypted)). A user name or password in it refuses the configuration, naming
+  ([What must travel encrypted](service-endpoints.md#what-must-travel-encrypted)). A user name or password in it refuses the configuration, naming
   `pixm.manager[N].endpoint.url` and never quoting it; the credentials go in
   `[pixm.manager.endpoint.credentials]`, with the keys of an endpoint's
   [credentials](configuration.md#the-file): `user` and `password`, the
@@ -85,7 +85,7 @@ password_file = "/run/secrets/pix-password"
   URI needs no entry.
 - `method` is `"get"`, the default, or `"post"`, which keeps the patient
   identifier out of the request URL
-  ([`GET` or `POST`](configuration.md#a-pix-manager-asked-by-get-or-post)).
+  ([`GET` or `POST`](service-endpoints.md#a-pix-manager-asked-by-get-or-post)).
 
 For each query, the gateway asks each Manager once, with one `targetSystem`
 per member that Manager resolves, and reads the identifier the answer holds

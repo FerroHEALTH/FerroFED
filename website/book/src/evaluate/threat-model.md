@@ -91,7 +91,7 @@ flowchart LR
 | R | a caller denies a request | P2 | the gateway records each query, read and write that reached a node with the verified caller and its request id, before the answer leaves; the request id travels to every node with the signed caller token, and each node audits who asked (N24) | [The access log](../operate/access-log.md), [Verifying it at the node](../operate/caller-token.md#verifying-it-at-the-node); `app/ferrofed-server/tests/it/access/`, `conveyance.rs` |
 | I | the patient identifier in a response, an error or a refusal | P1, P2 | errors name the position of the offending part, never the value; a node's error quoted in `meta.federation` has each consumed value masked | `app/ferrofed-server/tests/it/errors.rs`, `facade/query.rs`; `app/ferrofed-engine/tests/it/dispatch/` |
 | D | a flood of requests, a large body, a slow request | P1, P2 | a concurrency limit refused before the caller is verified; a per-caller rate; a body limit (`413`) and a request timeout (`408`) | `server.max_concurrent_requests`, `[server.caller_rate]`, `server.body_limit`, `server.request_timeout`; `app/ferrofed-server/tests/it/overload.rs` |
-| I | the token or the patient identifier read on the hop between the proxy and the gateway | P3 | the listener speaks plain HTTP by default: keep that hop inside one host or pod, protect it with a mesh, or set `[server.tls]` with a `client_ca_file` that admits the proxy alone | [TLS on the listeners](../operate/configuration.md#tls-on-the-listeners); `app/ferrofed-server/tests/it/listener_tls/` |
+| I | the token or the patient identifier read on the hop between the proxy and the gateway | P3 | the listener speaks plain HTTP by default: keep that hop inside one host or pod, protect it with a mesh, or set `[server.tls]` with a `client_ca_file` that admits the proxy alone | [TLS on the listeners](../operate/listener-tls.md#tls-on-the-listeners); `app/ferrofed-server/tests/it/listener_tls/` |
 
 The health family, `GET {base}/` and `GET {base}/.well-known/jwks.json` are
 open by design, and none of them names a member. `GET {base}/` names the
@@ -107,7 +107,7 @@ observed state, is served only to an operator, at
 | I | the patient identifier reaches a node in the query, the path, the query string, a header or the caller claims | P4 | the rewrite strips or refuses the subject; the outbound gate re-reads every finished request, the caller claims included, and stops one that carries a consumed value (§5.4.1, N33, CP-2, CP-26, CP-38) | `app/ferrofed-engine/tests/it/gate.rs`; the adversarial track 10, `app/ferrofed-server/tests/it/track10/` |
 | S | a node replays the caller's token at another node | P4 | the caller's token is never forwarded; each node gets its own onward credential and a caller token signed for its endpoint id alone, valid 60 seconds | [What a node is told about the caller](../operate/caller-token.md); `app/ferrofed-server/tests/it/auth/token.rs` |
 | S | someone obtains an onward token and replays it at its node | P3, P4 | onward tokens can be bound to the gateway's key with DPoP, or the connection to a client certificate with RFC 8705 | `[credentials."<id>"] … dpop_key_file`, `tls.client_identity_file`; `app/ferrofed-engine/tests/it/dpop/`, `mtls.rs` |
-| I | a credential sent to a node in cleartext | P3 | outside the development profile, a node URL that receives a credential must be `https`, refused at start and on reload | [What must travel encrypted](../operate/configuration.md#what-must-travel-encrypted); `app/ferrofed-server/tests/it/transport/` |
+| I | a credential sent to a node in cleartext | P3 | outside the development profile, a node URL that receives a credential must be `https`, refused at start and on reload | [What must travel encrypted](../operate/service-endpoints.md#what-must-travel-encrypted); `app/ferrofed-server/tests/it/transport/` |
 | T | two nodes claim one `ehr_id`, or a node claims another's `creating_system_id` | P4 | a follow-up on a collided `ehr_id` is `409` and an integrity incident; a conflicting learned route is withdrawn (§12.5.2, §12b.2, N21, N42) | `app/ferrofed-server/tests/it/ehr_id_collision.rs`; `FerroFEDIntegrityIncident` |
 | E | a node releases more than the caller may see | P4 | each node gets the caller's scopes and purposes of use and decides what to release (§13.2, N26, N27) | the node's own enforcement |
 | D | a slow or failing node holds the gateway | P4 | per-node and overall budgets; at most `max_in_flight_per_node` requests to one member at once; a silent member is named in the answer and fails it under the all-or-nothing default (§11) | `federation.per_node_timeout`, `overall_timeout`, `max_in_flight_per_node`; `app/ferrofed-server/tests/it/timeouts.rs`, `overload.rs` |
@@ -117,7 +117,7 @@ observed state, is served only to an operator, at
 
 | | Threat | From | Mitigation | Provided by |
 |---|---|---|---|---|
-| I | the patient identifier read in transit | P3 | the URL of every PIX Manager, PDQm Supplier, XCPD gateway and NVI must be `https` outside development; optional mutual TLS | [What must travel encrypted](../operate/configuration.md#what-must-travel-encrypted), [Mutual TLS to the identity services](../operate/configuration.md#mutual-tls-to-the-identity-services) |
+| I | the patient identifier read in transit | P3 | the URL of every PIX Manager, PDQm Supplier, XCPD gateway and NVI must be `https` outside development; optional mutual TLS | [What must travel encrypted](../operate/service-endpoints.md#what-must-travel-encrypted), [Mutual TLS to the identity services](../operate/service-endpoints.md#mutual-tls-to-the-identity-services) |
 | T | a wrong or forged cross-reference routes a query to another patient's EHR | P4 | none in the gateway beyond the transport: the identity service is trusted for its links | **carried by the deployment:** the service's own controls; record the trust in your [§13.4 decisions](../operate/deployment-decisions.md#5-what-the-technique-does-not-cover) |
 | S | a forged ITI-93 message drops bindings | P1 | the feed route takes only a client-credentials token of a client `pmir.feed_clients` names; a message without one is `401`, one of another client or of a person `403`, and neither changes anything | `pmir.feed_clients`, `[auth.issuer.<name>]`; `app/ferrofed-server/tests/it/pmir/feed.rs` |
 | T | a stale binding after a merge at the identity source | P4 | each binding lives `binding_ttl` after the last resolution that returned it; `[pmir]` drops the stale ones as the change arrives, on the replica that receives it | `federation.binding_ttl`, `[pmir]` |
@@ -160,7 +160,7 @@ front of it.
 
 | | Threat | From | Mitigation | Provided by |
 |---|---|---|---|---|
-| S | a key set fetched in the clear and substituted | P3 | every issuer, the key set its metadata names, and every introspection endpoint is `https`, or `http` to loopback, under every profile | [What must travel encrypted](../operate/configuration.md#what-must-travel-encrypted) |
+| S | a key set fetched in the clear and substituted | P3 | every issuer, the key set its metadata names, and every introspection endpoint is `https`, or `http` to loopback, under every profile | [What must travel encrypted](../operate/service-endpoints.md#what-must-travel-encrypted) |
 | D | tokens naming unknown keys make the gateway flood the issuer | P1 | an unknown `kid` reads the set again at most once per `jwks_refresh_interval`; an unavailable key set is `503`, never a pass | `auth.issuer.<name>.jwks_refresh_interval`; `app/ferrofed-server/tests/it/auth/keys.rs` |
 | S, E | an issuer compromised: any token it signs is admitted | P5 | none in the gateway: a trusted issuer is trusted for every caller it vouches for | **carried by the deployment:** a short trust list, per-issuer `backend_clients` and `demographic_clients`, `auth.product_scope` granted by your operators' issuer alone, and removing an issuer at once, which a reload applies without a restart ([Reloading the registry](../operate/registry.md#reloading-the-registry)) |
 
@@ -181,7 +181,7 @@ control from you, or an issue that is open:
    Bearer tokens and patient identifiers cross it. Keep it on one host or in
    one pod, put a mesh with mutual TLS on it, or serve TLS on the listener
    with a client CA that admits the proxy alone
-   ([TLS on the listeners](../operate/configuration.md#tls-on-the-listeners)).
+   ([TLS on the listeners](../operate/listener-tls.md#tls-on-the-listeners)).
 2. **The development profile opens the admin listener's write actions on
    loopback.** Under `profile = "development"` any process that reaches the
    listener's loopback address runs a write action without a credential.

@@ -70,7 +70,7 @@ both codes, written with no `system`, are FerroFED's own design.
 
 A national contact point's connector acts for the professional of another
 Member State its token names ([National contact
-points](authentication.md#national-contact-points)). Its record names the
+points](contact-point-issuers.md#national-contact-points)). Its record names the
 foreign provider as the provider agent, the foreign professional in the
 `agent:user` by their identifier, and the connector as the
 Application agent, the client that relayed the request. Beside them, one
