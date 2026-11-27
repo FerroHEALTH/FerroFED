@@ -33,15 +33,15 @@ use crate::fhir::list::{binary, entries, list};
 use crate::support::call;
 
 /// The version of node A's imaging composition, created at node A.
-const VERSION: &str = "5b0c3f7e-0000-4000-8000-00000000e1a1::cdr-a.example.org::1";
+pub(super) const VERSION: &str = "5b0c3f7e-0000-4000-8000-00000000e1a1::cdr-a.example.org::1";
 
 /// The versioned object of [`VERSION`].
-const OBJECT: &str = "5b0c3f7e-0000-4000-8000-00000000e1a1";
+pub(super) const OBJECT: &str = "5b0c3f7e-0000-4000-8000-00000000e1a1";
 
 /// The `[fhir]` tables of a face that writes imaging reports with
 /// `report`, the `[[fhir.report]]` entry, the header asked of the PDQm
 /// Supplier at `pdq`.
-fn writing(pdq: &str, report: &str) -> String {
+pub(super) fn writing(pdq: &str, report: &str) -> String {
     fhir_tables_with(
         pdq,
         &format!("receive_namespaces = [\"{NAMESPACE}\"]"),
@@ -50,7 +50,7 @@ fn writing(pdq: &str, report: &str) -> String {
 }
 
 /// The `[[fhir.report]]` entry of the vendored imaging report template.
-fn declared() -> String {
+pub(super) fn declared() -> String {
     let path = |value: &Path| toml::Value::String(value.display().to_string()).to_string();
     let archetypes = imaging::archetype_paths()
         .iter()
@@ -84,7 +84,7 @@ fn gateway(
 
 /// A node answering the imaging report query with `rows` and every other
 /// query with none, and the read of its composition with `composition`.
-async fn holding(rows: &str, composition: Option<&str>) -> Server {
+pub(super) async fn holding(rows: &str, composition: Option<&str>) -> Server {
     let server = Server::start().await;
     let columns = r#"[{"name":"composition","path":"c"},{"name":"uid","path":"c/uid/value"},{"name":"template_id","path":"c/archetype_details/template_id/value"}]"#;
     let answer = |rows: &str| {
@@ -316,7 +316,7 @@ async fn a_list_of_another_type_asks_no_imaging_query() -> TestResult {
 
 /// The synthetic imaging composition as node A serves it, under
 /// [`VERSION`].
-fn written_composition() -> Result<String, Box<dyn Error>> {
+pub(super) fn written_composition() -> Result<String, Box<dyn Error>> {
     let written = imaging::template()?;
     let template = Template::Adl2 {
         template: &written.template,

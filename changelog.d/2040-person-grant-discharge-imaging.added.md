@@ -1,0 +1,1 @@
+- A person's own grant lists and downloads their discharge and imaging reports on the FHIR face, confined to their own EHR, with a restriction the consent service reports carried out and its fact hidden (Regulation (EU) 2025/327 Art 3 and Art 8); MyHealth@EU rows 09 and 09.02 are met (#2040).
