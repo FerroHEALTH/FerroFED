@@ -5,6 +5,10 @@
 
 [Introduction](introduction.md)
 
+# Tutorials
+
+- [Your first federated query](tutorials/first-federated-query.md)
+
 # Evaluate
 
 - [How it works](how-it-works/overview.md)
@@ -103,6 +107,10 @@
 - [Hardening](operate/hardening.md)
 - [Troubleshooting](operate/troubleshooting.md)
 - [Releases](operate/releases.md)
+
+# Reference
+
+- [Command-line reference](reference/cli.md)
 
 # Contribute
 

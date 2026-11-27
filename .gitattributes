@@ -13,3 +13,6 @@ website/book/vendor/** linguist-vendored -text
 # section 12); the conformance-matrix guard fails when either is stale.
 website/book/src/evaluate/conformance.md linguist-generated
 conformance/requirements.tsv linguist-generated
+# Rendered from the clap definition by the ferrofed-server test cli_reference,
+# which fails when the page is stale.
+website/book/src/reference/cli.md linguist-generated

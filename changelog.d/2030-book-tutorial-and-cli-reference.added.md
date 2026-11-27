@@ -1,0 +1,1 @@
+- The book has a tutorial, "Your first federated query", whose requests a test sends in CI to a gateway over the quickstart's registry and patients, and a command-line reference generated from the `clap` definition, which a test holds to the binary.
