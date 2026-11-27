@@ -83,9 +83,8 @@ cannot show is never marked met.
 
 The catalogue is privileged-access: the Xt-EHR deliverable D6.1 (section 5)
 says it is available only with authorisation, and Commission Decision
-2011/833/EU Art 2(2)(c) excludes such documents from its reuse grant. The
-owner read v10.0.0 under an EU Login reading grant, and FerroFED has no grant
-to reuse it. This page, `conformance/myhealth-eu.tsv` and the badge therefore
+2011/833/EU Art 2(2)(c) excludes such documents from its reuse grant, and
+FerroFED has no grant to reuse it. This page, `conformance/myhealth-eu.tsv` and the badge therefore
 carry requirement ids, section numbers, statuses and FerroFED's own
 conclusions, and none of the catalogue's text. `scripts/checks/myhealth-eu.sh`
 holds the mapping, this page and the badge in step, and refuses a copy of
