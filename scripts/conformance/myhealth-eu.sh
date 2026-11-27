@@ -137,8 +137,9 @@ badge_names() {
 
 readme_block() {
   local name
+  # NOTE: CommonMark 0.31.2 §4.6; an HTML line opens a block that runs to the next blank line, so the heading follows one.
   echo '<!-- myhealth-eu:begin -->'
-  echo '<br>'
+  echo
   echo '**MyHealth@EU**<br>'
   echo "[![MyHealth@EU self-assessed](${ENDPOINT})](${BOOK_PAGE})"
   awk -F'\t' '{ print $1 }' <<< "$BADGES" | while read -r name; do
