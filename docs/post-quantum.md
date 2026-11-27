@@ -8,9 +8,11 @@ release workflows, the algorithm each uses, and whether it resists a
 cryptographically relevant quantum computer. The machine-readable copy is
 `conformance/post-quantum.tsv`: after its `#` comment lines, one row per use
 with five tab-separated columns: `use`, `algorithm`, `safe` (`yes` or `no`),
-`pq_standard` (the standard that defines the post-quantum form, or
-`no standard yet`) and `location`. Every change that adds, removes or
-changes a cryptographic use updates the file in the same pull request, and
+`pq_standard` (the standard that defines the post-quantum form; for a use
+whose algorithm another party chooses, whose choice it is and the text that
+gives it to them; or `no standard yet`) and `location`. Every change that
+adds, removes or changes a cryptographic use updates the file in the same
+pull request, and
 `scripts/checks/post-quantum.sh --update` rewrites the table below and the
 README badge from it. CI fails when the table, the badge or a location named
 in the file disagrees with the tree.
@@ -35,8 +37,9 @@ in the file disagrees with the tree.
 
 A row is `safe` when every key it depends on is established or verified by a
 post-quantum or hybrid mechanism, or when it is a symmetric primitive at 128
-bits or more. A row whose post-quantum form has no standard yet counts as not
-safe, and the badge counts the safe rows of all rows.
+bits or more. A row whose post-quantum form has no standard yet, or whose
+algorithm another party chooses, counts as not safe, and the badge counts the
+safe rows of all rows.
 
 ## What FerroFED does
 
@@ -55,15 +58,26 @@ that.
 
 The key exchange protects what a session carries against an attacker who
 records it now and decrypts it later, the risk the roadmap gives first
-place. The certificate signatures that authenticate a peer stay classical:
-no TLS 1.3 signature scheme for ML-DSA is published as an RFC yet, and the
-operator's certificates decide the algorithm. The JOSE signatures of the
+place. A listener or client whose `min_version` lowers the minimum to TLS
+1.2 keeps the classical exchange for a TLS 1.2 peer, since RFC 10024 defines
+the hybrid groups for TLS 1.3 alone; the option stays because eHDSI
+Cryptographic Algorithms 9.0.0 §3 requires at least TLS 1.2 in the eHDSI
+trust model. The certificate signatures that authenticate a peer stay
+classical: no TLS 1.3 signature scheme for ML-DSA is published as an RFC
+yet, the operator's certificates decide the algorithm, and verifying an
+ML-DSA certificate (RFC 9881) belongs to `ferrohealth-server`
+([FerroHEALTH/FerroSYS#449](https://github.com/FerroHEALTH/FerroSYS/issues/449)). The JOSE signatures of the
 access tokens, the client assertions, the caller token, the `DPoP` proofs,
 the Nuts grants, the document tokens and the console sign-in stay classical
 until the issuers, nodes and authorization servers FerroFED works with sign
 and verify with ML-DSA (RFC 9964). The document list's attachment hash is
-SHA-1 because FHIR R4 `Attachment.hash` defines it so; SHA-1 is below the
-128-bit floor of §4.1.3, so the row counts as not safe.
+SHA-1 because FHIR R4 `Attachment.hash` defines it so, as a hash "not
+intended to support digital signatures"; SHA-1 is below the 128-bit floor of
+§4.1.3, so the row counts as not safe. The release workflows sign with what
+their services choose: GitHub issues the Trusted Publishing token crates.io
+accepts and signs it with RS256, and Sigstore's client signs each provenance
+and SBOM attestation with an ECDSA P-256 key, so both rows stay classical
+until those services move.
 
 ## The inventory
 
@@ -73,8 +87,8 @@ SHA-1 because FHIR R4 `Attachment.hash` defines it so; SHA-1 is below the
 | TLS 1.3 key exchange of the clients FerroFED builds: the node engines, the Nuts grant, the conformance run and the console's client of the gateway | X25519MLKEM768 first (rustls prefer-post-quantum); X25519, P-256, P-384 for a peer without it | yes | RFC 10024 | `app/ferrofed-server/src/onward.rs (node_transport, transport), app/ferrofed-server/src/federation/build.rs, app/ferrofed-server/src/binding/nl/nuts.rs (http_client), app/ferrofed-server/src/conformance/client.rs, app/ferrofed-console/src/gateway/mod.rs` |
 | TLS 1.3 key exchange of the family clients: the identity services, the audit repository, the terminology server, the OpenID Provider and the OTLP export | X25519MLKEM768 first; X25519, P-256, P-384 for a peer without it | yes | RFC 10024 | `ferrohealth-server tls_client, ferrohealth-smart client, app/ferrofed-server/src/config/tls.rs, app/ferrofed-identity/src/outbound.rs, app/ferrofed-server/src/config/ihe/audit_repository.rs` |
 | TLS 1.3 key exchange of the PostgreSQL store | X25519MLKEM768 first (rustls prefer-post-quantum); X25519, P-256, P-384 for a peer without it | yes | RFC 10024 | `app/ferrofed-server/src/store/connection.rs (client_config)` |
-| TLS 1.2 key exchange where min_version lowers the minimum | ECDHE over X25519, P-256 or P-384 | no | no standard yet | `ferrohealth-server tls (protocol_versions)` |
-| TLS server and client certificate authentication, mutual TLS to a node included | ECDSA, RSA or Ed25519, as the operator's certificates hold | no | no standard yet | `ferrohealth-server tls, ferrohealth-server tls_client` |
+| TLS 1.2 key exchange where min_version lowers the minimum | ECDHE over X25519, P-256 or P-384 | no | the eHDSI trust model's: Cryptographic Algorithms 9.0.0 §3 requires at least TLS 1.2, and RFC 10024 defines the hybrid groups for TLS 1.3 alone | `ferrohealth-server tls (protocol_versions)` |
+| TLS server and client certificate authentication, mutual TLS to a node included | ECDSA, RSA or Ed25519, as the operator's certificates hold | no | the operator's: its certificates decide the signature algorithm (RFC 8446 §4.4.2.2), and verifying an ML-DSA certificate (RFC 9881) is ferrohealth-server's, FerroHEALTH/FerroSYS#449 | `ferrohealth-server tls, ferrohealth-server tls_client` |
 | TLS record protection | AES-128-GCM, AES-256-GCM, ChaCha20-Poly1305 | yes | NIST IR 8547 4.1.3 | `ferrohealth-server tls` |
 | Access token and DPoP proof verification | RS256, RS384, PS256, PS384, ES256, ES384 | no | RFC 9964 | `ferrohealth-smart resource, app/ferrofed-server/src/auth/verify.rs` |
 | Client assertions FerroFED signs (private_key_jwt, FAPI 2.0) | ES256 or ES384 | no | RFC 9964 | `ferrohealth-smart client assertion, app/ferrofed-server/src/config/secrets.rs, app/ferrofed-server/src/config/oauth.rs, app/ferrofed-server/src/jwks.rs` |
@@ -86,7 +100,7 @@ SHA-1 because FHIR R4 `Attachment.hash` defines it so; SHA-1 is below the
 | Patient and document ids of the FHIR face, and identifier sealing | HMAC-SHA-256, AES-256-GCM, HKDF-SHA-256 | yes | NIST IR 8547 4.1.3 | `app/ferrofed-server/src/ids.rs` |
 | Caller references in the security log | HMAC-SHA-256 | yes | NIST IR 8547 4.1.3 | `app/ferrofed-server/src/auth/reference.rs` |
 | TRC patient pseudonyms | HMAC-SHA-256 | yes | NIST IR 8547 4.1.3 | `app/ferrofed-server/src/facade/trc.rs` |
-| Document list attachment hashes | SHA-1, as FHIR R4 Attachment.hash defines | no | no standard yet | `app/ferrofed-server/src/fhir/list.rs` |
+| Document list attachment hashes | SHA-1, as FHIR R4 Attachment.hash defines | no | FHIR R4's: Attachment.hash is the SHA-1 of the data, base64, and is not intended to support digital signatures | `app/ferrofed-server/src/fhir/list.rs` |
 | Basic password hashing | Argon2id | yes | NIST IR 8547 4.1.3 | `ferrohealth-smart basic, app/ferrofed-server/src/config/auth` |
-| crates.io publishing | Trusted Publishing (OIDC token from GitHub, RS256) | no | no standard yet | `.github/workflows/publish-crates.yml` |
-| Release provenance and SBOM attestations | Sigstore attestation (ECDSA P-256) | no | no standard yet | `.github/workflows/release-build.yml, .github/workflows/release-image.yml, .github/workflows/release-console.yml` |
+| crates.io publishing | Trusted Publishing (OIDC token from GitHub, RS256) | no | GitHub's: it issues the Trusted Publishing OIDC token and signs it with RS256 | `.github/workflows/publish-crates.yml` |
+| Release provenance and SBOM attestations | Sigstore attestation (ECDSA P-256) | no | Sigstore's: its client signs each attestation with an ECDSA P-256 key under a Fulcio certificate | `.github/workflows/release-build.yml, .github/workflows/release-image.yml, .github/workflows/release-console.yml` |

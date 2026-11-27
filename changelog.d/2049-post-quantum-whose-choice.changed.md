@@ -1,0 +1,1 @@
+- The post-quantum inventory says whose choice each unsafe use outside FerroFED's control is, with the text that gives it to them, in place of "no standard yet": the eHDSI trust model for the TLS 1.2 key exchange, the operator for TLS certificates, FHIR R4 for the attachment hash, GitHub for crates.io publishing and Sigstore for the release attestations.
