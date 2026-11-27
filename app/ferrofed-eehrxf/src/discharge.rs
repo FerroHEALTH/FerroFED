@@ -30,16 +30,16 @@ use eehrxf::document::{Document, DocumentError};
 use eehrxf::mapping::Mapping;
 use eehrxf::mappings::HDR;
 use ferrofed_registry::definition::{StoredDefinition, query_name};
-use fhir_types::r4::bundle::Bundle;
 use openehr_its::rest::stored_query::{QualifiedQueryName, QueryNameError};
 use openehr_query::printer;
 
 use crate::prescriptions::mapped::Template;
-use crate::report::{self, Author, Report, ServedError, Writes};
+use crate::report::{self, Author, Delivered, Report, ServedError, Writes};
 use crate::reserved::{NAMESPACE, SAVED, VERSION};
 use crate::section_query;
 use async_trait::async_trait;
 use eehrxf::terminology::Terminology;
+use eehrxf::terminology::translation::Binding;
 
 /// The query's name in the reserved namespace.
 pub const SLUG: &str = "discharge-report";
@@ -133,14 +133,16 @@ impl Writes for Served {
     /// [`ServedError::Composition`] when the composition is no JSON,
     /// [`ServedError::Language`] when its language is not held,
     /// [`ServedError::Author`] when it records no author,
-    /// [`ServedError::Run`] when it does not map, and
+    /// [`ServedError::Run`] when it does not map,
+    /// [`ServedError::Translation`] when a translation the bindings ask for
+    /// gets no answer, and
     /// [`ServedError::Document`] when the document cannot be assembled.
     async fn document(
         &self,
         composition: &str,
         report: Report<'_>,
-        terminology: &Terminology,
-    ) -> Result<Bundle, ServedError> {
+        (terminology, bindings): (&Terminology, &[Binding]),
+    ) -> Result<Delivered, ServedError> {
         let mut document = Document::of(
             &MYHEALTHEU_DISCHARGE_REPORT_FORM,
             report.base,
@@ -155,8 +157,9 @@ impl Writes for Served {
             Author::Record,
             (&self.mapping, composition),
         )?;
-        let withheld = report::withheld(mapped.bundle());
-        let sections = report::mapped_sections(&mut document, report, mapped.bundle())?;
+        let (run, unbound) = report::transcoded(mapped.bundle(), (terminology, bindings)).await?;
+        let withheld = report::withheld(&run);
+        let sections = report::mapped_sections(&mut document, report, &run)?;
         // NOTE: HL7 Europe HDR 1.0.0 composition-eu-hdr cmp-hdr-2: a discharge summary or a
         // hospital course section is required, and the template records neither.
         let course = HDR_SLOTS
@@ -180,6 +183,9 @@ impl Writes for Served {
                 .with_section(section.into_section(vec![paragraph]))
                 .map_err(ServedError::Document)?;
         }
-        document.into_bundle().map_err(ServedError::Document)
+        Ok(Delivered {
+            bundle: document.into_bundle().map_err(ServedError::Document)?,
+            unbound,
+        })
     }
 }

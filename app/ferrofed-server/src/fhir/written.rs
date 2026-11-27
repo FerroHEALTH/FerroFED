@@ -403,10 +403,23 @@ async fn document(
         attesters: &attesters,
         ..report
     };
-    let bundle = served.document(&body, report, &fhir.terminology).await;
-    match bundle {
-        Ok(bundle) => Provenance::member(snapshot, &member.via, &member.node)
-            .stamp(fhir_json(StatusCode::OK, &bundle)),
+    let delivered = served
+        .document(&body, report, (&fhir.terminology, fhir.bindings))
+        .await;
+    match delivered {
+        Ok(delivered) => {
+            if !delivered.unbound.is_empty() {
+                tracing::warn!(
+                    request_id = %admitted.outbound,
+                    unbound = delivered.unbound.len(),
+                    locations = ?delivered.unbound.iter().map(|unbound| unbound.location.as_str()).collect::<Vec<_>>(),
+                    "codes of the {} meet no binding [eehrxf.terminology] transcode names, and are transferred as recorded",
+                    written.named()
+                );
+            }
+            Provenance::member(snapshot, &member.via, &member.node)
+                .stamp(fhir_json(StatusCode::OK, &delivered.bundle))
+        }
         Err(refusal @ (ServedError::Unnamed(_) | ServedError::Unattested(_))) => outcome(
             StatusCode::FAILED_DEPENDENCY,
             "processing",

@@ -15,6 +15,14 @@
 //! traces to the member it was read at, which the `Composition` names its
 //! custodian. The authorship and the provenance are our own design: no
 //! specification governs them.
+//!
+//! Under `[eehrxf.terminology] transcode = "myhealth-eu"` each resource a
+//! mapping run writes is translated before it enters the document
+//! (`transcoded`): a concept at an element a requested binding names, with
+//! no coding in the binding's systems, gains every exact translation into
+//! them through the terminology server (Implementing Regulation (EU)
+//! 2026/2083 Art 3(4)), and one no translation reaches is kept as recorded
+//! and listed in [`Delivered::unbound`].
 
 use std::collections::BTreeSet;
 
@@ -31,6 +39,7 @@ use eehrxf::document::{Document, DocumentError};
 use eehrxf::mapping::{Mapping, MappingError};
 use eehrxf::mappings::{Project, UnknownContext};
 use eehrxf::terminology::Terminology;
+use eehrxf::terminology::translation::{Binding, TranslationError, Translator, Unbound};
 use ferrofed_identity::role::header::{PatientHeader, PersonName};
 use fhir_types::r4::bundle::Bundle;
 use fhir_types::r4::codeable_concept::CodeableConcept;
@@ -48,6 +57,7 @@ use openehr_its::rest::stored_query::{QualifiedQueryName, QueryNameError};
 use crate::prescriptions::mapped::{MapModeError, Template};
 use crate::summary::Organisation;
 use crate::summary::resources::{absent, header_patient, human_name, organization, reference};
+use crate::transformation::preferred;
 use crate::vaccination::{Attester, Unattested, Unnamed};
 
 /// What one served report names beside its composition.
@@ -113,6 +123,10 @@ pub enum ServedError {
     /// The composition does not map.
     #[error("the composition does not map")]
     Run(#[source] MappingError),
+    /// The terminology server refused or did not answer a translation the
+    /// requested bindings ask for.
+    #[error("the mapped resources could not be translated")]
+    Translation(#[source] TranslationError),
     /// The document cannot be assembled from what the composition maps to.
     #[error("the report document cannot be assembled")]
     Document(#[source] DocumentError),
@@ -203,6 +217,43 @@ pub(crate) async fn languaged(
         None => document.with_language(language),
     }
     .map_err(ServedError::Document)
+}
+
+/// The mapping run `run` with each of its resources, but its
+/// `Composition`, `Provenance` and `OperationOutcome`, translated through
+/// `terminology` to meet `bindings`, and each concept no translation
+/// brought into its binding's systems.
+///
+/// With no bindings, or no server, the run is answered as it is.
+///
+/// # Errors
+///
+/// [`ServedError::Translation`] when the terminology server refuses or does
+/// not answer.
+pub(crate) async fn transcoded(
+    run: &Bundle,
+    (terminology, bindings): (&Terminology, &[Binding]),
+) -> Result<(Bundle, Vec<Unbound>), ServedError> {
+    let mut run = run.clone();
+    if bindings.is_empty() {
+        return Ok((run, Vec::new()));
+    }
+    let mut translator = Translator::new(terminology, &[]).with_bindings(bindings);
+    for entry in &mut run.entry {
+        let Some(resource) = entry.resource.take() else {
+            continue;
+        };
+        entry.resource = Some(match resource {
+            Resource::Composition(_) | Resource::Provenance(_) | Resource::OperationOutcome(_) => {
+                resource
+            }
+            other => translator
+                .translate(&other, preferred)
+                .await
+                .map_err(ServedError::Translation)?,
+        });
+    }
+    Ok((run, translator.unbound().to_vec()))
 }
 
 /// Takes into `document` the sections the mapping run `run` wrote, each
@@ -369,13 +420,24 @@ pub(crate) fn withheld(run: &Bundle) -> Option<String> {
     ))
 }
 
+/// A written report, and each concept at an element a requested binding
+/// names that no translation brought into the binding's systems.
+#[derive(Debug, Clone)]
+pub struct Delivered {
+    /// The document.
+    pub bundle: Bundle,
+    /// The concepts left as recorded, each named by its element path.
+    pub unbound: Vec<Unbound>,
+}
+
 /// A shipped mapping compiled against a deployment's template, which writes
 /// a member's composition as the document of its category.
 #[async_trait]
 pub trait Writes: std::fmt::Debug + Send + Sync {
     /// Writes `composition`, a composition in canonical JSON, as the
     /// document `report` names, asking `terminology` whether a value set
-    /// the form binds holds what the document writes.
+    /// the form binds holds what the document writes, and translating the
+    /// mapped resources through it to meet `bindings` (`report::transcoded`).
     ///
     /// # Errors
     ///
@@ -384,8 +446,8 @@ pub trait Writes: std::fmt::Debug + Send + Sync {
         &self,
         composition: &str,
         report: Report<'_>,
-        terminology: &Terminology,
-    ) -> Result<Bundle, ServedError>;
+        terminology: (&Terminology, &[Binding]),
+    ) -> Result<Delivered, ServedError>;
 }
 
 /// A category of report the gateway writes from one member's composition.

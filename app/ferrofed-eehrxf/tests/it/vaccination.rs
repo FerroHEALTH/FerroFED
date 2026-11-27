@@ -100,6 +100,20 @@ async fn written(header: &PatientHeader) -> Result<Result<Value, ServedError>, B
     })
 }
 
+#[tokio::test]
+async fn transcoding_for_myhealth_eu_leaves_a_vaccination_history_as_recorded() -> TestResult {
+    let (composition, attesters) = version()?;
+    conforming::untouched(
+        &served()?,
+        (
+            &composition,
+            "urn:uuid:4f5c1d1e-0000-4000-8000-000000001980",
+        ),
+        (&header(), &attesters),
+    )
+    .await
+}
+
 #[test]
 fn the_query_parses_back_to_the_tree_it_was_printed_from() -> TestResult {
     assert_eq!(

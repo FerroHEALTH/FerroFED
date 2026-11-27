@@ -186,6 +186,21 @@ fn procedure() -> String {
     )
 }
 
+/// Returns [`composition`] with its diagnosis coded
+/// [`crate::eps::transcoding::DIAGNOSIS`] in SNOMED CT in place of ICD-10,
+/// its terminology named by the system URI, as the ICD-10 one is.
+#[must_use]
+pub fn snomed_composition(uid: &str) -> String {
+    let (code, display) = crate::eps::transcoding::DIAGNOSIS;
+    let snomed = crate::eps::transcoding::SNOMED;
+    composition(uid).replace(
+        &icd10(DIAGNOSIS_DISPLAY, DIAGNOSIS),
+        &format!(
+            r#"{{ "_type": "DV_CODED_TEXT", "value": "{display}", "defining_code": {{ "_type": "CODE_PHRASE", "terminology_id": {{ "_type": "TERMINOLOGY_ID", "value": "{snomed}" }}, "code_string": "{code}" }} }}"#
+        ),
+    )
+}
+
 /// Returns a synthetic discharge composition as a member serves it.
 ///
 /// It is of [`TEMPLATE`], under the version id `uid`: a stay from
