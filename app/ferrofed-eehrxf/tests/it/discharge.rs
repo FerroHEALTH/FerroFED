@@ -316,14 +316,15 @@ fn condition_codes(bundle: &Value) -> Vec<Vec<(String, String)>> {
     of_type(bundle, "Condition")
         .into_iter()
         .map(|condition| {
-            condition["code"]["coding"]
-                .as_array()
+            condition
+                .pointer("/code/coding")
+                .and_then(Value::as_array)
                 .into_iter()
                 .flatten()
                 .filter_map(|coding| {
                     Some((
-                        coding["system"].as_str()?.to_owned(),
-                        coding["code"].as_str()?.to_owned(),
+                        coding.get("system")?.as_str()?.to_owned(),
+                        coding.get("code")?.as_str()?.to_owned(),
                     ))
                 })
                 .collect()

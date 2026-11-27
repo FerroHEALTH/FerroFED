@@ -39,6 +39,7 @@ use std::collections::BTreeMap;
 use std::time::Instant;
 
 use axum::response::Response;
+use eehrxf::terminology::translation::Unbound;
 use ferrofed_eehrxf::list::written::Writing;
 use ferrofed_eehrxf::list::{self, Listing, Match};
 use ferrofed_eehrxf::report::{Report, ServedError, Writes, Written};
@@ -408,15 +409,7 @@ async fn document(
         .await;
     match delivered {
         Ok(delivered) => {
-            if !delivered.unbound.is_empty() {
-                tracing::warn!(
-                    request_id = %admitted.outbound,
-                    unbound = delivered.unbound.len(),
-                    locations = ?delivered.unbound.iter().map(|unbound| unbound.location.as_str()).collect::<Vec<_>>(),
-                    "codes of the {} meet no binding [eehrxf.terminology] transcode names, and are transferred as recorded",
-                    written.named()
-                );
-            }
+            unbound(admitted, written, &delivered.unbound);
             Provenance::member(snapshot, &member.via, &member.node)
                 .stamp(fhir_json(StatusCode::OK, &delivered.bundle))
         }
@@ -447,6 +440,22 @@ async fn document(
             )
         }
     }
+}
+
+/// Logs, by element path alone, each concept of the `written` report no
+/// translation brought into a binding `[eehrxf.terminology] transcode`
+/// names, which the report carries as recorded.
+fn unbound(admitted: &Admitted<'_>, written: Written, unbound: &[Unbound]) {
+    if unbound.is_empty() {
+        return;
+    }
+    tracing::warn!(
+        request_id = %admitted.outbound,
+        unbound = unbound.len(),
+        locations = ?unbound.iter().map(|unbound| unbound.location.as_str()).collect::<Vec<_>>(),
+        "codes of the {} meet no binding [eehrxf.terminology] transcode names, and are transferred as recorded",
+        written.named()
+    );
 }
 
 /// The composition `body` holds and the persons who attested it: for a

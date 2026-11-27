@@ -83,7 +83,8 @@ pub async fn start() -> Server {
     server
 }
 
-/// Mounts on `server` the answers of `ConceptMap/$translate` under `/fhir`:
+/// Mounts on `server` the answers of `ConceptMap/$translate` under `/fhir`.
+///
 /// [`SUBSTANCE`] into ATC answers [`INGREDIENT`] and [`DIAGNOSIS`] into
 /// ICD-10 answers [`CATEGORY`], each `equivalent`, and every other
 /// translation no match.

@@ -123,7 +123,7 @@ pub(crate) async fn untouched(
     (composition, identifier): (&str, &str),
     (header, attesters): (&PatientHeader, &[Attester]),
 ) -> Result<(), Box<dyn Error>> {
-    let (server, terminology) = transcoding_terminology().await?;
+    let (stub, terminology) = transcoding_terminology().await?;
     let write = |bindings| {
         delivered(
             served,
@@ -137,9 +137,10 @@ pub(crate) async fn untouched(
     assert!(transcoded.unbound.is_empty(), "{:?}", transcoded.unbound);
     assert_eq!(
         serde_json::to_value(&recorded.bundle)?,
-        serde_json::to_value(&transcoded.bundle)?
+        serde_json::to_value(&transcoded.bundle)?,
+        "the report is written as recorded"
     );
-    let asked = ferrofed_testkit::mock::recorded(&server)
+    let asked = ferrofed_testkit::mock::recorded(&stub)
         .await?
         .iter()
         .filter(|request| request.url.path().ends_with("/ConceptMap/$translate"))
