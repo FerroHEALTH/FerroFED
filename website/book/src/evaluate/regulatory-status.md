@@ -319,7 +319,7 @@ what that asks of it, and its support period.
   conformity. A release placed from 11 December 2027 therefore carries one
   technical documentation set, one declaration and one CE marking for both
   acts, all planned under
-  [#525](https://github.com/FerroHEALTH/FerroFED/issues/525).
+  [#940](https://github.com/FerroHEALTH/FerroFED/issues/940).
 - **The economic operators supplied.** EHDS Art 35 has an economic operator
   identify, for 10 years, "any economic operator to which they have
   supplied an EHR system". CRA Art 23(1)(b) asks the same "where available";
@@ -515,7 +515,7 @@ them:
   ([The patient summary over FHIR](../integrate/patient-summary.md)). The
   same face lists the summaries that exist for a patient, the members' own
   ones included
-  ([The document list](../integrate/patient-summary.md#the-document-list)).
+  ([The document list](../integrate/document-list.md#the-document-list)).
   It also searches and reads a patient's electronic prescriptions and
   receives a dispensation into the member that owns its prescription,
   passed through in the HL7 Europe MPD profiles from the members that serve
@@ -581,10 +581,10 @@ before the Regulation applies on 26 March 2027:
   ([#813](https://github.com/FerroHEALTH/FerroFED/issues/813)), where prescriptions from openEHR medication data,
   laboratory reports, discharge reports and imaging were built (issues [FerroHEALTH/FerroBRIDGE#1321](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1321),
   [FerroHEALTH/FerroBRIDGE#1322](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1322), [FerroHEALTH/FerroBRIDGE#1324](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1324), [FerroHEALTH/FerroBRIDGE#1325](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1325) and [FerroHEALTH/FerroBRIDGE#1326](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1326), now closed).
-- [#525](https://github.com/FerroHEALTH/FerroFED/issues/525): the rest of
-  the conformity work: the points the [Annex II checklist](annex-ii.md)
-  leaves open, the EU declaration of conformity, which each release writes
-  once the manufacturer issues it, the CE marking and the registration.
+- [#940](https://github.com/FerroHEALTH/FerroFED/issues/940): the EU declaration of conformity, which each release
+  writes once the manufacturer issues it, and the CE marking; [#2061](https://github.com/FerroHEALTH/FerroFED/issues/2061)
+  the registration; the points the [Annex II checklist](annex-ii.md)
+  leaves open name their own issues.
 
 No EU declaration of conformity has been drawn up and no FerroFED release
 carries the CE marking. The release process says when, in a release, the

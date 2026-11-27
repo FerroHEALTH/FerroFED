@@ -20,7 +20,7 @@ A request a national contact point relays is always served as under
 `disclose = false`, whatever this setting says: the healthcare provider of
 another Member State it relays is a healthcare provider too (Art 8, Art
 11(5); [National contact
-points](authentication.md#national-contact-points)). The setting decides
+points](contact-point-issuers.md#national-contact-points)). The setting decides
 only what the deployment's own callers see.
 
 With `disclose = false`, a member the pre-filter excludes is still never sent

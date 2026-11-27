@@ -117,7 +117,7 @@ The circumstances that lead to the most severe ones:
   ([Hardening](../operate/hardening.md#the-container));
 - leaving the hop between the proxy and the gateway in cleartext on a
   shared network
-  ([TLS on the listeners](../operate/configuration.md#tls-on-the-listeners));
+  ([TLS on the listeners](../operate/listener-tls.md#tls-on-the-listeners));
 - trusting an issuer or an identity service that is compromised, or a
   member that ignores the caller the gateway conveys
   ([Admitting a node](../operate/admission.md));

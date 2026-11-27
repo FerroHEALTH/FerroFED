@@ -36,7 +36,7 @@ You connect a contact point in four steps:
    ([Authentication](../operate/authentication.md)).
 3. Name that issuer in a `[[federation.contact_point]]`, with the header the
    connector sends its correlation identifier in
-   ([National contact points](../operate/authentication.md#national-contact-points)).
+   ([National contact points](../operate/contact-point-issuers.md#national-contact-points)).
 4. Give FerroFED its own PostgreSQL store with `[store]`, which a
    contact-point issuer needs; without it the gateway refuses to start
    ([FerroFED's own store](../operate/store.md)).
@@ -409,6 +409,74 @@ record and is still the security event `emergency-limit-reached`. The
 `[[access_log.emergency_purpose]]` entries and the store are what the count
 needs either way.
 
+## Anomaly detection
+
+The NCPeH Architecture Specifications 10.0.0 §5.1.9 give the contact point
+an anomaly detection "based on a configurable rule", with three warnings:
+
+| Warning | Raised when |
+|---|---|
+| `EHDSI_WARNING_SEC_UNEXPECTED_NUMBER_OF_REQUESTS_FOR_UNIQUE_PATIENT` | too many requests for one patient in the window, counted "even in case of a request for a non existing patient" |
+| `EHDSI_WARNING_SEC_UNEXPECTED_NUMBER_OF_REQUESTS_FOR_UNIQUE_POINT_OF_CARE` | too many requests from one point of care in the window |
+| `EHDSI_WARNING_SEC_UNEXPECTED_NUMBER_OF_REQUESTS` | too many requests in all in the window |
+
+A breach is persisted "as a warning" in the audit record, and "does not
+block traffic". FerroFED sees every request a contact point relays with
+what these rules count by, so it counts them behind the contact point, as
+it does the emergency access limit. Where the counts are kept is FerroFED's
+own design. The notice to the national service desk stays the contact
+point's, raised from the security event and the record below.
+
+Each rule is a table of its own, and a rule you leave out is not counted.
+No rule is in effect by default:
+
+```toml
+[anomaly.patient]          # by the patient of the treatment relationship confirmation
+threshold = 20
+window = "1h"
+
+[anomaly.point_of_care]    # by the identity assertion's point of care
+threshold = 200
+window = "1h"
+
+[anomaly.requests]         # every request of every contact point
+threshold = 5000
+window = "1h"
+```
+
+| Key | What it sets |
+|---|---|
+| `threshold` | how many requests one window holds; each request past it raises the rule's warning, at least 1 |
+| `window` | the window, at least one second; it opens at the first request counted in it |
+
+A `threshold` or a `window` of zero is refused, naming the key. A reload
+applies changed rules. `OPTIONS {base}/` declares the rules in effect
+under `federation.national_contact_point.anomaly`, beside the emergency
+limit, each as `threshold` and `window_s`, or `null` when left out.
+
+How the gateway counts:
+
+- **Every request that reaches patient data**, the patient lookup
+  included, since §5.1.9 counts a request for a patient who does not exist.
+  A request with no treatment relationship confirmation is not counted by
+  patient, and one whose assertion names no point of care is not counted by
+  point of care.
+- **In fixed windows.** A window opens at the first request it counts and
+  ends `window` later; the next request after that opens a new one.
+- **Across replicas and restarts**, in FerroFED's own store
+  (`ferrofed.contact_point_requests`), one statement per request for every
+  rule. The table names each patient and point of care by a SHA-256
+  digest alone.
+- **Whether or not an access log is kept.**
+
+A request past a rule's threshold is served. It is the security event
+`unexpected-number-of-requests` under `ferrofed::security`, one line per
+warning, naming the warning, the contact point and the patient by its
+pseudonym alone; with an access log, its record's outcome description
+carries each warning, separated by `; `, after any description the record
+already had. When the store does not answer, the request is served
+uncounted and is the security event `anomaly-uncounted`.
+
 ## Failures the connector relays
 
 The contact points exchange a common set of exceptions, and the national
@@ -542,13 +610,9 @@ the NCPeH API), the eHDSI CDA reference test documents, and the OpenNCP
 Transformation Manager's Schematrons and coded element list.
 
 The decisions were checked again on 2026-10-29 against the MyHealth@EU
-Requirements Catalogue v10.0.0 (W10-Operation Ready, 2026-03-06), which the
-owner read under an EU Login reading grant: its requirements on health
-professional identification (01), patient identification (02), the contact
-point's operation and data protection (03, 04), the patient summary (05),
-information quality (10), security, traceability and auditability (11),
-non-repudiation (12), the summary use case and the exception handling,
-and on 2026-11-10 its original clinical documents (08). They
+Requirements Catalogue v10.0.0 (W10-Operation Ready, 2026-03-06), cited by
+requirement id only: rows 01 to 05, 10, 11 and 12, the summary use case
+(§1.1) and the exception handling (§1.25), and on 2026-11-10 row 08. They
 hold, with two amendments of FerroFED's own: the gateway never refuses on
 the professional's role or point of care, and the PDF of the original is
 the contact point's, rendered from the narrative. The catalogue is

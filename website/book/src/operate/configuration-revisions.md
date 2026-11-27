@@ -10,15 +10,15 @@ of this exists: the gateway is configured by its file and the `FERROFED__`
 environment alone, opens no store, and serves no revision route. No
 specification governs this page: our own design.
 
-What is built is the revision store and its API on the admin listener
-(#576), the members and stored queries the operator console manages, with
-their owners (#577, [Console-managed resources](#console-managed-resources)),
-and the onward credentials and binding sections it manages, with write-only
+The revisions hold the revision store and its API on the admin listener,
+the members and stored queries the operator console manages, with their
+owners ([Console-managed resources](#console-managed-resources)), and the
+onward credentials and binding sections it manages, with write-only
 secrets, a confirmation after a change applies and a second operator's
-approval before it applies (#578,
-[Credentials and binding sections](#credentials-and-binding-sections)).
+approval before it applies
+([Credentials and binding sections](#credentials-and-binding-sections)).
 Any revision exports as TOML, and TOML imports as a dry-run revision
-(#579, [Export and import](#export-and-import)).
+([Export and import](#export-and-import)).
 
 ## Turning it on
 
@@ -160,7 +160,7 @@ The `authentication` section lists who may call, which only the file sets
 and no revision holds: `auth.product_scope`, each `[auth.issuer.<name>]` by its
 `issuer`, `kind`, `jwks_file` and `audience` (a change waits for the next
 start), each `[[trust.issuer]]` by its `issuer`, and each
-[national contact point](authentication.md#national-contact-points)'s
+[national contact point](contact-point-issuers.md#national-contact-points)'s
 `[[federation.contact_point]]` by its `issuer`, `correlation_header` and
 `additional_countries`. An entry is keyed by its position, such as
 `federation.contact_point[0].correlation_header`, as a reload names it. None of them is editable, and a Basic user's password hash
@@ -427,7 +427,7 @@ restart to change.
 ## Export and import
 
 Any revision exports as TOML, and TOML imports as a dry-run revision, so a
-configuration moves between the console and version control (#579).
+configuration moves between the console and version control.
 
 | Route | Answer |
 |---|---|

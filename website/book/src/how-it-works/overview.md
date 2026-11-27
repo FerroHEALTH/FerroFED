@@ -6,8 +6,7 @@
 This part of the book explains the gateway in diagrams, one question per
 page. Each diagram cites the section of the Federation Tier specification
 it shows, and its requirements (N) or conformance points (CP). Each one
-shows what is built on `main`. A part drawn with a dashed border is planned,
-and the text names its issue and milestone.
+shows what is built on `main`.
 
 | Page | The question it answers |
 |---|---|
@@ -150,6 +149,8 @@ so where each piece of state lives is FerroFED's own design.
 | Stored-query definitions | `redb`, PostgreSQL or read-only files | yes |
 | Outbound credentials and the signing keys | one secret file each | yes, they are your files |
 
-It never writes a patient identifier, a value derived from one, or a result
+[What the gateway keeps](../operate/deployment-shape.md#what-the-gateway-keeps)
+lists every store, with the setting that turns each on. It never writes a
+patient identifier, a value derived from one, or a result
 row to disk. A stored query names its patient through a `$parameter`, and a
 definition with a literal patient identifier is refused (§5.4.1, N33).

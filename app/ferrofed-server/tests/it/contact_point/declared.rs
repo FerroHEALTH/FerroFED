@@ -8,7 +8,8 @@
 //! authenticated by the gateway (Implementing Regulation (EU) 2026/2099
 //! Art 6(1) and (2); §13.4 authn-end-user, CP-39), that a purpose of use is
 //! required, the emergency access limit in effect (eHDSI Section II Security
-//! Services 10.0.0 §2.5), and, per issuer, the claim each attribute is read
+//! Services 10.0.0 §2.5), the anomaly rules in effect (`NCPeH` Architecture
+//! Specifications 10.0.0 §5.1.9), and, per issuer, the claim each attribute is read
 //! from. A deployment that declares no contact point declares nothing.
 
 use std::collections::BTreeMap;
@@ -41,7 +42,16 @@ struct DeclaredContactPoint {
     professional: String,
     purpose_of_use: String,
     emergency: DeclaredEmergency,
+    anomaly: DeclaredAnomaly,
     issuers: Vec<DeclaredIssuer>,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+struct DeclaredAnomaly {
+    patient: Option<DeclaredEmergency>,
+    point_of_care: Option<DeclaredEmergency>,
+    requests: Option<DeclaredEmergency>,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
@@ -90,6 +100,15 @@ async fn a_declared_contact_point_is_described_with_how_its_requests_are_served(
         },
         member.emergency,
         "the §2.5 baseline, in effect when [emergency] is not written"
+    );
+    assert_eq!(
+        DeclaredAnomaly {
+            patient: None,
+            point_of_care: None,
+            requests: None
+        },
+        member.anomaly,
+        "no anomaly rule is in effect when [anomaly] is not written"
     );
     let [issuer] = member.issuers.as_slice() else {
         return Err("one contact point".into());
@@ -146,6 +165,37 @@ async fn a_tightened_emergency_limit_is_declared_as_the_one_in_effect() -> TestR
         },
         member.emergency,
         "a country tightens the §2.5 baseline"
+    );
+    Ok(())
+}
+
+// conformance: CP-23
+#[tokio::test]
+async fn the_anomaly_rules_are_declared_beside_the_emergency_limit() -> TestResult {
+    let gateway = Gateway::with_rows(
+        declared(),
+        "\n[anomaly.patient]\nthreshold = 20\nwindow = '1h'\n\n[anomaly.requests]\nthreshold = 1000\nwindow = '10min'\n",
+    )
+    .await?;
+    let member = described(&gateway)
+        .await?
+        .federation
+        .national_contact_point
+        .ok_or("the member is declared")?;
+    assert_eq!(
+        DeclaredAnomaly {
+            patient: Some(DeclaredEmergency {
+                threshold: 20,
+                window_s: 3600
+            }),
+            point_of_care: None,
+            requests: Some(DeclaredEmergency {
+                threshold: 1000,
+                window_s: 600
+            }),
+        },
+        member.anomaly,
+        "NCPeH Architecture Specifications 10.0.0 §5.1.9: the rules in effect"
     );
     Ok(())
 }

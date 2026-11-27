@@ -4,10 +4,10 @@
 # Laboratory reports over FHIR
 
 Medical test results are a priority category of Regulation (EU) 2025/327
-(Art 14(1)(e)). The [document list](patient-summary.md#the-document-list)
+(Art 14(1)(e)). The [document list](document-list.md#the-document-list)
 names a patient's laboratory reports beside the patient summary, each at a
 `Binary/{token}` URL the gateway signs for you
-([Reading a member's document](patient-summary.md#reading-a-members-document)).
+([Reading a member's document](document-list.md#reading-a-members-document)).
 
 ## Laboratory reports in the list
 

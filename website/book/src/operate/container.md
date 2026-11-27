@@ -3,7 +3,7 @@
 
 # The container image and the quickstart
 
-FerroFED ships one static binary, `ferrofed`, and an image that carries it on
+**Audience:** operators, and integrators who try the gateway. FerroFED ships one static binary, `ferrofed`, and an image that carries it on
 distroless static. Every release carries `compose.yaml`, which runs that image
 alone in front of the CDRs you already run, with an example `ferrofed.toml`
 and `registry.toml` ([The gateway from a
@@ -344,9 +344,7 @@ pinned SHA-256.
 `--wait` returns once every service reports healthy. The gateway service
 runs `ghcr.io/ferrohealth/ferrofed` at the product version, the tag default
 `compose.yaml` holds, and `FERROFED_VERSION` selects another published
-version. Its healthcheck is the image's own `ferrofed healthcheck`, which
-images before v0.0.7 do not carry, so with an older `FERROFED_VERSION` the
-gateway never turns healthy and `--wait` fails. No compose file builds the
+version. Its healthcheck is the image's own `ferrofed healthcheck`. No compose file builds the
 image; every one runs the published image.
 
 The gateway and the four FerroEHR nodes send their installation reports to
@@ -434,10 +432,7 @@ issuer's network namespace, since it reads an issuer's metadata over plain
 of `docker/quickstart/patients.tsv` over ITI-104 under its own token before
 the gateway starts.
 
-`docker compose down -v` stops the stack and removes its volumes. A
-quickstart volume created before v0.0.8 holds the roles with their earlier
-passwords, which the nodes no longer send, so run `docker compose down -v`
-once before you bring that stack up again, then seed it anew.
+`docker compose down -v` stops the stack and removes its volumes.
 
 ### The synthetic patients
 

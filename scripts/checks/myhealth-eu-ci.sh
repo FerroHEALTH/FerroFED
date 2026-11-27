@@ -13,8 +13,9 @@
 #                  as evidence;
 #   the verdicts   conformance/myhealth-eu-validation.tsv holds guide,
 #                  document and verdict rows, each guide core, laboratory,
-#                  discharge or vaccination and each verdict valid or
-#                  invalid; the
+#                  discharge, vaccination, eps, epd or imaging, each
+#                  verdict valid or invalid, and each invalid one's cause
+#                  an issue (#N or Owner/Repo#N), - for a valid one; the
 #                  validator lane holds the rows to its run;
 #   the badges     every badge scripts/conformance/myhealth-eu.sh renders
 #                  equals its file, and each CI-line badge carries the EU
@@ -81,18 +82,23 @@ check_search() {
   done < <(rows "$SEARCH")
 }
 
-# check_verdicts: the verdict record's rows.
+# check_verdicts [RECORD]: the rows of the verdict record RECORD, by default
+# the committed one.
 check_verdicts() {
-  local guide document verdict
-  [[ -f "$VALIDATION" ]] || {
-    fail "$VALIDATION is missing."
+  local record="${1:-$VALIDATION}" guide document verdict cause
+  [[ -f "$record" ]] || {
+    fail "$record is missing."
     return
   }
-  while IFS=$'\t' read -r guide document verdict; do
-    case "$guide" in core | laboratory | discharge | vaccination) ;; *) fail "$VALIDATION: '$guide' is no MyHealth@EU guide the lane checks." ;; esac
-    case "$verdict" in valid | invalid) ;; *) fail "$VALIDATION: $document has verdict '$verdict', not valid or invalid." ;; esac
-    [[ "$document" == *.json ]] || fail "$VALIDATION: '$document' is no emitted document."
-  done < <(rows "$VALIDATION")
+  while IFS=$'\t' read -r guide document verdict cause; do
+    case "$guide" in core | laboratory | discharge | vaccination | eps | epd | imaging) ;; *) fail "$record: '$guide' is no MyHealth@EU guide the lane checks." ;; esac
+    case "$verdict" in
+    valid) [[ "$cause" == - ]] || fail "$record: valid $document names the cause '$cause', not -." ;;
+    invalid) [[ "$cause" =~ ^([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[0-9]+$ ]] || fail "$record: invalid $document names no issue as its cause ('$cause')." ;;
+    *) fail "$record: $document has verdict '$verdict', not valid or invalid." ;;
+    esac
+    [[ "$document" == *.json ]] || fail "$record: '$document' is no emitted document."
+  done < <(rows "$record")
 }
 
 # check_badges: every badge file against a fresh rendering, and its words.
@@ -165,6 +171,19 @@ self_test() {
   check_emblem "$work/plain.json" 2> /dev/null
   [[ "$failed" -eq 1 ]] || {
     echo "myhealth-eu-ci: self-test failed: a badge without a logo passed" >&2
+    exit 1
+  }
+  failed=0
+  printf 'guide\tdocument\tverdict\tcause\neps\ta.json\tvalid\t-\nimaging\tb.json\tinvalid\tFerroHEALTH/FerroFED#212\n' > "$work/caused.tsv"
+  check_verdicts "$work/caused.tsv" 2> /dev/null
+  [[ "$failed" -eq 0 ]] || {
+    echo "myhealth-eu-ci: self-test failed: verdicts with their causes were refused" >&2
+    exit 1
+  }
+  printf 'guide\tdocument\tverdict\tcause\neps\ta.json\tinvalid\t-\n' > "$work/uncaused.tsv"
+  check_verdicts "$work/uncaused.tsv" 2> /dev/null
+  [[ "$failed" -eq 1 ]] || {
+    echo "myhealth-eu-ci: self-test failed: an invalid verdict naming no issue passed" >&2
     exit 1
   }
   failed=0

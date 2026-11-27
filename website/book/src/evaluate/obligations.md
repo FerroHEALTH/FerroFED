@@ -19,16 +19,16 @@ report behind its status.
 
 | Status | Statements | Gateway statements | Meaning |
 |---|---|---|---|
-| tested | 356 | 351 | a test asserts it |
+| tested | 364 | 359 | a test asserts it |
 | built-untested | 0 | 0 | the code does it and no test asserts it yet |
 | planned | 0 | 0 | not built yet; an open issue holds the work |
 | missing | 0 | 0 | not built, found missing by the audit; an issue holds the work |
-| deferred | 5 | 4 | not built, by a decision of the owner |
+| deferred | 7 | 7 | not built, or a permission or recommendation not taken, by a recorded decision |
 | new-gap | 7 | 7 | the text contradicts itself or is silent, found by the audit and reported on [#212](https://github.com/FerroHEALTH/FerroFED/issues/212) |
 | contradiction | 5 | 4 | the text contradicts itself, reported on [#212](https://github.com/FerroHEALTH/FerroFED/issues/212) before the audit |
-| node | 15 | 0 | a member node must meet it |
-| operator | 24 | 0 | the federation operator must meet it |
-| n/a | 36 | 11 | no gateway obligation: a client or an editor must meet it, or it is a permission the gateway does not take |
+| node | 17 | 0 | a member node must meet it |
+| operator | 26 | 0 | the federation operator must meet it |
+| n/a | 22 | 0 | a statement addressed to a client or an editor, which binds no gateway, node or operator |
 
 ## Gaps
 
@@ -73,8 +73,10 @@ None.
 
 | Statement | Actor | Keyword | Requirement | Point | Statement text | Evidence |
 |---|---|---|---|---|---|---|
+| [aql-facade#7.2.1](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/aql-facade.html) | Gateway | MAY | N29 | CP-22 | the gateway MAY instead scope via FROM EHR e[ehr_id/value=…] or the ehr_id request parameter | decided on [#2046](https://github.com/FerroHEALTH/FerroFED/issues/2046): a permission FerroFED leaves; the rewrite dispatches N29's canonical WHERE e/ehr_id/value form to every node (owner decisions on [#16](https://github.com/FerroHEALTH/FerroFED/issues/16)), and no node is sent the FROM EHR predicate or the ehr_id parameter instead |
+| [result-set#federation-meta.3](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/result-set.html#federation-meta) | Gateway | MAY | N17 | CP-35 | A gateway MAY emit the standard _-prefixed fields | decided on [#2046](https://github.com/FerroHEALTH/FerroFED/issues/2046): a permission FerroFED leaves; every node runs its own scoped AQL, so no one _executed_aql describes the merged answer, and FerroFED emits none of the _-prefixed fields |
+| [deduplication#10.2.4](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/deduplication.html) | Gateway | SHOULD | N15 | CP-9 | The mode SHOULD be scoped to latest-version queries | owner decision on [#16](https://github.com/FerroHEALTH/FerroFED/issues/16) (§10.2 against §10.3, held on [#17](https://github.com/FerroHEALTH/FerroFED/issues/17)): the mode applies to every query, keyed on the full version id, so a history query keeps its versions apart without the scoping |
 | [partial-results#11.6.4.1](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/partial-results.html) | Gateway | MAY | N39 | CP-32 | A gateway MAY hold an ordered, merged result set for a bounded period and serve OFFSET-based pages from it | owner decision on [#16](https://github.com/FerroHEALTH/FerroFED/issues/16) (2026-10-01): no cursor; pinned by `app/ferrofed-server/tests/it/order.rs::a_bounded_offset_page_is_computed_afresh_and_carries_no_cursor` ([#60](https://github.com/FerroHEALTH/FerroFED/issues/60) closed) |
+| [partial-results#11.6.4.2](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/partial-results.html) | Gateway | MUST | N39 | CP-32 | meta.federation MUST carry the cursor handle and its expiry, and the gateway MUST NOT re-run the fan-out mid-cursor | owner decision on [#16](https://github.com/FerroHEALTH/FerroFED/issues/16), re-decided on [#2046](https://github.com/FerroHEALTH/FerroFED/issues/2046) (§11.6.4 marks the cursor OPTIONAL): no cursor, so no handle is carried; pinned by `app/ferrofed-server/tests/it/order.rs::a_bounded_offset_page_is_computed_afresh_and_carries_no_cursor` |
 | [partial-results#11.7.1](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/partial-results.html) | Gateway | MAY | - | - | the Tier MAY support the Exchange-Routing async pattern | owner decision on [#16](https://github.com/FerroHEALTH/FerroFED/issues/16): Prefer: respond-async is ignored and answered synchronously: `app/ferrofed-server/tests/it/timeouts.rs::respond_async_is_ignored_and_answered_synchronously`; `app/ferrofed-server/tests/it/timeouts.rs::respond_async_never_exempts_a_request_from_the_overall_budget` ([#59](https://github.com/FerroHEALTH/FerroFED/issues/59) closed) |
-| [testing#track-8.1](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/testing.html#track-8) | Gateway | MAY | N3 | - | Hooks reserved; full propagation MAY be deferred | owner decision on [#16](https://github.com/FerroHEALTH/FerroFED/issues/16); conformance/tracks.tsv track 8 deferred; hooks built ([#48](https://github.com/FerroHEALTH/FerroFED/issues/48)), intake [#147](https://github.com/FerroHEALTH/FerroFED/issues/147) |
-| [testing#track-11.1](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/testing.html#track-11) | Gateway | MAY | N3 | - | Its subject matter, full propagation of PMIR identity merges and splits, MAY be deferred to a future release | owner decision on [#16](https://github.com/FerroHEALTH/FerroFED/issues/16); track 8 deferred |
-| [future#18.4](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/future.html) | Editor | MAY | N3 | - | full propagation of identity merges/splits across the federation MAY be deferred to a later release | owner decision on [#16](https://github.com/FerroHEALTH/FerroFED/issues/16); track 8 |
+| [follow-up-routing#12.1.1](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/follow-up-routing.html) | Gateway | MAY | - | - | The Tier MAY still use short codes for endpoint addressing, just never inside a uid | decided on [#2046](https://github.com/FerroHEALTH/FerroFED/issues/2046): a permission FerroFED leaves; an endpoint is addressed by its endpoint_id alone and no short code is used |

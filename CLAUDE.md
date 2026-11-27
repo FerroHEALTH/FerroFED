@@ -20,134 +20,18 @@ specification), and it reaches every node over the openEHR ITS-REST API.
 The name follows the Ferro family (FerroEHR, FerroTERM, FerroBRIDGE, and the
 rest of FerroHEALTH). FerroFED in prose, `ferrofed` in identifiers.
 
-## Status: building v0.0.17
+## Status: building v0.0.23 and v0.1.0
 
-v0.0.16 is released (2026-11-05), v0.0.15 (2026-10-30), v0.0.14 (2026-10-28), v0.0.13 (2026-10-25), v0.0.12 (2026-10-24), v0.0.11 (2026-10-16), v0.0.10 (2026-10-15), v0.0.9 (2026-10-05) and v0.0.8 (2026-10-04). v0.0.7 (2026-10-03) carries definitions and
-membership (§12.6, §12.7, §12b): definition requests routed to one chosen node, the
-template fan-out, the stored-query registry with its storage backends and
-drift repair, the admission check, the metrics surface, every credential held
-in a type that never renders it, and a gateway-only compose file with example
-configuration attached to every release. v0.0.6 carried the v0.0.4 to v0.0.6
-milestones: the merged answer across nodes (§9 to §11), the ITS-REST surface
-with follow-up routing (§7a, §12, §12a), and targeting with the
-self-description (§8, §7a.2). v0.0.8 carries security and the bindings (§13
-to §15, Annex A, Annex B): every caller is authenticated at the gateway
-(#80); each node is reached with its own
-credential, an OAuth 2.0 token for a client assertion the gateway signs, with
-token exchange and DPoP (#81, #439), the Nuts grant (#88) or the FAPI 2.0
-grant (#497), and is told the caller in a token the gateway signs (#82);
-consent stays with the node, with the optional Step-1 pre-filter (#83) and
-Mitz (#475); undirected patient queries are localized by XCPD (#85), PIXm or
-the NVI (#87), with PDQm ahead of resolution (#487) and PMIR identity changes
-dropping stale bindings (#147); the registry can be read from an mCSD
-directory (#86) with LRZa addressing; every IHE transaction is audited over
-ATNA ITI-20, the BALP records with a bounded spool (#418, #486, #512);
-traces export over OpenTelemetry (#353); and the identity clients share one
-TLS type with mutual TLS (#507).
+v0.0.22 is the newest release (2026-11-27); the open milestones are v0.0.23
+and v0.1.0. What each release shipped is its section of `CHANGELOG.md`, and
+the milestones on the tracker hold what is being built. The gateway serves
+the Federation Tier on its ITS-REST face (the federated query and its
+merge, follow-up routing, definitions and stored queries, the identity
+bindings of Annex A and Annex B) and, as an EHR system under Regulation
+(EU) 2025/327, the European exchange format on its FHIR face: the patient
+summary, the laboratory, discharge and imaging reports, prescriptions and
+dispensations, and a national contact point's connector.
 
-v0.0.9 carries the conformance program (#89): the Connectathon
-tracks 1 to 9 as scenarios with a per-track and per-point report (#92), the
-leakage and integrity suites of tracks 10 and 11 (#90, #91), the node
-profile run against FerroEHR 4.3.3 and EHRbase 2.36.0 pinned by digest (#93,
-#549), a differential run against the reference implementation (#94), and
-`ferrofed conformance run`, which scores a configured deployment, runs the
-node profile with `--node-profile` and reads the seed data each release
-attaches (#546, #573), with the matrix closed and the conformance statement
-written (#89, #95). It also carries the
-regional binding refactor: one `Binding` trait with the `binding-ihe` and
-`binding-nl` features of the server, `ihe` and `nl` of the identity crate and
-`nl` of the engine, and RFC 8414 in its own crate (#489, #551), retired onto
-`ferrohealth-smart` 0.7.0 (#1342); the identity crate laid out as `role/`, `ihe/` and `nl/`, and
-the engine's onward grants under `onward::grant` beside `single_node`
-(#587, #588); mutual TLS to a node with RFC 8705 client authentication and
-certificate-bound tokens (#492, #560); DPoP proofs read from `openehr-its`
-at 0.0.84 (#574); the FAPI 2.0 client key rotated with an overlap (#514); an
-ES256 `[signing]` key beside ES384 (#513); the Nuts grant toward the NVI
-(#539) and the gateway's did:web DID document (#503); the consent
-non-disclosure setting `[federation.consent] disclose` (#493) and a
-pre-filter that says it did not ask, with a closed `NotAsked` reason (#496,
-#568); PIXm asked by POST (#494); the verified caller as the user agent of
-each IHE audit record (#500); the operator console, `app/ferrofed-console`,
-with its own image (#275), the operator views over a read-only operator
-surface (#276, #583), sign-out (#584), the query console (#277) and the
-compressed bundle (#600), and its browser journeys in headless Chrome
-(#608); the secure-cookie guard (#615); the
-country research (#488); FerroFED's intended
-purpose and EHDS classification (#520); changelog fragments (#598); and
-Cadasto B.V. as the Licensor (#602). The re-pin to the specification's 1.0
-release moved to v0.0.10 (#17, #354).
-v0.0.10 is the first half of EHDS readiness (#519): FerroFED is an EHR
-system under Regulation (EU) 2025/327. It carries the re-pin to the
-specification's 1.0.0 text (#17, #354); the logging component, the access
-record of every access with the professional, the assurance level, the
-client's address, emergency access and retention (#623, #742, #722, #659);
-the Annex II 2.1 FHIR face serving the patient summary in the European
-exchange format and receiving a document (#689, #809, #803), with its
-terminology rules (#687) and the HL7 validator lane in CI (#688); the
-information sheet and instructions for use attached to every release
-(#769); and the production gaps the end-to-end audit found (#622 to #634,
-#639 to #641): identity resolution in production, zero-downtime restarts,
-several replicas, metrics, overload protection, TLS on the listener, and the
-production, upgrade, data-protection and threat-model pages.
-v0.0.11 carries more of EHDS readiness and the console. The ePrescription
-face (#523's children: #1038 to #1042, #1053, #1118, #1129, #1136):
-electronic prescriptions searched and read, and a dispensation received
-into the member that owns its prescription and read back, passed through in
-the HL7 Europe MPD 1.0.0 profiles from the members `[[fhir.serve]]`
-declares, with no dispensability, count or lock at the gateway. The access
-record gains labels per category and origin, the patients of a population
-query, the version a write left, the EHR a create left, insertions by the
-person or a representative, and the log of each semantic transformation
-(#797, #819, #946, #983, #992, #1003, #985), with a write's record reserved
-before the write (#945); the identity state exports for a replacement
-(#798). Configuration is one set of versioned revisions under
-`config.ui = "managed"`, saved, applied, confirmed and rolled back from the
-console and followed by every replica (#575 to #579, #954), and `[auth]`
-and the listener certificates reload without a restart (#636). The console
-is redesigned to the family's standard (#1074): its shell, dashboard,
-member pages, routing, stored queries, query console and configuration
-tabs, the admin actions (#909) and token refresh (#643), with every screen
-in the book in light and dark taken by the journey tooling, each browser
-journey on its own pinned chromedriver (#1081, #1052). The `openehr-*`
-crates move to 0.0.87 with `fhirconnect` 0.1.117, on one copy of the
-family, and a received document's category comes from its template (#714,
-#1028). The CRA documents land: the cybersecurity risk assessment, the
-information to the user, decommissioning and the Annex VII index (#1058,
-#1059, #1063, #1065), with security fixes as patch releases cut from the
-newest release's tag (#1064, #1087); beside them the Annex II
-checklist, the technical documentation, the declaration script and the
-economic-operator register (#941, #671, #940, #787). And the fixes: an
-unresolved member named on the FHIR face (#1104, #1107), reloads that say
-what waits for a restart (#1017, #955), refusals that quote no credential
-(#1021), and the console's request bounds and contrast (#1022, #1112).
-v0.0.12 rebuilt the operator console on FerroUI as `ferrofed-console`
-(#1219, #1230), moved client authentication onto `ferrohealth-smart`
-(#1174) and the audit crates onto FerroAUDIT (#1177), sent the installation
-report to FerroPULSE (#1122), and applied the term-mapping rule to the
-summary (#926). v0.0.13 serves a national contact point's national
-connector on the FHIR face with its end-to-end test (#524, #735), looks a
-patient up by identifier (#1294), validates a received document in full
-with `ferrobridge-validator` (#808), translates a summary code through the
-terminology server on `ferrobridge-term` (#1213, #925), and ships the
-Kubernetes package and OTLP over TLS (#638, #644). v0.0.14 assembles the
-laboratory, discharge and imaging reports in their HL7 Europe forms (#1355,
-#1357, #1375), refuses a duplicate dispensation by its business identifier
-(#1346) and resolves every patient through FerroPIX (#1377). v0.0.15 runs on
-the shared FerroSYS crates with no local copy left (#1397, #1448), takes
-`ferrohealth-server` 0.4.1 (#1455) and prints the family's healthcheck lines
-(#1453). v0.0.16 serves laboratory reports on the FHIR face, written from a
-member's composition or passed through from its own endpoint (#1404, #1555,
-#1556), prescriptions and dispensations in the map mode (#1403, #1560,
-#1561), and the Federation Tier 1.0.1 routing (#1478). v0.0.17, being built,
-carries discharge reports and imaging (#1405, #1406) and the rest of EHDS
-readiness (#519): the conformity work (#525,
-#940, #1144), the re-checks against the implementing acts once adopted
-(#1267, #799) and the European digital testing environment (#675). The
-component work (the openEHR mapping of medication data, the further
-categories and the patient summary's re-check against the Art 15(1) act)
-moved to FerroHEALTH/FerroBRIDGE with `eehrxf` (#813); the gateway half of
-each stays here (#1403 to #1406). Each crate gets the rest of
-its behaviour from its own issue, in milestone order.
 The design of record is `docs/architecture.md`, the output of the first
 research pass on #16 (the
 evidence is on #18 to #27), with every decision in its register decided by the

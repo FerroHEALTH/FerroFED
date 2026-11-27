@@ -36,7 +36,7 @@ explicitly. Any other value, or the header given twice, is refused with a
 best_effort = false   # a request asking for partial is then refused with a 400
 ```
 
-The gateway never quietly serves an all-or-nothing answer to a request that
+The gateway never serves an all-or-nothing answer to a request that
 asked for `partial`. The setting is named in the startup log line.
 
 ## Timeouts
@@ -247,8 +247,7 @@ url_file = "/run/secrets/ferrofed/store-url"
 - `[stored_queries]` takes no connection string: `[store]` holds it, and
   any other key there is refused as unknown.
 - The table is `ferrofed.stored_query_definition`, the store's first
-  migration, so a database an earlier release's `postgres` backend wrote is
-  taken over with every definition it holds.
+  migration.
 - Every replica shares the table, whose primary key is the name and the
   version. Two replicas that store the same new version at once store exactly
   one: one `PUT` answers `200` and the other `409` (`stored-query-held`), and

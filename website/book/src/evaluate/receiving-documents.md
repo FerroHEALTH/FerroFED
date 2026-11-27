@@ -17,7 +17,7 @@ FerroHEALTH/FerroBRIDGE and pinned exactly, reads a received document,
 checks it against its profiles and maps it into openEHR. The gateway takes
 the document at `POST {fhir-base}/Bundle` and writes the composition to the
 declared member, with an access record of each receipt
-([The patient summary over FHIR](../integrate/patient-summary.md#receiving-a-document)).
+([The patient summary over FHIR](../integrate/receiving-a-document.md#receiving-a-document)).
 The information sheet lists the categories a release can receive, and each
 deployment's `GET {fhir-base}/metadata` the ones it receives and the ones
 it has no receiving member for, with no `Bundle` create at all when it

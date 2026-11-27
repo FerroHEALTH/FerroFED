@@ -202,7 +202,7 @@ What a deployment must provide:
   is reported as a Mitz outage, since Mitz is never called, and no claim
   value appears in a label, a log line or an error.
 - **TLS.** `[nl_gf.mitz.endpoint]` is Mitz's
-  [endpoint table](configuration.md#the-endpoint-table-of-a-service). Its
+  [endpoint table](service-endpoints.md#the-endpoint-table-of-a-service). Its
   `url` must be `https` outside `profile = "development"`.
   `credentials` takes basic credentials or the OAuth 2.0 client
   credentials grant of `[nl_gf.mitz.endpoint.credentials.oauth]` (RFC 6749 §4.4),

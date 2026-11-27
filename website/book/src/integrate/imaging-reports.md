@@ -5,10 +5,10 @@
 
 Medical imaging studies and related reports are a priority category of
 Regulation (EU) 2025/327 (Art 14(1)(d)). The
-[document list](patient-summary.md#the-document-list) names the imaging
+[document list](document-list.md#the-document-list) names the imaging
 documents of a member that serves them itself, beside the patient summary,
 each at a `Binary/{token}` URL the gateway signs for you
-([Reading a member's document](patient-summary.md#reading-a-members-document)).
+([Reading a member's document](document-list.md#reading-a-members-document)).
 
 The gateway also writes an imaging report from a member's openEHR
 composition when you declare the template those compositions are of

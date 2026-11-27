@@ -400,7 +400,7 @@ marking or registration is a finding of non-compliance in its own right (Art
 45(1)). The [technical documentation](technical-documentation.md) says how a
 request for it, or for a translation of parts of it, is answered within 30
 days (Art 37(4)); the declaration is planned under
-[#525](https://github.com/FerroHEALTH/FerroFED/issues/525). A request to
+[#940](https://github.com/FerroHEALTH/FerroFED/issues/940). A request to
 identify the economic operators supplied (EHDS Art 35, CRA Art 23) is
 answered from the [register of economic operators](#the-register-of-economic-operators),
 with each operator's name and address, and with the statement that the

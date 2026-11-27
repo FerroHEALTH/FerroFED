@@ -6,6 +6,8 @@
 `[store]` connects FerroFED to one PostgreSQL database of its own. The
 store holds the state that must both survive a restart and be one on every
 replica. No specification governs the store: it is FerroFED's own design.
+**Audience:** operators. [What the gateway keeps](deployment-shape.md#what-the-gateway-keeps)
+lists every store a gateway can have; this page is the PostgreSQL one.
 
 ## When you need it
 
@@ -49,7 +51,8 @@ every replica:
 | `ferrofed.emergency_access` | the emergency accesses granted to one health professional a national contact point relays, keyed by a SHA-256 digest of the professional's identity: the instants granted inside the window, and the end of that window ([The emergency access limit](../integrate/national-contact-point.md#the-emergency-access-limit)) | at `expires_at`, the end of the window of the last access granted, by the sweep |
 | `ferrofed.dpop_proof` | one `DPoP` proof the gateway accepted, by the SHA-256 of its `jti` alone, never the value, so a replay to any replica is refused (RFC 9449 §11.1; [`DPoP`](authentication.md#dpop)) | at `expires_at`, the end of the window the proof is accepted in, by the sweep |
 | `ferrofed.contact_point_dispensation` | who dispensed one dispensation a national contact point wrote, keyed by the SHA-256 of the gateway's id of it: the identity assertion's `organization-id` and the facility identifier the dispensation names on `performer.actor`, so its discard is held to that dispenser on every replica ([Dispensations and their discard](../integrate/national-contact-point.md#dispensations-and-their-discard)) | at `expires_at`, 24 hours after the dispensation, by the sweep; no discard is admitted after it |
-| `ferrofed.face_id` | the patient identifier one stable id of the FHIR face stands for, a patient's or a listed document's, sealed with AES-256-GCM under a key derived from `fhir.id_key` and bound to the id, so the table alone shows no identifier ([Looking a patient up](../integrate/patient-summary.md#looking-a-patient-up), [Reading a listed document](../integrate/patient-summary.md#reading-a-listed-document)) | at `expires_at`, `fhir.id_lifetime` after the last answer that named the id, by the sweep |
+| `ferrofed.contact_point_requests` | the requests national contact points relay, counted per anomaly rule, keyed by the rule and a SHA-256 digest of what it counts by (the patient, the point of care, or all requests): the requests in the current window and its end ([Anomaly detection](../integrate/national-contact-point.md#anomaly-detection)) | at `expires_at`, the end of the window, by the sweep |
+| `ferrofed.face_id` | the patient identifier one stable id of the FHIR face stands for, a patient's or a listed document's, sealed with AES-256-GCM under a key derived from `fhir.id_key` and bound to the id, so the table alone shows no identifier ([Looking a patient up](../integrate/patient-summary.md#looking-a-patient-up), [Reading a listed document](../integrate/document-list.md#reading-a-listed-document)) | at `expires_at`, `fhir.id_lifetime` after the last answer that named the id, by the sweep |
 | `ferrofed.store_migration` | one migration applied, and when | never |
 
 These stay out of the store: caches (revocation and OCSP answers, issuer

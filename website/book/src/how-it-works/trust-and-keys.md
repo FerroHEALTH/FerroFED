@@ -9,14 +9,10 @@ specification requires both: the client authenticates to the gateway, the
 gateway authenticates onward to each node, and the client's identity
 travels with every request (§13.1, N24, N25, CP-16, CP-17).
 
-All three are built on `main` for v0.0.8: client authentication
-([#80](https://github.com/FerroHEALTH/FerroFED/issues/80)), OAuth 2.0 to
-each node with the gateway's own key
-([#81](https://github.com/FerroHEALTH/FerroFED/issues/81)) and the caller's
-identity conveyed to each node
-([#82](https://github.com/FerroHEALTH/FerroFED/issues/82)), with token
-exchange per caller and `DPoP`-bound tokens where a node asks for them
-([#439](https://github.com/FerroHEALTH/FerroFED/issues/439)).
+The gateway does all three: it authenticates every client, reaches each node
+with OAuth 2.0 under its own key, and conveys the caller's identity to each
+node, with token exchange per caller and `DPoP`-bound tokens where a node
+asks for them.
 
 ## The gate
 
@@ -60,12 +56,11 @@ flowchart TB
     tok -->|"access token"| cdr
 ```
 
-- **Callers to the gateway** ([#80](https://github.com/FerroHEALTH/FerroFED/issues/80)):
+- **Callers to the gateway:**
   each calling organisation's authorization server signs its own access
   tokens. The gateway keeps a trust list of issuers and reads each issuer's
   JWKS, so it holds many public key sets and no caller's private key.
-- **The gateway to each node** ([#81](https://github.com/FerroHEALTH/FerroFED/issues/81),
-  §13.1, N25, N30): the gateway has one key pair of its own, on P-256
+- **The gateway to each node** (§13.1, N25, N30): the gateway has one key pair of its own, on P-256
   (ES256) or P-384 (ES384). A deployment whose nodes hold to the FAPI 2.0
   Security Profile uses P-256, since that profile admits ES256 and not
   ES384 (§5.4.1). The private half is a secret file; the public half is
@@ -75,7 +70,7 @@ flowchart TB
   (§13.1 `jwks-discovery`). A rotation keeps the current and the previous
   `kid` in the set for one overlap window. The gateway needs no node's key
   for this.
-- **The identity sent to the node** ([#82](https://github.com/FerroHEALTH/FerroFED/issues/82)):
+- **The identity sent to the node:**
   the `openEHR-federation-client` header is a JWS signed with the same
   gateway key, so the node verifies it against the same JWKS.
 
@@ -102,7 +97,7 @@ sequenceDiagram
     G-->>C: answer
 ```
 
-**Checking the caller** ([#80](https://github.com/FerroHEALTH/FerroFED/issues/80)).
+**Checking the caller.**
 The access token is a JWT (RFC 9068), checked against the issuer's JWKS,
 and every check fails closed. The issuer must be on the trust list, and the
 algorithm on an allow-list (ES256, ES384, PS256, RS256), so `none` and HMAC
@@ -122,8 +117,7 @@ through the cross-reference service (§5.2), sends only to the patient's own
 `{node, ehr_id}` pairs, and tells each node the patient's `ehr_id` there
 ([Patient grants](../operate/patient-grants.md)).
 
-**Authenticating to the node** ([#81](https://github.com/FerroHEALTH/FerroFED/issues/81),
-§13.1, N25). The gateway sends the node's token endpoint an OAuth 2.0 client
+**Authenticating to the node** (§13.1, N25). The gateway sends the node's token endpoint an OAuth 2.0 client
 credentials request with a client assertion of RFC 7523 §2.2. The assertion
 lives 300 seconds at most, carries a unique `jti`, and names the node's
 token endpoint as its audience. The token endpoint verifies it against the
@@ -132,8 +126,7 @@ per node until 30 seconds before it expires, and drops it on a `401`. A
 token it cannot obtain fails that node `node-error`; the gateway never
 sends a request without one.
 
-**A token per caller, and a token bound to a key**
-([#439](https://github.com/FerroHEALTH/FerroFED/issues/439)). Where a node's
+**A token per caller, and a token bound to a key.** Where a node's
 authorization server supports token exchange (RFC 8693), the gateway asks
 it for a token per verified caller instead: the caller's token is the
 subject, a second assertion of the gateway the actor, the node the
@@ -146,8 +139,7 @@ a key of the gateway's with `DPoP` (RFC 9449): every request to that node
 and its token endpoint carries a proof of the key over its method and URL,
 and a node that demands a nonce is answered once more with it.
 
-**Telling the node who asks** ([#82](https://github.com/FerroHEALTH/FerroFED/issues/82),
-N24, §12.4). Every request to a node carries `openEHR-federation-client`: a
+**Telling the node who asks** (N24, §12.4). Every request to a node carries `openEHR-federation-client`: a
 query, a routed read or write, a definition request, the ask-all probe and
 the read of an EHR by subject alike. It is a JWS signed with the
 gateway key, ES256 or ES384 as the key's curve says, typed
@@ -185,17 +177,15 @@ The §13.4 decisions a deployment must publish, such as which identity is
 verified across each boundary and who authenticates the end user, are
 answered for the gateway, with a template for the rest, in
 [The §13.4 deployment decisions](../operate/deployment-decisions.md)
-([#84](https://github.com/FerroHEALTH/FerroFED/issues/84), CP-39).
+(CP-39).
 
-The Nuts track of the Dutch binding (Annex B §B.4) is built: an endpoint
+Under the Nuts track of the Dutch binding (Annex B §B.4), an endpoint
 whose `[credentials]` name a `nuts` grant obtains its token with a
 Verifiable Presentation of the gateway's credentials, bound to a key of the
-gateway's with `DPoP` ([The Nuts grant](../operate/onward-credentials.md#the-nuts-grant-annex-b-b4),
-[#88](https://github.com/FerroHEALTH/FerroFED/issues/88)). So is the
-harmonised BgZ and eOverdracht track (Annex B §B.4a): an endpoint whose
+gateway's with `DPoP` ([The Nuts grant](../operate/onward-credentials-nl.md#the-nuts-grant-annex-b-b4)). Under the
+harmonised BgZ and eOverdracht track (Annex B §B.4a), an endpoint whose
 `oauth` grant sets `security_profile = "fapi2"` discovers an authorization server
 under the FAPI 2.0 Security Profile, authenticates with an ES256
 `private_key_jwt` assertion naming its issuer, sends the configured Rich
 Authorization Requests `authorization_details`, and binds its token with
-`DPoP` ([The FAPI 2.0 grant](../operate/onward-credentials.md#the-fapi-20-grant-annex-b-b4a),
-[#497](https://github.com/FerroHEALTH/FerroFED/issues/497)).
+`DPoP` ([The FAPI 2.0 grant](../operate/onward-credentials-nl.md#the-fapi-20-grant-annex-b-b4a)).

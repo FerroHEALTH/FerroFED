@@ -21,7 +21,7 @@ page: our own design.
   `client_auth = "required"` and a `client_ca_file` that admits the proxy
   alone, and `[metrics.tls]` for the
   admin listener
-  ([TLS on the listeners](configuration.md#tls-on-the-listeners)).
+  ([TLS on the listeners](listener-tls.md#tls-on-the-listeners)).
 - [ ] **Publish container ports on one address.** A port published on
   `0.0.0.0` is reachable from the network even when the host firewall says
   otherwise ([The quickstart](container.md#the-quickstart));
@@ -72,19 +72,19 @@ page: our own design.
   would travel over plain `http`, and a stored-query database password
   without `sslmode=require`. The startup banner and a `WARN` line name each
   unencrypted credential the development profile admits
-  ([What must travel encrypted](configuration.md#what-must-travel-encrypted)).
+  ([What must travel encrypted](service-endpoints.md#what-must-travel-encrypted)).
 - [ ] **Use `https` for every node that receives a credential**, and mutual
   TLS where a node or a national service asks for it: `client_identity_file`
   and `trust_roots_file` in the `tls` table of the endpoint's credentials or
   of the service's table ([Mutual TLS to a node](onward-credentials.md#mutual-tls-to-a-node-rfc-8705),
-  [Mutual TLS to the identity services](configuration.md#mutual-tls-to-the-identity-services)).
+  [Mutual TLS to the identity services](service-endpoints.md#mutual-tls-to-the-identity-services)).
 - [ ] **Send the IHE audit over TLS.** The FHIR Feed URL is `https` and the
   ITI-55 syslog repository is TLS outside development
   ([The audit trail](audit.md)).
-- [ ] **Run the OpenTelemetry collector beside the gateway.** The metrics
-  push and the span export are gRPC without TLS; let the collector forward
-  over TLS ([Tracing](tracing.md),
-  [#644](https://github.com/FerroHEALTH/FerroFED/issues/644)).
+- [ ] **Export telemetry over TLS.** Give `[telemetry.otlp]` an `https://`
+  endpoint, with `[telemetry.otlp.tls]` for a private collector, or run the
+  collector beside the gateway on loopback
+  ([A remote collector over TLS](tracing.md#a-remote-collector-over-tls)).
 
 ## Callers and issuers
 

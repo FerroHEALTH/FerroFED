@@ -11,6 +11,7 @@
 #[cfg(feature = "binding-ihe")]
 mod audit;
 mod check;
+mod contact_point_reports;
 mod discharge;
 mod discharge_received;
 mod display;
@@ -20,6 +21,7 @@ mod inserted;
 mod laboratory;
 mod laboratory_grant;
 mod refused;
+mod report_grant;
 mod representative;
 mod start;
 mod vaccination;

@@ -53,8 +53,7 @@ the origin of `gateway.public_url`, the request's whole path appended
 ## Behind a reverse proxy
 
 The gateway names each request by the address it came from, which the
-access log of [#623](https://github.com/FerroHEALTH/FerroFED/issues/623)
-records ([The audit trail](audit.md)). That is the address of the
+[access log](access-log.md) records ([The audit trail](audit.md)). That is the address of the
 connection's peer, so behind a reverse proxy it is the proxy's. The
 client's own address reaches the gateway only in a header the proxy writes,
 which any client can write as well, so the gateway reads it only from a

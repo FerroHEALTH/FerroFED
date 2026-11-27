@@ -23,12 +23,8 @@
 //! pseudonym (eHDSI Section I Security Policies 10.0.0 SR 5).
 
 use std::collections::BTreeMap;
-use std::fmt::Write as _;
-use std::sync::LazyLock;
 use std::time::Instant;
 
-use aws_lc_rs::hmac;
-use aws_lc_rs::rand::SystemRandom;
 use axum::response::Response;
 use ferrofed_engine::conveyance::relayed::Relayed;
 use ferrofed_registry::id::{EhrId, NodeId};
@@ -37,6 +33,7 @@ use secrecy::ExposeSecret;
 use super::confined::Unconfined;
 use crate::auth::caller::Caller;
 use crate::auth::contact_point::TrcPatient;
+use crate::digest::pseudonym;
 use crate::error::{self, Code};
 use crate::federation::Federation;
 use crate::security::{Event, TARGET};
@@ -204,30 +201,6 @@ pub(crate) enum Reached<'a> {
     Ehr(&'a EhrId),
     /// A request that names no patient or EHR, of the kind it names.
     Unbound(&'static str),
-}
-
-/// The key the pseudonyms of one process are drawn with, generated at
-/// start and never written anywhere.
-static PSEUDONYM_KEY: LazyLock<Option<hmac::Key>> = LazyLock::new(|| {
-    // NOTE: no specification governs this: our own design; with no random source the
-    // record names no pseudonym, and never the identifier in its place.
-    hmac::Key::generate(hmac::HMAC_SHA256, &SystemRandom::new()).ok()
-});
-
-/// The pseudonym of `identifier`: the first 16 bytes of its HMAC-SHA256
-/// under this process's key, in hexadecimal.
-fn pseudonym(identifier: &str) -> String {
-    let Some(key) = PSEUDONYM_KEY.as_ref() else {
-        return String::from("unavailable");
-    };
-    let tag = hmac::sign(key, identifier.as_bytes());
-    tag.as_ref()
-        .iter()
-        .take(16)
-        .fold(String::with_capacity(32), |mut hex, byte| {
-            let _hex_written = write!(hex, "{byte:02x}");
-            hex
-        })
 }
 
 /// Records that the contact point relaying `relayed` reached `reached`
