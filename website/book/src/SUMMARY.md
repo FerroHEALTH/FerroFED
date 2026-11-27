@@ -39,6 +39,10 @@
 - [Data protection](evaluate/data-protection.md)
 - [Threat model](evaluate/threat-model.md)
 
+# Explanation
+
+- [How FerroFED federates](explanation/how-ferrofed-federates.md)
+
 # Integrate
 
 - [The client contract](integrate/client-contract.md)
