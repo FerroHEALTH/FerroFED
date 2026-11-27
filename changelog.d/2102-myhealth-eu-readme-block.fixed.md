@@ -1,0 +1,1 @@
+- The README's MyHealth@EU badges render as badges again on GitHub; the block showed as raw markdown text.
