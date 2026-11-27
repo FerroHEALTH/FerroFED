@@ -1,0 +1,1 @@
+- The configuration page no longer says a renamed key is still read under its old name with a warning: a release that renames or removes a key stops reading it and refuses it by name for that one release. A test now fails when a book page quotes a removal refusal `config::retired` does not declare.

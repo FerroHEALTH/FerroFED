@@ -63,12 +63,11 @@ cannot carry: a basic user or password holding a control character such as a new
 §2), or a basic user holding a colon. That refusal names the key the value came from, and never
 the value. The gateway never falls back to a default for a value you set.
 
-A key a release renamed is still read under its old name for at least one
-release. `config check` prints a `warning:` line for it, naming the key that
-replaces it and the release that will refuse it, and `serve` logs the same
-at start; setting both the old and the new key is refused
-([the compatibility policy](upgrading.md#the-compatibility-policy)). No key
-is deprecated in this release.
+A release that renames or removes a key stops reading it. For that one
+release the old key is refused by name, with the key that replaces it, and
+from the next release on it is refused as any unknown key is
+([the compatibility policy](upgrading.md#the-compatibility-policy)). Both
+start-up and `config check` refuse it.
 
 With a FHIR face (`[fhir]`), `config check` also prints a `note:` line for
 each Art 14(1) category the face receives, naming the member its

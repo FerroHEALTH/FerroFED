@@ -42,6 +42,9 @@ pub fn check(_config: &Config) -> Result<(), RemovedKeys> {
 }
 
 #[cfg(test)]
+mod book;
+
+#[cfg(test)]
 mod tests {
     use ferrohealth_config::removed::stale;
 
