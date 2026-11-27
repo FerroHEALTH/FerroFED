@@ -19,16 +19,16 @@ report behind its status.
 
 | Status | Statements | Gateway statements | Meaning |
 |---|---|---|---|
-| tested | 362 | 357 | a test asserts it |
+| tested | 364 | 359 | a test asserts it |
 | built-untested | 0 | 0 | the code does it and no test asserts it yet |
 | planned | 0 | 0 | not built yet; an open issue holds the work |
 | missing | 0 | 0 | not built, found missing by the audit; an issue holds the work |
-| deferred | 10 | 9 | not built, or a permission or recommendation not taken, by a recorded decision |
+| deferred | 7 | 7 | not built, or a permission or recommendation not taken, by a recorded decision |
 | new-gap | 7 | 7 | the text contradicts itself or is silent, found by the audit and reported on [#212](https://github.com/FerroHEALTH/FerroFED/issues/212) |
 | contradiction | 5 | 4 | the text contradicts itself, reported on [#212](https://github.com/FerroHEALTH/FerroFED/issues/212) before the audit |
 | node | 17 | 0 | a member node must meet it |
 | operator | 26 | 0 | the federation operator must meet it |
-| n/a | 21 | 0 | a statement addressed to a client or an editor, which binds no gateway, node or operator |
+| n/a | 22 | 0 | a statement addressed to a client or an editor, which binds no gateway, node or operator |
 
 ## Gaps
 
@@ -80,6 +80,3 @@ None.
 | [partial-results#11.6.4.2](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/partial-results.html) | Gateway | MUST | N39 | CP-32 | meta.federation MUST carry the cursor handle and its expiry, and the gateway MUST NOT re-run the fan-out mid-cursor | owner decision on [#16](https://github.com/FerroHEALTH/FerroFED/issues/16), re-decided on [#2046](https://github.com/FerroHEALTH/FerroFED/issues/2046) (§11.6.4 marks the cursor OPTIONAL): no cursor, so no handle is carried; pinned by `app/ferrofed-server/tests/it/order.rs::a_bounded_offset_page_is_computed_afresh_and_carries_no_cursor` |
 | [partial-results#11.7.1](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/partial-results.html) | Gateway | MAY | - | - | the Tier MAY support the Exchange-Routing async pattern | owner decision on [#16](https://github.com/FerroHEALTH/FerroFED/issues/16): Prefer: respond-async is ignored and answered synchronously: `app/ferrofed-server/tests/it/timeouts.rs::respond_async_is_ignored_and_answered_synchronously`; `app/ferrofed-server/tests/it/timeouts.rs::respond_async_never_exempts_a_request_from_the_overall_budget` ([#59](https://github.com/FerroHEALTH/FerroFED/issues/59) closed) |
 | [follow-up-routing#12.1.1](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/follow-up-routing.html) | Gateway | MAY | - | - | The Tier MAY still use short codes for endpoint addressing, just never inside a uid | decided on [#2046](https://github.com/FerroHEALTH/FerroFED/issues/2046): a permission FerroFED leaves; an endpoint is addressed by its endpoint_id alone and no short code is used |
-| [testing#track-8.1](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/testing.html#track-8) | Gateway | MAY | N3 | - | Hooks reserved; full propagation MAY be deferred | owner decision on [#16](https://github.com/FerroHEALTH/FerroFED/issues/16); conformance/tracks.tsv track 8 deferred; hooks built ([#48](https://github.com/FerroHEALTH/FerroFED/issues/48)), intake [#147](https://github.com/FerroHEALTH/FerroFED/issues/147) |
-| [testing#track-11.1](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/testing.html#track-11) | Gateway | MAY | N3 | - | Its subject matter, full propagation of PMIR identity merges and splits, MAY be deferred to a future release | owner decision on [#16](https://github.com/FerroHEALTH/FerroFED/issues/16); track 8 deferred |
-| [future#18.4](https://syntaric.github.io/openehr-federation-spec/federation-aql/1.0/future.html) | Editor | MAY | N3 | - | full propagation of identity merges/splits across the federation MAY be deferred to a later release | owner decision on [#16](https://github.com/FerroHEALTH/FerroFED/issues/16); track 8 |

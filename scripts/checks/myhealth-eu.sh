@@ -107,7 +107,9 @@ has_test() {
   awk -v want="$name" '
     { line[NR] = $0 }
     $0 ~ ("fn " want "\\(") {
-      for (k = NR - 1; k > 0 && line[k] ~ /^[[:space:]]*(#\[|\/\/)/; k--)
+      # Walk back over the attributes and comments above the fn, a
+      # multi-line attribute included, to the end of the item before it.
+      for (k = NR - 1; k > 0 && line[k] !~ /^[[:space:]]*$/ && line[k] !~ /[;{}][[:space:]]*$/; k--)
         if (line[k] ~ /^[[:space:]]*#\[.*test(\]|\()/) found = 1
     }
     END { exit !found }
@@ -317,7 +319,7 @@ self_test() {
     cp "$render" "$repo/scripts/conformance/myhealth-eu.sh"
     cp -R "$(dirname "$script")/badge-logos" "$repo/scripts/checks/badge-logos"
     printf '# Evidence\n\n## The evidence\n' > "$repo/docs/evidence.md"
-    printf '#[test]\nfn a_test() {}\n\nfn not_a_test() {}\n' > "$repo/tests/it.rs"
+    printf '#[test]\nfn a_test() {}\n\nfn not_a_test() {}\n\n#[tokio::test]\n#[expect(\n    clippy::panic_in_result_fn,\n    reason = "a test asserts"\n)]\nasync fn an_expecting_test() {}\n' > "$repo/tests/it.rs"
     {
       printf '# a comment\n%s\n' "$HEADER"
       for pair in $IDS; do
@@ -429,6 +431,9 @@ self_test() {
   row 06 4 'tests/it.rs::not_a_test'
   rerender
   expect "a function that is no test" 1 "has no test \"not_a_test\""
+  row 06 4 'tests/it.rs::an_expecting_test'
+  rerender
+  expect "a test under a multi-line attribute" 0
   fixture
   row 06 4 "docs/evidence.md::No such heading"
   rerender

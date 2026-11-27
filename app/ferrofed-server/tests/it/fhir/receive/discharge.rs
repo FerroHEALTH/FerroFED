@@ -33,16 +33,16 @@ use crate::fhir::list::{binary, entries, list};
 use crate::support::call;
 
 /// The version of node A's discharge composition, created at node A.
-const VERSION: &str = "5b0c3f7e-0000-4000-8000-00000000d1a1::cdr-a.example.org::1";
+pub(super) const VERSION: &str = "5b0c3f7e-0000-4000-8000-00000000d1a1::cdr-a.example.org::1";
 
 /// The versioned object of [`VERSION`].
-const OBJECT: &str = "5b0c3f7e-0000-4000-8000-00000000d1a1";
+pub(super) const OBJECT: &str = "5b0c3f7e-0000-4000-8000-00000000d1a1";
 
 /// The `[fhir]` tables of a face that writes discharge reports with
 /// `report`, the `[[fhir.report]]` entry, the header asked of the PDQm
 /// Supplier at `pdq`, and the terminology server `terminology` answers
 /// eHDSILanguage at.
-fn writing(pdq: &str, report: &str, terminology: &Server) -> String {
+pub(super) fn writing(pdq: &str, report: &str, terminology: &Server) -> String {
     fhir_tables_with(
         pdq,
         &format!("receive_namespaces = [\"{NAMESPACE}\"]"),
@@ -51,7 +51,7 @@ fn writing(pdq: &str, report: &str, terminology: &Server) -> String {
 }
 
 /// The `[[fhir.report]]` entry of the vendored discharge report template.
-fn declared() -> String {
+pub(super) fn declared() -> String {
     let path = |value: &Path| toml::Value::String(value.display().to_string()).to_string();
     let archetypes = discharge::archetype_paths()
         .iter()
@@ -88,7 +88,7 @@ fn gateway(
 
 /// A node answering the discharge report query with `rows` and every other
 /// query with none, and the read of its composition with `composition`.
-async fn holding(rows: &str, composition: Option<&str>) -> Server {
+pub(super) async fn holding(rows: &str, composition: Option<&str>) -> Server {
     let server = Server::start().await;
     let columns = r#"[{"name":"composition","path":"c"},{"name":"uid","path":"c/uid/value"},{"name":"template_id","path":"c/archetype_details/template_id/value"}]"#;
     let answer = |rows: &str| {
