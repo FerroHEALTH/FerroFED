@@ -568,9 +568,19 @@ stay with the contact point:
   point's. A report
   the gateway writes from an openEHR composition is a new document in the
   exchange format, and no original.
-- **Transcoding and translation.** Implementing Regulation (EU) 2026/2083
-  Art 3(4) and (5) give the mapping and translation of codes to the Member
-  State, with the Commission's central terminology service.
+- **Translation into other languages, and transcoding by default.**
+  Implementing Regulation (EU) 2026/2083 Art 3(4) and (5) give the mapping
+  and translation of codes to the Member State, with the Commission's
+  central terminology service, and the national infrastructure is part of
+  the Member State. With `[eehrxf.terminology] transcode = "myhealth-eu"`
+  a deployment that is the contact point's national infrastructure
+  transcodes on the national side through its terminology server: the
+  summary and the reports gain the codings the MyHealth@EU bindings take
+  ([Transcoding for MyHealth@EU](terminology.md#transcoding-for-myhealtheu)),
+  and a received dispensation is translated back into its owner's code
+  systems
+  ([Translating a dispensation](prescriptions.md#translating-a-dispensation-into-the-members-code-systems)).
+  Without that option, transcoding stays with the contact point.
 - **HCP and treatment-relationship assertions, SMP and cross-border
   transport.** They belong to the exchange between contact points, which
   the NCPeH API guide specifies, and to the secure network the contact
