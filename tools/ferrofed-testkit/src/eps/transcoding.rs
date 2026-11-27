@@ -55,7 +55,7 @@ pub fn coded_allergy_composition(uid: &str, template: &str) -> String {
             "value": SUBSTANCE.1,
             "defining_code": {
                 "_type": "CODE_PHRASE",
-                "terminology_id": { "_type": "TERMINOLOGY_ID", "value": "SNOMED-CT" },
+                "terminology_id": { "_type": "TERMINOLOGY_ID", "value": SNOMED },
                 "code_string": SUBSTANCE.0
             }
         });
