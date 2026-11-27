@@ -49,13 +49,17 @@ above whatever the filter says.
 
 An `https://` `endpoint` exports the spans over TLS to a collector anywhere,
 with no forwarder beside the gateway. The gateway trusts the platform's
-roots, and two keys add what a private collector needs:
+roots, and the `[telemetry.otlp.tls]` table adds what a private collector
+needs:
 
 ```toml
 [telemetry.otlp]
 endpoint = "https://otel.example.org:4317"
+
+[telemetry.otlp.tls]
 trust_roots_file = "/run/secrets/ferrofed/otel-ca.pem"              # PEM roots beside the platform's
 client_identity_file = "/run/secrets/ferrofed/otel-client.pem"      # chain and key, PEM, for mutual TLS
+min_version = "1.3"                                                 # the default; "1.2" for an older collector
 ```
 
 Each file is read once, at start, and checked: the client identity must hold

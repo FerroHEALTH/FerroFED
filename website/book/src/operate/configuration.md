@@ -278,7 +278,7 @@ endpoint = "http://127.0.0.1:4317"   # an OTLP gRPC collector, http:// beside th
 traces = true          # export the spans
 metrics = true         # push the metrics
 sample_ratio = 1.0     # the share of requests whose spans are exported, 0.0 to 1.0
-# trust_roots_file and client_identity_file add the TLS of an https:// collector.
+# [telemetry.otlp.tls] adds the TLS of an https:// collector: trust_roots_file and client_identity_file.
 
 # The metrics surface, off by default; see Metrics.
 [metrics]
@@ -418,10 +418,7 @@ password_file = "/run/secrets/pdq-password"
 
 When a service refuses a token with `401`, the gateway drops the token and
 sends the call once more with a fresh one, and a second `401` fails the
-call (RFC 6750 §3.1). The
-`url`, `credentials` and `tls` keys sat on the table itself before release
-0.0.19; a configuration that still sets one there is refused, naming the
-`endpoint` key that replaces it ([Upgrading](upgrading.md)).
+call (RFC 6750 §3.1).
 
 ### A PIX Manager asked by `GET` or `POST`
 

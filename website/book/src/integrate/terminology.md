@@ -102,7 +102,7 @@ With no server configured, nothing is translated and a code in no preferred
 system follows Art 10(7). A received coding with no display is refused, and
 a `required` binding no vendored expansion decides is listed as not
 evaluated. A server that refuses an operation, or does not answer within
-`timeout_ms`, is an error that names the operation and the server's status,
+`timeout`, is an error that names the operation and the server's status,
 never a coding left out or a binding taken as held.
 
 FerroTERM is the terminology server of the Ferro family. The gateway reaches

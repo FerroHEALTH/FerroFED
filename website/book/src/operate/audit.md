@@ -173,10 +173,7 @@ The FHIR Feed records follow the policy of the ITI-55 audit trail. Every
 record is written to the spool first, flushed to disk, and delivered from
 there in order, so it counts as recorded once it is on disk. One writer
 appends the records that arrive together to the spool's active segment
-file and flushes them to the disk once. A spool directory a release before
-0.0.21 wrote holds one `.msg` file per record, which this release refuses
-at start, naming the file: let the older release deliver them, or move
-them out, before you upgrade. While the repository is down, or answers
+file and flushes them to the disk once. While the repository is down, or answers
 `5xx`, `408` or `429`, the transactions go on and the records wait in the
 spool. One delivery is one round of the `[audit.repository.endpoint]`
 `retry` table's tries, and a failed round waits `retry.max_backoff` before
@@ -228,7 +225,7 @@ without limit, so the wait is bounded, on both spools:
 - and, for an ITI-83 query, an ITI-78 search or ITI-119 match of the
   `[pdqm]` step, or an ITI-55 discovery, by the time the transaction was
   given: what is left of the patient query's budget, of the step's
-  `timeout_ms`, or of the localization's time. Whichever bound comes first
+  `timeout`, or of the localization's time. Whichever bound comes first
   applies.
 
 On a loaded host a durable write waits for the journal to commit other

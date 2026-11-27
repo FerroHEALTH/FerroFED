@@ -160,7 +160,7 @@ answer` repeats at most once every five minutes, with `down_for_s`. The
 first probe that finds it answering again logs `the store answers again`, with
 how long it was down. The five minutes are FerroFED's own choice.
 
-A database that cannot be reached at start, or within `timeout_ms`, refuses
+A database that cannot be reached at start, or within `timeout`, refuses
 the start. Once running, a request that needs the store while the database
 does not answer is refused, and is never answered from memory: a stored
 query read or `PUT` answers `500`, names nothing in the body, and the log
@@ -173,25 +173,3 @@ A table whose rows expire carries the end of each row's window in a column
 its window from every such table of the schema `ferrofed`, so the store
 keeps a row no longer than its rule needs. The stored-query definitions have
 no window and are never swept.
-
-## Moving from `[stored_queries] url`
-
-The `postgres` backend of the stored-query registry used to read its own
-connection string, `[stored_queries] url` or `url_file`. Those keys are
-gone since 0.0.17, and a configuration that still sets either refuses to
-start with an unknown key. Move the connection string to `[store]`, point it at
-the database the backend already uses, and set `sslmode=require`:
-
-```toml
-[stored_queries]
-backend = "postgres"
-
-[store]
-url_file = "/run/secrets/ferrofed/store-url"
-ca_file = "/etc/ferrofed/store-ca.pem"
-```
-
-The table of definitions is the store's first migration, so the gateway
-takes over the existing table with every definition it holds, and a version
-it held is refused a second `PUT` as before. [Upgrading](upgrading.md) lists
-the step.

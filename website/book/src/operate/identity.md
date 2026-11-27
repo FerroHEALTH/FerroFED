@@ -148,13 +148,11 @@ scope = "*"                             # the scopes the Manager's server define
 - `token_endpoint` is `https` outside the development profile: the client
   secret or assertion travels to it. One discovered from `issuer` is always
   `https`.
-- The `oauth2` and `fapi2` tables of earlier releases are refused here,
-  naming the `oauth` table that replaces them, and so is an `onward`
-  table, which only a node takes
+- An `onward` table is refused here, since only a node takes one
   ([Onward credentials](onward-credentials.md)).
   `config check` names every key it refuses, and never a secret.
 
-The gateway caches the token until `refresh_margin_ms`, 30 seconds by
+The gateway caches the token until `refresh_margin`, 30 seconds by
 default, before the `expires_in` the token response states, and incorporates it in each ITI-83 request as
 `Authorization: Bearer` (ITI-72 §3.72.4.2). A token with no stated lifetime
 serves the one request it was obtained for. When the Manager answers `401`,
@@ -178,7 +176,7 @@ A member whose domain holds two identifiers, or one that is no `ehr_id`, is a
 candidate, because the Manager holds the patient there; its resolution then
 reports why it could not be asked. A Manager that fails, answers in a form
 the gateway cannot read, or does not answer within
-`[federation.localization] timeout_ms` fails the localization closed
+`[federation.localization] timeout` fails the localization closed
 (§14.1): every member is `not-localized` with the error, and no member is
 asked unless `on_failure = "ask-all"`. `OPTIONS {base}/` declares
 `localization.mode` as `"pixm"`. With `[xcpd]` set, XCPD localizes and
@@ -482,7 +480,7 @@ password_file = "/run/secrets/pdq-password"
 | one active Patient carrying exactly one identifier in the master domain (for ITI-119, graded `certain`) | localized and resolved by the master identifier | goes on |
 | no Patient, or one with no master identifier (PDQm §2:3.78.4.1.3 Case 3, §2:3.119.4.1.3 Cases 4, 5 and 7) | `not-resolved` | goes on; `complete` is false (N6) |
 | more than one Patient, a Patient with two master identifiers, or an ITI-119 match not graded `certain` | `not-resolved`, with the reason in `error` | fails `424` under all-or-nothing |
-| a failure, or no answer within `timeout_ms` | `not-localized` with the error under `on_failure = "closed"`; `not-resolved` under `"ask-all"` and on a directed query | `200` under `"closed"` (§14.1); `424` otherwise |
+| a failure, or no answer within `timeout` | `not-localized` with the error under `on_failure = "closed"`; `not-resolved` under `"ask-all"` and on a directed query | `200` under `"closed"` (§14.1); `424` otherwise |
 
 A Patient with `active` set to `false` is a deprecated record and never a
 match (§2:3.78.4.1.3 Case 6). The gateway never picks one of several
@@ -503,18 +501,10 @@ state shows as `demographics` on
 [`GET {base}/operator/dependencies`](health.md#the-dependency-report), and each call is counted in
 `ferrofed_demographics_requests_total` ([Metrics](metrics.md)).
 
-## No patient index: `[dev]` is refused
+## No patient index
 
 FerroFED keeps no table of patient identifiers, not even for a laptop or a
-test (no specification governs this: our own design). Earlier releases read
-a static cross-reference, `[[dev.crossref]]`, under `profile =
-"development"`. A configuration that still sets `[dev]` is refused at load:
-
-```text
-ferrofed: cannot start: [dev] is no longer read: FerroFED keeps no patient index, so it resolves every patient through a PIX Manager; remove [dev] and configure [[pixm.manager]]
-```
-
-The refusal quotes no row of the table. To try FerroFED with synthetic
+test (no specification governs this: our own design). To try FerroFED with synthetic
 patients, run the [quickstart](container.md#the-quickstart): it starts
 FerroPIX, seeds it with the synthetic patients over ITI-104, and resolves
 through `[[pixm.manager]]`.

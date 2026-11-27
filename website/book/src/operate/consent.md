@@ -223,7 +223,7 @@ then asked under a legal basis you hold, and its node applies the rules
 that bind it.
 
 Mitz answers `Permit` or `Deny` per category. `Indeterminate`, a fault, a
-status other than `200`, silence past `timeout_ms` and an answer that does
+status other than `200`, silence past `timeout` and an answer that does
 not hold to the question are no decision: the members of that holder are
 asked, and the failure is carried in `meta.federation.consent.error`. Mitz
 3.8.2 §3.2.4.6 tells the data holder's own system to treat `Indeterminate`

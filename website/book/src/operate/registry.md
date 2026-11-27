@@ -205,7 +205,7 @@ A refresh that changed something goes through the same checks as a reload:
   the same instant, so the registry follows the directory once the
   directory, or the configuration, is put right.
 - When the directory's answer runs past `deadline`, `max_pages`,
-  `max_bytes` or `max_entries`, the refresh is refused the same way with
+  `max_size` or `max_entries`, the refresh is refused the same way with
   `class = "registry-budget"`; an answer that does not hold to ITI-91 is
   refused with `class = "registry-unreadable"`. Both count as a refused
   reload. Each limit bounds one whole read or refresh,
@@ -317,7 +317,7 @@ its localizer to narrow which members learn of a patient keeps that narrowing
 on every patient route
 ([Reading an EHR by subject](../integrate/follow-ups.md#reading-an-ehr-by-subject)).
 
-When the localizer does not answer within `timeout_ms`, or fails, the gateway
+When the localizer does not answer within `timeout`, or fails, the gateway
 fails closed: it asks no member, reports every member `not-localized` with the
 localizer's error, and carries the same error as
 `meta.federation.localization.error`, so an outage never reads as a patient

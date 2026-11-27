@@ -47,7 +47,7 @@ and never issues them. The token is a JWT access token, verified as follows:
   `iss`, `exp`, `aud`, `sub`, `client_id`, `iat` and `jti`. A `sub` that is
   empty or blank names no caller and is refused;
 - `aud` names one of the issuer's `audience`;
-- `exp`, `nbf` and `iat` hold within the issuer's `clock_skew_seconds`;
+- `exp`, `nbf` and `iat` hold within the issuer's `clock_skew`;
 - the token names a caller the issuer's `kind` admits
   ([Who the caller is](#who-the-caller-is)).
 
@@ -139,11 +139,11 @@ demographic_clients = []
 | `auth.issuer[].kind` | none | `federation` for another party's issuer; unset for a SMART App Launch 2.2 authorization server ([Who the caller is](#who-the-caller-is)). Name each issuer in one table only: a second table of the same issuer refuses the start. |
 | `auth.issuer[].audience` | the public URL | The audiences, of which every token of the issuer names one in `aud` (RFC 9068 §4). Unset, the `gateway.public_url` as written; an issuer without an audience refuses the start. |
 | `auth.issuer[].algorithms` | six | The signature algorithms admitted: RS256, RS384, PS256, PS384, ES256 and ES384. An HMAC algorithm refuses the start. |
-| `auth.issuer[].clock_skew_seconds` | `60` | The leeway on `exp`, `nbf` and `iat`, at most `300` (RFC 7519 §4.1.4). |
-| `auth.issuer[].jwks_max_age_seconds` | `600` | How long a key set is used before it is read again. |
-| `auth.issuer[].jwks_refresh_interval_seconds` | `60` | The least time between two reads of one key set, after an unknown `kid` or a failed read. |
+| `auth.issuer[].clock_skew` | `60s` | The leeway on `exp`, `nbf` and `iat`, at most five minutes (RFC 7519 §4.1.4). |
+| `auth.issuer[].jwks_max_age` | `10min` | How long a key set is used before it is read again. |
+| `auth.issuer[].jwks_refresh_interval` | `60s` | The least time between two reads of one key set, after an unknown `kid` or a failed read. |
 | `auth.issuer[].jwks_file` | none | A JWK Set file handed over out of band, read in place of the `jwks_uri` the issuer's metadata names. A file holding a symmetric key or private key material refuses the start, naming the key's index and `kid` and never a value. |
-| `auth.issuer[].timeout_ms` | `10000` | How long one call to the authorization server may take: its metadata, its key set, or an introspection. |
+| `auth.issuer[].timeout` | `10s` | How long one call to the authorization server may take: its metadata, its key set, or an introspection. |
 | `auth.issuer[].role_claims` | `["roles", "groups", "entitlements"]` | The claims `ferrohealth-smart` reads a token's roles from, each a dotted path. The gateway grants nothing by these roles: the professional's roles it conveys come from the IUA `subject_role`. |
 | `auth.issuer[].mode` | `jwt` | `jwt`: the token is a JWT checked against the key set. `introspection`: the token is checked at the issuer's RFC 7662 endpoint, under `[auth.issuer.<name>.introspection]`. One issuer at most is introspected. |
 | `auth.issuer[].introspection.endpoint` | the metadata's | The introspection endpoint, in place of the one the issuer's metadata names. |
@@ -166,10 +166,9 @@ demographic_clients = []
 | `trust.issuer[].patient.ehr_id_system` | none | The identifier system under which the cross-reference service knows that member's `ehr_id`s. |
 | `trust.issuer[].requester` | none | Refused: who asks for the data is read from the `professional.hp_identifier`, `professional.hp_professional_role`, `provider.healthcare_provider_identifier` and `provider.facility_type` fields of the issuer's `[auth.issuer.<name>.federation]` table, which the [Mitz consent pre-filter](consent.md#dutch-consent-nl_gfmitz) asks about. |
 | `trust.issuer[].client_tokens_act_for_professional` | none | Refused: a token `ferrohealth-smart` classifies as a system's reaches no patient data ([Professionals and assurance](#professionals-and-assurance)). |
-| `auth.attributes[].issuer` | none | An issuer whose tokens state their professional: its name, identifier and roles, the organisation and the purposes of use, read by `ferrohealth-smart` ([What a token states about its professional](#what-a-token-states-about-its-professional)); a patient's, a related person's or a system's token states its purposes of use alone. Without a table, a token of the issuer states none of them. |
-| `auth.attributes[].mapping` | none | `iua`: read the IHE IUA extension, `extensions.ihe_iua` (ITI TF-2 3.71.4.2.2.1.1). |
-| `auth.attributes[].authorization_details_purposes` | `false` | Whether the `system\|code` `purpose_of_use` of each RFC 9396 `authorization_details` entry is read as a purpose of use too (Annex B §B.4a.3). |
-| `auth.attributes[].fields` | `{}` | Sources over the mapping's, one list per field, each `{ claim = "<dotted path>" }` or `{ constant = "<value>" }`. `"professional.issuing_authority_name"` names the agency that issued the professional's identifier (Implementing Regulation (EU) 2026/2099 Annex Table 1 `issuing_authority_name`), which IHE IUA defines no claim for. |
+| `auth.issuer[].attributes.mapping` | none | Setting the issuer's `[auth.issuer.<name>.attributes]` table has its tokens state their professional: the name, identifier and roles, the organisation and the purposes of use, read by `ferrohealth-smart` ([What a token states about its professional](#what-a-token-states-about-its-professional)); a patient's, a related person's or a system's token states its purposes of use alone. Without the table, a token of the issuer states none of them. `iua`: read the IHE IUA extension, `extensions.ihe_iua` (ITI TF-2 3.71.4.2.2.1.1). |
+| `auth.issuer[].attributes.authorization_details_purposes` | `false` | Whether the `system\|code` `purpose_of_use` of each RFC 9396 `authorization_details` entry is read as a purpose of use too (Annex B §B.4a.3). |
+| `auth.issuer[].attributes.fields` | `{}` | Sources over the mapping's, one list per field, each `{ claim = "<dotted path>" }` or `{ constant = "<value>" }`. `"professional.issuing_authority_name"` names the agency that issued the professional's identifier (Implementing Regulation (EU) 2026/2099 Annex Table 1 `issuing_authority_name`), which IHE IUA defines no claim for. |
 | `trust.issuer[].assurance` | none | Refused: set the issuer's `[auth.issuer.<name>.assurance]` table instead. |
 | `federation.contact_point[].issuer` | none | A national contact point: an `[auth.issuer.<name>]` of `kind = "federation"` whose `[auth.issuer.<name>.federation]` table sets `contact_point = true` ([National contact points](#national-contact-points)). Every such issuer needs one `[[federation.contact_point]]`, and one naming any other issuer is refused. |
 | `federation.contact_point[].correlation_header` | none | The request header the contact point's connector sends its correlation identifier in, recorded in the access record. A header that carries a credential (`Authorization`, `Proxy-Authorization`, `Cookie`, `DPoP`) is refused. |
@@ -180,18 +179,10 @@ demographic_clients = []
 So are `auth.capabilities`,
 `auth.scopes_supported` and `auth.described_issuer`, which the gateway reads
 nowhere: it serves no SMART
-discovery document and grants nothing without a scope. A key `[auth]` held
-for every issuer before `ferrohealth-smart` 0.9 (`audience`, `algorithms`,
-`clock_skew_seconds`, `jwks_max_age_seconds`, `jwks_refresh_interval_seconds`,
-`jwks_file`, `timeout_ms`, `mode`, `role_claims`) is refused at the section,
-naming the `[auth.issuer.<name>]` table it moved to, and so is an issuer written
-as `[auth] issuer = "…"`. The issuer keys `kind` (other than `federation`),
-`preset`, `profile_file` and `scopeless_subjects`, the `[auth.idp]` table and
-the profile keys that listed clients or classified callers
-(`first_party_clients`, `delegates`, `audience_delegates`,
-`issuer_client_is_person`, `patient_context`, `fhir_user_patient`,
-`representation`, `act_represents_patient`, `guest` and the vendor keys) are
-unknown keys, refused at load. A `[[trust.issuer]]` entry names an
+discovery document and grants nothing without a scope. Every issuer key
+sits on its `[auth.issuer.<name>]` table: one written on `[auth]`, such as
+`audience`, is an unknown key and refused at load, as is any key the table
+above does not name. A `[[trust.issuer]]` entry names an
 `[auth.issuer.<name>]`. A gateway that federates and lists no
 issuer refuses to start, with exit code `78`, because it could admit no one.
 Each bad value refuses to start under its key; a value `ferrohealth-smart`
@@ -210,10 +201,10 @@ The gateway reads an issuer's metadata at its RFC 8414 location, with
 OpenID Connect Discovery 1.0 as the fallback, and the key set its
 `jwks_uri` names, when a token of that issuer first needs them; with the
 issuer's `jwks_file` it reads the file and no metadata. The set is read again
-once it is older than `jwks_max_age_seconds`. A token naming a key the set
+once it is older than `jwks_max_age`. A token naming a key the set
 does not hold makes the gateway read the set once more, so a key the issuer
 rotated in is picked up; that read happens at most once per
-`jwks_refresh_interval_seconds`, so tokens naming unknown keys cannot make
+`jwks_refresh_interval`, so tokens naming unknown keys cannot make
 the gateway flood the issuer. Metadata or a key set that cannot be read is a
 `503` (`authentication-unavailable`), never a pass, and a failed read is not
 repeated inside the refresh interval. A key declared for another use or

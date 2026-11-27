@@ -61,8 +61,7 @@ the `redb` file and the PostgreSQL table as before and leave the version
 table alone, so a rollback to one of them needs no restore while the store
 is at version 1. A release before `[store]` reads the PostgreSQL connection
 string from `[stored_queries] url` or `url_file` and refuses `[store]`, so
-move the string back before you start it
-([Moving from `[stored_queries] url`](store.md#moving-from-stored_queries-url)).
+move the string back before you start it.
 
 With several replicas on one PostgreSQL store, a replica of the earlier
 release refuses its next connection once a newer one has migrated the
