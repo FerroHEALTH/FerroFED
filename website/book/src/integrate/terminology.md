@@ -73,11 +73,9 @@ carries the codings its FHIRconnect mappings write: the original code as
 recorded, and a coding after it for each `TERM_MAPPING` whose `match` is
 `'='`. A mapping whose `match` is `'>'`, `'<'` or `'?'` is written as no
 coding, and its section's narrative carries it as one line, such as
-`AllergyIntolerance.code: broader term SNOMED-CT 762952008, from Hospital A.`
-([#926](https://github.com/FerroHEALTH/FerroFED/issues/926)). A code in no
+`AllergyIntolerance.code: broader term SNOMED-CT 762952008, from Hospital A.` A code in no
 preferred system is translated through the configured terminology server,
-as below, and with none is kept as recorded (Art 10(7))
-([#1213](https://github.com/FerroHEALTH/FerroFED/issues/1213)).
+as below, and with none is kept as recorded (Art 10(7)).
 
 ## The terminology server
 

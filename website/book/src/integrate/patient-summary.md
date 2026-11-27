@@ -247,8 +247,7 @@ every entry is named under the absolute URL of `{fhir-base}`.
 The tests hold every document the face writes to a structural check against
 the vendored `bundle-eu-eps`, `composition-eu-eps` and `patient-eu-eps`
 profiles, and CI runs HL7's FHIR Validator over every document those tests
-write and fails on an error
-([#688](https://github.com/FerroHEALTH/FerroFED/issues/688)).
+write and fails on an error.
 
 ## The document list
 

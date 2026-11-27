@@ -83,7 +83,7 @@ authenticates the gateway ([Identity resolution](identity.md)).
 
 Every request to a node also carries the verified caller in an
 `openEHR-federation-client` token the gateway signs with its own key (§13.1,
-N24, [#82](https://github.com/FerroHEALTH/FerroFED/issues/82)), so
+N24), so
 `[signing]` is required on every federating gateway, and every node that
 verifies the token needs the same JWK Set location
 ([What a node is told about the caller](caller-token.md)).

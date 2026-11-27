@@ -486,8 +486,7 @@ The Registry sends the feed to `pmir.callback_url`, which is
 
 Every IHE transaction the gateway makes is audited, and every access to
 patient data it intermediates is recorded with the caller it verified
-([The audit trail](audit.md),
-[#623](https://github.com/FerroHEALTH/FerroFED/issues/623)). Both go to your Audit Record
+([The audit trail](audit.md)). Both go to your Audit Record
 Repository as FHIR `AuditEvent`s, from a spool on the durable volume:
 
 ```toml
@@ -504,8 +503,8 @@ url = "https://arr.example.org/fhir"
 ```
 
 Outside the development profile, `config check` refuses this configuration
-without `destination`, naming `audit.destination`. With the access log of
-#623, a gateway with a registry refuses `log` as well, because the log
+without `destination`, naming `audit.destination`. A gateway with a
+registry refuses `log` as well, because the log
 target names no caller and no patient.
 
 A record counts as recorded once it is on the spool's disk. Keep the volume
