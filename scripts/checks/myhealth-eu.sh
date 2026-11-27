@@ -12,8 +12,11 @@
 #                 own section number, and no other id has one;
 #   the status    met, partly-met, waits-art-15-1, not-met, not-assessed or
 #                 not-applicable; a met or not-applicable row names no
-#                 issue, a waits-art-15-1 row names #1425, and every row
-#                 states FerroFED's conclusion;
+#                 issue, a waits-art-15-1 row names #1425, every row
+#                 states FerroFED's conclusion, and a not-applicable
+#                 row's conclusion names the public provision that assigns
+#                 the requirement elsewhere (an act by its number, eHDSI or
+#                 Xt-EHR) or says no read text assigns it;
 #   the tree      each evidence item is a file of the tree, and its anchor,
 #                 when it has one, is a heading of a Markdown file or a test
 #                 function of a Rust file;
@@ -72,6 +75,10 @@ readonly CATALOGUE_BYTES=10005748
 # catalogue's own names for the parties, which FerroFED writes in lower case.
 readonly REFUSED_VERBS='must|shall|should'
 readonly REFUSED_TERMS='NCPeH|NCP-A|NCP-B|Country of affiliation|Country of treatment'
+# A not-applicable conclusion names its provision: an act by its number
+# (2026/2083, Regulation (EU) 2025/327), an eHDSI specification or an
+# Xt-EHR deliverable, or the plain statement that no read text assigns it.
+readonly PROVISION='[0-9]{4}/[0-9]+|eHDSI|Xt-EHR|no read text assigns it; our own reading'
 readonly QUOTES=$'"|\xe2\x80\x9c|\xe2\x80\x9d|\xe2\x80\x9e|\xc2\xab|\xc2\xbb|\xe2\x80\x98'
 
 failures=0
@@ -250,6 +257,9 @@ run() {
     case "$status" in
     met | not-applicable)
       [[ "$issue" == - ]] || fail "$MAPPING line $line: a $status row names no issue."
+      if [[ "$status" == not-applicable ]] && ! printf '%s' "$note" | grep -Eq "$PROVISION"; then
+        fail "$MAPPING line $line: a not-applicable row names the provision that assigns it elsewhere, or says no read text assigns it; our own reading."
+      fi
       ;;
     waits-art-15-1)
       [[ " $issue " == *" #1425 "* ]] || fail "$MAPPING line $line: a waits-art-15-1 row names #1425."
@@ -369,6 +379,19 @@ self_test() {
   row 06 5 '#12 #1425'
   rerender
   expect "a waiting row with the act's issue" 0
+  fixture
+  row 06 3 not-applicable
+  rerender
+  expect "a not-applicable row naming no provision" 1 "names the provision"
+  row 06 6 'The contact points do it (2026/2083 Art 3(6)).'
+  rerender
+  expect "a not-applicable row naming an act" 0
+  row 06 6 'No read text assigns it; our own reading.'
+  rerender
+  expect "a not-applicable row in another case" 1 "names the provision"
+  row 06 6 'The contact point does it; no read text assigns it; our own reading.'
+  rerender
+  expect "a not-applicable row saying no text assigns it" 0
   fixture
   row 06 3 not-met
   row 06 5 '#12,#13'
