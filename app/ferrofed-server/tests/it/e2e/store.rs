@@ -259,6 +259,7 @@ async fn two_replicas_booting_together_over_an_empty_database_apply_each_migrati
     assert_eq!(
         vec![
             String::from("contact_point_dispensation"),
+            String::from("contact_point_requests"),
             String::from("dpop_proof"),
             String::from("emergency_access"),
             String::from("face_id"),
@@ -454,6 +455,9 @@ async fn the_sweep_deletes_the_rows_past_their_window_and_keeps_the_rest() -> Te
              INSERT INTO ferrofed.contact_point_dispensation VALUES
                ('discarded', 'urn:oid:2.999.9', 'urn:oid:2.999.8', 'F-1', now() - interval '1 second'),
                ('open', 'urn:oid:2.999.9', 'urn:oid:2.999.8', 'F-2', now() + interval '1 hour');
+             INSERT INTO ferrofed.contact_point_requests VALUES
+               ('requests', 'ended', 3, now() - interval '1 second'),
+               ('patient', 'open', 1, now() + interval '1 hour');
              INSERT INTO ferrofed.face_id VALUES
                ('expired-id', '\\x00', now() - interval '1 second'),
                ('live-id', '\\x00', now() + interval '1 hour');
@@ -469,13 +473,14 @@ async fn the_sweep_deletes_the_rows_past_their_window_and_keeps_the_rest() -> Te
     assert_eq!(
         vec![
             (String::from("contact_point_dispensation"), 1),
+            (String::from("contact_point_requests"), 1),
             (String::from("dpop_proof"), 1),
             (String::from("emergency_access"), 1),
             (String::from("face_id"), 1),
             (String::from("window_probe"), 2)
         ],
         swept,
-        "every table of the store with a window is swept, the emergency count's, the DPoP proofs', the dispensers' and the face ids' included"
+        "every table of the store with a window is swept, the emergency count's, the DPoP proofs', the dispensers', the anomaly counts' and the face ids' included"
     );
     assert_eq!(
         vec![String::from("future")],
@@ -495,6 +500,7 @@ async fn the_sweep_deletes_the_rows_past_their_window_and_keeps_the_rest() -> Te
     assert_eq!(
         vec![
             (String::from("contact_point_dispensation"), 0),
+            (String::from("contact_point_requests"), 0),
             (String::from("dpop_proof"), 0),
             (String::from("emergency_access"), 0),
             (String::from("face_id"), 0),

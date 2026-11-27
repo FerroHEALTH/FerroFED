@@ -76,11 +76,20 @@ pub enum Event {
     /// (eHDSI Section II Security Services 10.0.0 §2.5; `NCPeH` Architecture
     /// Specifications 10.0.0 §5.1.9).
     EmergencyLimitReached,
+    /// The requests national contact points relay passed an anomaly rule's
+    /// threshold in its window, so the request carries the rule's warning
+    /// and is served (`NCPeH` Architecture Specifications 10.0.0 §5.1.9).
+    UnexpectedRequests,
+    /// A request a national contact point relays could not be counted
+    /// against the anomaly rules, and is served uncounted (`NCPeH`
+    /// Architecture Specifications 10.0.0 §5.1.9: detection does not block
+    /// traffic).
+    AnomalyUncounted,
 }
 
 impl Event {
     /// Every event, in declaration order.
-    pub const ALL: [Self; 20] = [
+    pub const ALL: [Self; 22] = [
         Self::KeySetUnavailable,
         Self::IntrospectionUnavailable,
         Self::AqlRefused,
@@ -101,6 +110,8 @@ impl Event {
         Self::TrcPatientMismatch,
         Self::TrcPatientUnresolved,
         Self::EmergencyLimitReached,
+        Self::UnexpectedRequests,
+        Self::AnomalyUncounted,
     ];
 
     /// The label value, the `event` field of the security log line.
@@ -127,6 +138,8 @@ impl Event {
             Self::TrcPatientMismatch => "trc-patient-mismatch",
             Self::TrcPatientUnresolved => "trc-patient-unresolved",
             Self::EmergencyLimitReached => "emergency-limit-reached",
+            Self::UnexpectedRequests => "unexpected-number-of-requests",
+            Self::AnomalyUncounted => "anomaly-uncounted",
         }
     }
 

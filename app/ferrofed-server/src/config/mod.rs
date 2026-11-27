@@ -22,6 +22,7 @@ use std::path::PathBuf;
 use ferrohealth_telemetry::section::TelemetrySection;
 
 pub mod access_log;
+pub mod anomaly;
 pub mod audit;
 pub mod auth;
 pub mod base_path;
@@ -134,6 +135,9 @@ pub struct Config {
     /// The limit of each relayed health professional's emergency accesses
     /// (`[emergency]`, eHDSI Section II Security Services 10.0.0 §2.5).
     pub emergency: emergency::Emergency,
+    /// The anomaly warnings of the requests national contact points relay
+    /// (`[anomaly]`, `NCPeH` Architecture Specifications 10.0.0 §5.1.9).
+    pub anomaly: anomaly::Anomaly,
     /// The FHIR R4 face of the European exchange format (`[fhir]`,
     /// Regulation (EU) 2025/327 Annex II 2.1), off unless the table is set.
     pub fhir: Option<fhir::Fhir>,
@@ -195,6 +199,7 @@ impl Default for Config {
             stored_queries: stored_queries::StoredQueries::default(),
             store: None,
             emergency: emergency::Emergency::default(),
+            anomaly: anomaly::Anomaly::default(),
             fhir: None,
             eehrxf: eehrxf::Eehrxf::default(),
             metrics: server::Metrics::default(),

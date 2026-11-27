@@ -519,7 +519,7 @@ mod fhir_face {
 }
 
 /// The first column of every row `query` answers at `url`, as text.
-async fn column(url: &str, query: &str) -> Result<Vec<String>, Box<dyn Error>> {
+pub(super) async fn column(url: &str, query: &str) -> Result<Vec<String>, Box<dyn Error>> {
     let (client, connection) = tokio_postgres::connect(url, tokio_postgres::NoTls).await?;
     let driven = tokio::spawn(connection);
     let rows = client.query(query, &[]).await?;

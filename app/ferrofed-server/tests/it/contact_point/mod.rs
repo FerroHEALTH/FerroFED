@@ -30,6 +30,7 @@
 )]
 
 mod admission;
+mod anomaly;
 mod config;
 mod declared;
 pub(crate) mod emergency;
