@@ -95,11 +95,13 @@ pub enum ServeMode {
 }
 
 impl Fhir {
-    /// Whether a `[[fhir.serve]]` member names the code systems it records.
+    /// Whether a member of an `Electronic-Dispensations` entry names the
+    /// code systems it records.
     #[must_use]
     pub(crate) fn declares_systems(&self) -> bool {
         self.serve.iter().any(|entry| {
-            entry.members.iter().any(|member| {
+            entry.category == Category::Dispensation.code()
+                && entry.members.iter().any(|member| {
                 matches!(member, ServeMember::Declared(declared) if !declared.systems.is_empty())
             })
         })
