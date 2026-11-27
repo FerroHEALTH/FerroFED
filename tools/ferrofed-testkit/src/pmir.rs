@@ -293,8 +293,38 @@ pub fn merge_message(
     identifiers: &[(&str, &str)],
     surviving: &str,
 ) -> Result<String, RegistryError> {
-    let patient = Patient {
-        id: Some(subsumed.to_owned()),
+    let mut patient = carrying(subsumed, identifiers);
+    patient.active = Some(false.into());
+    patient.link = vec![PatientLink {
+        other: Reference {
+            reference: Some(format!("Patient/{surviving}").into()),
+            ..Reference::default()
+        },
+        r#type: "replaced-by".into(),
+        ..PatientLink::default()
+    }];
+    message_of(subsumed, patient)
+}
+
+/// An ITI-93 message whose history holds one update (§2:3.93.4.1.2.3).
+///
+/// The Patient `id` is active, carries `identifiers` as `(system, value)`
+/// and has no link. A Registry whose local policy allows an unmerge sends
+/// one as this update, the `replaced-by` link removed (§2:3.93.4.1.3.1).
+///
+/// # Errors
+///
+/// Returns [`RegistryError::Write`] when the message cannot be written.
+pub fn update_message(id: &str, identifiers: &[(&str, &str)]) -> Result<String, RegistryError> {
+    let mut patient = carrying(id, identifiers);
+    patient.active = Some(true.into());
+    message_of(id, patient)
+}
+
+/// The Patient `id` carrying `identifiers` as `(system, value)`.
+fn carrying(id: &str, identifiers: &[(&str, &str)]) -> Patient {
+    Patient {
+        id: Some(id.to_owned()),
         identifier: identifiers
             .iter()
             .map(|(system, value)| Identifier {
@@ -303,26 +333,22 @@ pub fn merge_message(
                 ..Identifier::default()
             })
             .collect(),
-        active: Some(false.into()),
-        link: vec![PatientLink {
-            other: Reference {
-                reference: Some(format!("Patient/{surviving}").into()),
-                ..Reference::default()
-            },
-            r#type: "replaced-by".into(),
-            ..PatientLink::default()
-        }],
         ..Patient::default()
-    };
+    }
+}
+
+/// The ITI-93 message whose history writes `patient`, the Patient `id`, by
+/// `PUT`.
+fn message_of(id: &str, patient: Patient) -> Result<String, RegistryError> {
     let history = Bundle {
         id: Some(String::from("history-1")),
         r#type: "history".into(),
         entry: vec![BundleEntry {
-            full_url: Some(format!("http://pmir.example.test{BASE}/Patient/{subsumed}").into()),
+            full_url: Some(format!("http://pmir.example.test{BASE}/Patient/{id}").into()),
             resource: Some(Resource::Patient(Box::new(patient))),
             request: Some(BundleEntryRequest {
                 method: "PUT".into(),
-                url: format!("Patient/{subsumed}").into(),
+                url: format!("Patient/{id}").into(),
                 ..BundleEntryRequest::default()
             }),
             response: Some(BundleEntryResponse {

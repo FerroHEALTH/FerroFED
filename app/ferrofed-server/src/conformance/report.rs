@@ -613,7 +613,15 @@ mod tests {
             "CP-2's wire part is a harness scenario"
         );
         assert_eq!(Some("not-run".to_owned()), result("track", "1"));
-        assert_eq!(Some("deferred".to_owned()), result("track", "8"));
+        assert_eq!(
+            Some("not-run".to_owned()),
+            result("track", "8"),
+            "track 8 is covered by the PMIR suites, and no live scenario scores it"
+        );
+        assert_eq!(
+            Some(UNSCORED.to_owned()),
+            report.row("track", "8").map(|row| row.reason.clone())
+        );
         assert_eq!(
             Some("not-run".to_owned()),
             result("gateway", "CP-14"),
