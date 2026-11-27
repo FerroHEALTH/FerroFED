@@ -235,6 +235,25 @@ async fn product_and_version_come_from_the_registry_and_are_absent_when_unknown(
 }
 
 #[tokio::test]
+async fn every_endpoint_names_its_registry_base_url_in_meta() -> TestResult {
+    let (a, b, c) = (node(&["a::1"]).await, node(&[]).await, node(&[]).await);
+    let urls = [a.uri(), b.uri(), c.uri()];
+    let snapshot = registry([&urls[0], &urls[1], &urls[2]])?;
+    let envelope = envelope(directed(&snapshot, &["node-a-pub", "node-b-pub"]).await?)?;
+    for (id, base) in ["node-a-pub", "node-b-pub", "node-c-pub"].iter().zip(&urls) {
+        let url = entry(&envelope, id)?
+            .get("url")
+            .and_then(Value::as_str)
+            .ok_or_else(|| format!("{id} names no url"))?;
+        assert!(
+            url.starts_with(base.as_str()),
+            "§9.5: {id} names its registry base URL in meta, in scope or not: {url}"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn row_count_is_what_each_node_contributed_before_the_tier_touches_the_rows() -> TestResult {
     // The same uid at both nodes, with no DISTINCT and the default dedup mode,
     // so both rows come back; `row_count` counts what each node sent.

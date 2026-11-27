@@ -9,8 +9,9 @@
 # It fails when:
 #   1. the header row is not the ten columns, or a row has another count;
 #   2. a row id is duplicated;
-#   3. a status, actor or keyword is outside its vocabulary, or a node or
-#      operator status sits on another actor;
+#   3. a status, actor or keyword is outside its vocabulary, a node or
+#      operator status sits on another actor, or an n/a status sits on a
+#      Gateway, Node or Operator row;
 #   4. a planned, missing, built-untested, new-gap, contradiction or deferred
 #      row names no #N, or an n/a row gives no reason;
 #   5. a tested row names no test as file::function, or any row cites a file
@@ -129,6 +130,7 @@ check_tree() {
           if ($5 !~ /^(MUST|MUST NOT|SHALL|SHALL NOT|REQUIRED|SHOULD|SHOULD NOT|RECOMMENDED|MAY)$/) print file ": " id " has keyword \"" $5 "\", outside RFC 2119"
           if (s == "node" && a != "Node") print file ": " id " is " a "'"'"'s, so its status cannot be node"
           if (s == "operator" && a != "Operator") print file ": " id " is " a "'"'"'s, so its status cannot be operator"
+          if (s == "n/a" && a !~ /^(Client|Editor)$/) print file ": " id " is " a "'"'"'s, so its status cannot be n/a"
           if (s ~ /^(planned|missing|built-untested|new-gap|contradiction|deferred)$/ && !issue(ev)) print file ": " id " is " s " and names no issue as #N"
           if (s == "n/a" && (ev == "" || ev == "-")) print file ": " id " is n/a and gives no reason"
           named = 0
@@ -265,6 +267,10 @@ self_test() {
   expect 1 "an unknown actor"
   edit $'s/\tNode\tSHOULD/\tOperator\tSHOULD/'
   expect 1 "a node status on an Operator row"
+  edit $'s/\tNode\tSHOULD\tN27a\tCP-33a\tnode\t/\tNode\tSHOULD\tN27a\tCP-33a\tn\/a\t/'
+  expect 1 "an n/a status on a Node row"
+  edit $'s/\tNode\tSHOULD\tN27a\tCP-33a\tnode\t/\tClient\tSHOULD\tN27a\tCP-33a\tn\/a\t/'
+  expect 0 "an n/a status on a Client row"
   edit $'s/#12 (rest-facade#7a.1 is no issue)/rest-facade#7a.1 is no issue/'
   expect 1 "a planned row naming no issue"
   edit $'s/\tplanned\t#12 (rest-facade#7a.1 is no issue)/\tnew-gap\tsee section 7a/'
