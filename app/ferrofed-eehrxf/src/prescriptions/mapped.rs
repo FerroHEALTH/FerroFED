@@ -40,6 +40,7 @@ use openehr_base::v1_3::base_types::identification::uid_based_id::UidBasedId;
 use openehr_mapping_core::template::{PathError, TemplateSource};
 
 use super::RESOURCE;
+use super::conform;
 use super::page::{Kept, Page, Prescription};
 
 /// The context of the MPD project that maps a medication order to a
@@ -276,6 +277,12 @@ impl MapMode {
                 CallContext::new().with_patient(patient),
             )
             .map_err(MapModeError::Run)?;
+        // NOTE: RM 1.1.0 COMPOSITION.language: the language the order is written in; a composition
+        // whose language does not read names none, and its prescriptions are withheld for it.
+        let language = serde_json::from_str::<Written>(composition)
+            .ok()
+            .and_then(|written| written.language)
+            .map(|language| language.code_string);
         let mut page = Page::default();
         for resource in answer
             .bundle()
@@ -289,11 +296,14 @@ impl MapMode {
                 .and_then(Value::as_str)
                 .unwrap_or_default()
                 .to_owned();
-            let kept = Kept {
+            let mut kept = Kept {
                 full_url: None,
                 resource: Value::Object(object),
                 resource_type,
             };
+            if kept.resource_type == RESOURCE {
+                conform::reasoned(&mut kept.resource, language.as_deref());
+            }
             match kept.resource_type.as_str() {
                 RESOURCE => page.prescriptions.push(Prescription {
                     identifiers: identifiers(&kept.resource),
@@ -422,4 +432,18 @@ struct Item {
     kind: Option<String>,
     /// The `archetype_node_id`.
     archetype_node_id: Option<String>,
+}
+
+/// What a composition is read for to name the language it is written in.
+#[derive(serde::Deserialize)]
+struct Written {
+    /// The `language`.
+    language: Option<CodePhrase>,
+}
+
+/// A `CODE_PHRASE`, by its code.
+#[derive(serde::Deserialize)]
+struct CodePhrase {
+    /// The `code_string`.
+    code_string: String,
 }

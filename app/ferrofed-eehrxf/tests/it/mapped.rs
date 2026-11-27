@@ -239,3 +239,16 @@ fn an_order_the_composition_does_not_hold_names_nothing() -> TestResult {
     assert!(mapped::order_in(&composition, "no version", 0).is_none());
     Ok(())
 }
+
+// NOTE: MyHealth@EU Requirements Catalogue 10.0.0 §1.14.1 and §1.14.2: what the map mode writes is
+// served, so it conforms to MedicationRequest-myhealtheu-epd with its narrative and language.
+#[test]
+fn a_mapped_prescription_conforms_to_the_myhealth_eu_profile() -> TestResult {
+    let (mode, composition) = compiled()?;
+    let page = mode.page(&composition, PATIENT, "2026-11-04T10:00:00Z")?;
+    let [prescription] = page.prescriptions.as_slice() else {
+        return Err(format!("{} prescriptions, not one", page.prescriptions.len()).into());
+    };
+    ferrofed_eehrxf::prescriptions::conform::held(&prescription.kept.resource)?;
+    Ok(())
+}

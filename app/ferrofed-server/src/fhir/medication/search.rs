@@ -10,6 +10,7 @@ use std::time::Instant;
 use axum::response::Response;
 use eehrxf::category::Category;
 use ferrofed_eehrxf::prescriptions::SearchRequest;
+use ferrofed_eehrxf::prescriptions::conform;
 use ferrofed_eehrxf::prescriptions::page::{Page, Prescription};
 use ferrofed_eehrxf::prescriptions::searchset::{Answered, Assembled, Silent, assemble};
 use ferrofed_eehrxf::summary::Organisation;
@@ -175,7 +176,9 @@ fn listed(
 ///
 /// A prescription named so has that id and a `fullUrl` of the face's read
 /// (FHIR R4 `http.html` §3.1.0.2), and is otherwise as the member sent it
-/// or, in the map mode, as the face mapped it; one whose parts give no such
+/// or, in the map mode, as the face mapped it; one that breaks the
+/// MyHealth@EU ePrescription profile is withheld and named
+/// ([`conform::hold`]); one whose parts give no such
 /// id keeps its own id and `fullUrl` and is marked unreadable, which the
 /// searchset warns of. A resource a mapped prescription references is named
 /// under the face's base by its type and id, so the reference resolves in the
@@ -198,6 +201,9 @@ fn named(fhir: &FhirSettings, member: &prescriptions::Member, pages: &[Page]) ->
         for (position, prescription) in page.prescriptions.iter_mut().enumerate() {
             name(base, chosen, (origin, position), prescription);
         }
+        // NOTE: MyHealth@EU Requirements Catalogue 10.0.0 §1.14.1 and §1.14.2: a prescription is
+        // served only in the MyHealth@EU ePrescription profile, after naming, so no position moves.
+        conform::hold(page);
     }
     pages
 }

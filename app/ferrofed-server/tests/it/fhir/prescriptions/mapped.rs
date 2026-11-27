@@ -168,6 +168,20 @@ async fn a_map_mode_members_own_orders_are_mapped_beside_a_native_members() -> T
         "FHIR R4 Reference.identifier: the patient the search names"
     );
     assert!(
+        prescription
+            .pointer("/text/div")
+            .and_then(Value::as_str)
+            .is_some_and(|div| div.contains("<p>")),
+        "MyHealth@EU Requirements Catalogue 10.0.0 §1.14.2: the order's narrative: {prescription}"
+    );
+    assert!(
+        prescription
+            .pointer("/language")
+            .and_then(Value::as_str)
+            .is_some(),
+        "the language the order is written in: {prescription}"
+    );
+    assert!(
         !text.contains("synthetic-rx-foreign"),
         "an order another system created is not node A's: {text}"
     );

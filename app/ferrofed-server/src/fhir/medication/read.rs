@@ -11,6 +11,7 @@ use std::time::Instant;
 use axum::extract::Path;
 use axum::response::Response;
 use eehrxf::category::Category;
+use ferrofed_eehrxf::prescriptions::conform;
 use ferrofed_eehrxf::prescriptions::page::Kept;
 use ferrofed_engine::outbound_id::OutboundId;
 use ferrofed_registry::id::EndpointId;
@@ -276,6 +277,26 @@ fn found(
     let Some(kept) = read.resource() else {
         return crate::error::fixed(Code::Internal, request_id);
     };
+    // NOTE: MyHealth@EU Requirements Catalogue 10.0.0 §1.14.1 and §1.14.2: a prescription is
+    // served only in the MyHealth@EU ePrescription profile, as the search serves it.
+    if read.readable == Readable::Prescription
+        && let Err(unheld) = conform::held(&kept.resource)
+    {
+        let mut response = outcome(
+            StatusCode::FAILED_DEPENDENCY,
+            "incomplete",
+            &format!(
+                "the prescription could not be read: {} (node-error) answered a prescription that \
+                 is not served: {unheld} (MyHealth@EU ePrescription, §11.3)",
+                read.chosen.native
+            ),
+        );
+        attach(
+            &mut response,
+            prescription::accessed_withheld(federation, read),
+        );
+        return response;
+    }
     let mut kept = kept.clone();
     // NOTE: FHIR R4 `http.html` §3.1.0.2: the returned resource's id is the [id] read, the
     // one change the face makes to the member's resource.

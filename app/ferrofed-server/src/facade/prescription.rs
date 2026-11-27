@@ -467,8 +467,9 @@ pub(crate) fn accessed_written(
 }
 
 /// The access record's facts of the read `read` whose one resource the
-/// face withholds, a version read whose member holds another version, so
-/// the member contributed nothing and nothing was delivered.
+/// face withholds, a version read whose member holds another version or a
+/// prescription the face does not serve, so the member contributed nothing
+/// and nothing was delivered.
 pub(crate) fn accessed_withheld(federation: &Federation, read: &Read) -> Option<Accessed> {
     recorded(federation, read, (false, None))
 }

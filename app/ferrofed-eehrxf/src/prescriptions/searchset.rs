@@ -13,7 +13,9 @@
 //! per member, and an `outcome` entry of severity `warning` says so; under
 //! `partial`, each member that did not answer is named in an `outcome` entry
 //! too (Federation Tier §11.3, §11.4), and so is each member one of the
-//! page's prescriptions comes from that cannot be read by id ([`Prescription::unreadable`]).
+//! page's prescriptions comes from that cannot be read by id ([`Prescription::unreadable`]),
+//! and each prescription withheld for the MyHealth@EU ePrescription profile
+//! ([`super::conform`]), with why.
 //! FHIR R4 `http.html` §3.1.0.9 allows
 //! no `fatal` or `error` issue in a `searchset`. The `Provenance` and the
 //! warning are our own design: no specification governs them.
@@ -155,6 +157,9 @@ pub fn assemble(
     for text in unreadable(answered, &matched) {
         writer.own(warning("informational", &text), "outcome");
     }
+    for text in withheld(answered) {
+        writer.own(warning("incomplete", &text), "outcome");
+    }
     let outcomes = answered
         .iter()
         .flat_map(|member| member.pages.iter())
@@ -292,6 +297,26 @@ fn unanswered(member: &Silent) -> String {
         "the search is incomplete: no answer from {} ({}) (§11.3)",
         member.endpoint, member.status
     )
+}
+
+/// One sentence for each prescription of a member of `answered` the
+/// gateway withheld, naming the member and why, never a value.
+fn withheld(answered: &[Answered<'_>]) -> Vec<String> {
+    answered
+        .iter()
+        .flat_map(|member| {
+            member
+                .pages
+                .iter()
+                .flat_map(|page| page.withheld.iter())
+                .map(|why| {
+                    format!(
+                        "a prescription of {} is not served: {why} (MyHealth@EU ePrescription)",
+                        member.endpoint
+                    )
+                })
+        })
+        .collect()
 }
 
 /// One sentence for each member of `answered` that one of the page's

@@ -59,11 +59,11 @@ pub(super) const SERVED: &str = "\n[[fhir.serve]]\ncategory = \"Electronic-Presc
 
 /// Node A's prescription: an extension of a profile no package defines,
 /// nested arrays, and decimals whose text a number type would not keep.
-const RX_A: &str = r#"{ "resourceType" : "MedicationRequest", "id":"rx-a1", "extension":[{"url":"https://example.org/fhir/StructureDefinition/synthetic","extension":[{"url":"part","valueDecimal":0.1000}]}],
+const RX_A: &str = r#"{ "resourceType" : "MedicationRequest","language":"en","text":{"status":"generated","div":"<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Synthetic prescription</p></div>"}, "id":"rx-a1", "extension":[{"url":"https://example.org/fhir/StructureDefinition/synthetic","extension":[{"url":"part","valueDecimal":0.1000}]}],
   "identifier":[{"system":"urn:oid:2.999.5.1","value":"SYNTHETIC-RX-WITHHELD-A1"}], "status":"active","intent":"order",
   "subject":{"reference":"Patient/p-a"},"medicationCodeableConcept":{"text":"Synthetic medicine A"},
   "dosageInstruction":[{"doseAndRate":[{"doseQuantity":{"value":1.50,"unit":"mg"}}],"timing":{"repeat":{"frequency":2,"period":0.1000}}}],
-  "dispenseRequest":{"quantity":{"value":1e2}} }"#;
+  "dispenseRequest":{"extension":[{"url":"https://profiles.ihe.net/PHARM/MPD/StructureDefinition/ihe-ext-medicationrequest-prescribedQuantity","valueQuantity":{"value":2,"unit":"tablet"}}],"quantity":{"value":1e2}} ,"authoredOn":"2026-11-01","requester":{"display":"Synthetic prescriber"}}"#;
 
 /// The decimals of [`RX_A`], each as the member wrote it.
 const DECIMALS: [&str; 3] = ["1.50", "0.1000", "1e2"];
@@ -120,13 +120,17 @@ fn relays(text: &str, resource: &str, at: (&str, &str)) -> Result<bool, Box<dyn 
 }
 
 /// Node A's second prescription, on its second page.
-const RX_A2: &str = r#"{"resourceType":"MedicationRequest","id":"rx-a2","identifier":[{"system":"urn:oid:2.999.5.1","value":"SYNTHETIC-RX-A2"}],"status":"completed","intent":"order","subject":{"reference":"Patient/p-a"},"medicationCodeableConcept":{"text":"Synthetic medicine A2"}}"#;
+const RX_A2: &str = r#"{"resourceType":"MedicationRequest","language":"en","text":{"status":"generated","div":"<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Synthetic prescription</p></div>"},"id":"rx-a2","identifier":[{"system":"urn:oid:2.999.5.1","value":"SYNTHETIC-RX-A2"}],"status":"completed","intent":"order","subject":{"reference":"Patient/p-a"},"medicationCodeableConcept":{"text":"Synthetic medicine A2"},"authoredOn":"2026-11-01","requester":{"display":"Synthetic prescriber"}}"#;
 
 /// Node B's prescription.
-const RX_B: &str = r#"{"resourceType":"MedicationRequest","id":"rx-b1","identifier":[{"system":"urn:oid:2.999.5.2","value":"SYNTHETIC-RX-B1"}],"status":"active","intent":"order","subject":{"reference":"Patient/p-b"},"medicationCodeableConcept":{"text":"Synthetic medicine B"}}"#;
+const RX_B: &str = r#"{"resourceType":"MedicationRequest","language":"en","text":{"status":"generated","div":"<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Synthetic prescription</p></div>"},"id":"rx-b1","identifier":[{"system":"urn:oid:2.999.5.2","value":"SYNTHETIC-RX-B1"}],"status":"active","intent":"order","subject":{"reference":"Patient/p-b"},"medicationCodeableConcept":{"text":"Synthetic medicine B"},"authoredOn":"2026-11-01","requester":{"display":"Synthetic prescriber"}}"#;
 
 /// Node B's prescription under the identifier node A's carries.
-const RX_B_SAME: &str = r#"{"resourceType":"MedicationRequest","id":"rx-b9","identifier":[{"system":"urn:oid:2.999.5.1","value":"SYNTHETIC-RX-WITHHELD-A1"}],"status":"active","intent":"order","subject":{"reference":"Patient/p-b"},"medicationCodeableConcept":{"text":"Synthetic medicine A"}}"#;
+const RX_B_SAME: &str = r#"{"resourceType":"MedicationRequest","language":"en","text":{"status":"generated","div":"<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Synthetic prescription</p></div>"},"id":"rx-b9","identifier":[{"system":"urn:oid:2.999.5.1","value":"SYNTHETIC-RX-WITHHELD-A1"}],"status":"active","intent":"order","subject":{"reference":"Patient/p-b"},"medicationCodeableConcept":{"text":"Synthetic medicine A"},"authoredOn":"2026-11-01","requester":{"display":"Synthetic prescriber"}}"#;
+
+/// Node A's prescription with no prescriber, no narrative and no language,
+/// which the MyHealth@EU ePrescription profile refuses.
+pub(super) const RX_BARE: &str = r#"{"resourceType":"MedicationRequest","id":"rx-bare","identifier":[{"system":"urn:oid:2.999.5.1","value":"SYNTHETIC-RX-BARE"}],"status":"active","intent":"order","subject":{"reference":"Patient/p-a"},"medicationCodeableConcept":{"text":"Synthetic medicine bare"},"authoredOn":"2026-11-01"}"#;
 
 /// A `searchset` of the prescriptions `resources`, each under a `fullUrl`
 /// at `base`, with the `next` link `next` when given.
@@ -387,6 +391,53 @@ async fn each_members_prescriptions_are_answered_as_sent_with_a_provenance_namin
 }
 
 // conformance: CP-26 track-10
+// NOTE: MyHealth@EU Requirements Catalogue 10.0.0 §1.14.1 and §1.14.2: a prescription is served
+// only in MedicationRequest-myhealtheu-epd, with its narrative and its language.
+#[tokio::test]
+async fn a_prescription_the_myhealth_eu_profile_refuses_is_withheld_and_its_member_named()
+-> TestResult {
+    let members = Members::start(
+        page(searchset(
+            "https://cdr-a.example.org",
+            &[RX_A, RX_BARE],
+            None,
+        )),
+        page(searchset("https://cdr-b.example.org", &[RX_B], None)),
+    )
+    .await?;
+    let dir = tempfile::tempdir()?;
+    let (status, text) = call(members.both(dir.path())?, search("")?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    assert!(relays(&text, RX_A, AT_A)?, "{text}");
+    assert!(relays(&text, RX_B, AT_B)?, "{text}");
+    assert!(
+        !text.contains("SYNTHETIC-RX-BARE"),
+        "neither served nor quoted: {text}"
+    );
+    let bundle: Value = serde_json::from_str(&text)?;
+    assert_eq!(bundle["total"], Value::from(2));
+    let outcomes = entries(&bundle, "outcome");
+    let [outcome] = outcomes.as_slice() else {
+        return Err(format!("one outcome entry: {bundle}").into());
+    };
+    let diagnostics = outcome
+        .pointer("/issue/0/diagnostics")
+        .and_then(Value::as_str)
+        .ok_or("diagnostics")?;
+    for named in [
+        "node-a-mpd",
+        "MedicationRequest-myhealtheu-epd",
+        "requester",
+    ] {
+        assert!(diagnostics.contains(named), "{named}: {diagnostics}");
+    }
+    assert_eq!(
+        outcome.pointer("/issue/0/severity"),
+        Some(&Value::from("warning"))
+    );
+    Ok(())
+}
+
 #[tokio::test]
 async fn each_member_is_asked_by_its_ehr_id_alone() -> TestResult {
     let members = Members::start(
