@@ -165,15 +165,8 @@ its binary knows. Both arms start from the checkout, so a relative path in
 either configuration reads the head's tree and the files `run` makes under
 `target/perf-run/`.
 
-An earlier gate started both arms with the head's `perf/ferrofed.toml`, so
-both did the same work: when
-[#1741](https://github.com/FerroHEALTH/FerroFED/pull/1741) gave the head
-the contact point, the FHIR face and the PDQm client, its peak memory came
-out at 1.24 of the base. That gate could not judge a change that renamed a
-key, because the base binary refused the head's file at boot
-([#1813](https://github.com/FerroHEALTH/FerroFED/issues/1813)). A change to
-`perf/ferrofed.toml` that enables more work is now measured as part of the
-head, the family rule FerroBRIDGE, FerroTERM and FerroPIX follow.
+A change to `perf/ferrofed.toml` that enables more work is measured as part
+of the head, the family rule FerroBRIDGE, FerroTERM and FerroPIX follow.
 
 The contract includes the services the tree pins. Each arm runs over the
 four FerroEHR nodes and the FerroPIX its own `compose.yaml` and
@@ -191,12 +184,7 @@ address of its own services' ports, on `127.0.0.1` or `localhost`, moved to
 `127.0.0.2`, and its own registry document of the nodes it runs over.
 Nothing else in the file changes. A base whose
 services publish beyond `127.0.0.2`, or whose file reads no
-`target/perf-run/registry.toml`, is refused with exit 2. When FerroPIX
-0.0.25 moved its machines from Basic credentials to client credentials
-tokens ([#1825](https://github.com/FerroHEALTH/FerroFED/issues/1825)), a
-gate that ran both arms over the head's FerroPIX had the base's Basic
-requests refused fast, and judged the head over a base that did no
-patient resolution at all.
+`target/perf-run/registry.toml`, is refused with exit 2.
 
 A base from before `perf/arm.env` has its overrides derived from its own
 `scripts/perf/gate.sh`: the gate evaluates that script's `gateway_env()`

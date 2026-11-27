@@ -8,13 +8,6 @@ people who run it. It ships as its own binary, `ferrofed-console`, and its own
 image, `ghcr.io/ferrohealth/ferrofed-console`, beside the gateway. No
 specification governs the console: it is FerroFED's own design.
 
-The console was named `ferrofed-viewer` before v0.0.12. To upgrade, pull
-`ghcr.io/ferrohealth/ferrofed-console` in place of
-`ghcr.io/ferrohealth/ferrofed-viewer`, rename every `FERROFED_VIEWER__`
-override to `FERROFED_CONSOLE__` and `FERROFED_VIEWER_CONFIG` to
-`FERROFED_CONSOLE_CONFIG`, and run the binary as `ferrofed-console`. The
-cookies are renamed with it, so every operator signs in once more.
-
 The console is one more client of the gateway. It reaches the gateway over
 HTTP, on the same public surface any other client uses, and it adds no
 behaviour to the gateway. It stores no clinical data: the query console
