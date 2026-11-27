@@ -727,12 +727,12 @@ label_of() {
   local name="$1" version
   version="$(spec_version)"
   case "$name" in
-  federation-gateway) echo "Federation Tier $version points" ;;
-  federation-node) echo "Federation Tier $version node" ;;
-  federation-operator) echo "Federation Tier $version operator" ;;
+  federation-gateway) echo "gateway points" ;;
+  federation-node) echo "node points" ;;
+  federation-operator) echo "operator points" ;;
   aql-golden) echo "AQL golden cases" ;;
-  federation-obligations) echo "Federation Tier $version" ;;
-  federation-tracks) echo "Federation Tier $version tracks" ;;
+  federation-obligations) echo "gateway obligations" ;;
+  federation-tracks) echo "test tracks" ;;
   ehds-annex-ii) echo "EHDS Annex II" ;;
   ehds-chapter-iii) echo "EHDS Chapter III, Annex IV" ;;
   ehds-annex-iii) echo "EHDS Annex III" ;;
@@ -908,12 +908,15 @@ write_badges() {
   badge_length_check "$dir"/*.json || die "a badge runs past the length limits; its breakdown belongs on the conformance page"
 }
 
-# The README block with its markers: the matrix badges, linked to the
-# breakdown on the book's conformance page, then the golden badge, linked to
-# its pass list.
+# The README block with its markers: the caption, then the matrix badges
+# under the Federation Tier heading, linked to the breakdown on the book's
+# conformance page, and the golden badge, linked to its pass list.
 render_block() {
   local name
   echo '<!-- conformance:begin -->'
+  # shellcheck disable=SC2154 # badge-logos/logo.sh sets it
+  echo "$badge_caption<br>"
+  echo "**Federation Tier $(spec_version)**<br>"
   for name in federation-gateway federation-node federation-operator; do
     echo "[![$(label_of "$name")](${ENDPOINT}${name}.json)]($BOOK_PAGE#the-readme-badges)"
   done
@@ -923,17 +926,27 @@ render_block() {
   echo '<!-- conformance:end -->'
 }
 
-# The README compliance block with its markers: one badge per regulatory
-# record, linked to its breakdown on the book's conformance page, which
-# links the record.
+# The README compliance block with its markers, the last group: the EHDS
+# and CRA statements, one badge per regulatory record, linked to its
+# breakdown on the book's conformance page, which links the record, and the
+# post-quantum badge of scripts/checks/post-quantum.sh.
 render_compliance_block() {
   local name
   echo '<!-- compliance:begin -->'
+  echo '**Security and compliance**<br>'
+  printf '%s\n' "${COMPLIANCE_STATEMENTS[@]}"
   for name in ehds-annex-ii ehds-chapter-iii ehds-annex-iii cra-annex-vii; do
     echo "[![$(label_of "$name")](${ENDPOINT}${name}.json)]($BOOK_PAGE#the-readme-badges)"
   done
+  echo "[![Post-quantum safe uses](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fpost-quantum-badge.json)](docs/post-quantum.md)"
   echo '<!-- compliance:end -->'
 }
+
+# The static EHDS and CRA badges of the compliance group.
+readonly COMPLIANCE_STATEMENTS=(
+  '[![EHDS](https://img.shields.io/badge/EHDS-regulatory%20status-blue?logo=europeanunion&labelColor=003399&logoColor=FFCC00)](https://ferrofed.eu/docs/evaluate/regulatory-status.html)'
+  '[![CRA](https://img.shields.io/badge/CRA-risk%20assessment-blue?logo=europeanunion&labelColor=003399&logoColor=FFCC00)](https://ferrofed.eu/docs/evaluate/cra-risk-assessment.html)'
+)
 
 # Replace the README block, markers included, with a fresh rendering.
 write_block() {

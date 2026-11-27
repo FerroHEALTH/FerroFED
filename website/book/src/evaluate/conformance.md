@@ -139,11 +139,11 @@ count because they bind no one the badge counts.
 
 | Badge | Count | The rest of the count | Not counted | Rows |
 |---|---|---|---|---|
-| Federation Tier 1.0.1 points | 35/35 covered | 0 planned, 0 deferred | the node and operator points | [Conformance points](#conformance-points) |
-| Federation Tier 1.0.1 node | 3 points | - | a member node's to meet | [Conformance points](#conformance-points) |
-| Federation Tier 1.0.1 operator | 3 points | - | the operator's to meet | [Conformance points](#conformance-points) |
-| Federation Tier 1.0.1 | 364/383 tested | 7 deferred by decision, 7 upstream gaps, 5 upstream contradictions | 17 node's, 26 operator's, 22 not applicable | [the obligations checklist](obligations.md) |
-| Federation Tier 1.0.1 tracks | 11/11 covered | - | - | [the test tracks](#test-tracks) |
+| gateway points | 35/35 covered | 0 planned, 0 deferred | the node and operator points | [Conformance points](#conformance-points) |
+| node points | 3 points | - | a member node's to meet | [Conformance points](#conformance-points) |
+| operator points | 3 points | - | the operator's to meet | [Conformance points](#conformance-points) |
+| gateway obligations | 364/383 tested | 7 deferred by decision, 7 upstream gaps, 5 upstream contradictions | 17 node's, 26 operator's, 22 not applicable | [the obligations checklist](obligations.md) |
+| test tracks | 11/11 covered | - | - | [the test tracks](#test-tracks) |
 | EHDS Annex II | 11/18 met | 7 partial | 1 not applicable | [the Annex II checklist](annex-ii.md) |
 | EHDS Chapter III, Annex IV | 28/53 met | 7 open, 6 await an implementing act, 12 manufacturer's tasks | 4 not applicable | [the conformity record](conformity-record.md) |
 | EHDS Annex III | 12/16 documented | 2 planned, 2 partial | - | [the Annex III index](technical-documentation.md#the-annex-iii-index) |
