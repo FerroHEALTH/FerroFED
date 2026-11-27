@@ -37,7 +37,7 @@ This page is not legal advice.
 | Art 5, inserting information | the access service and the member CDR | a person's grant writes only into its own EHR, marked as the person's or as a representative's the token names, and the record says so; the member keeps a person from changing a professional's entry | met |
 | Art 6, rectification | the access service and the controller | routes the controller's correction | not the gateway's |
 | Art 7(1), transmission to another provider | the healthcare provider | adds no fee, limit or format | met |
-| Art 7(2), cross-border transmission | the national contact point | serves the requests a national connector relays: patient summaries, and prescriptions and dispensations where members serve them | partial |
+| Art 7(2), cross-border transmission | the national contact point | serves the requests a national connector relays: patient summaries, laboratory, discharge and imaging reports, and prescriptions and dispensations where members serve them | met |
 | Art 7(3), transmission to social security | the healthcare provider | outside the intended purpose | not the gateway's |
 | Art 7(4), sending a downloaded copy | the receiving provider | receives patient summaries and laboratory, discharge and imaging reports, and dispensations where members serve them; the reports wait on their hazards (#2044) | partial |
 | Art 8, restricting access | the person, the consent service and the member | carries the restriction out and hides its fact | met |
@@ -278,7 +278,14 @@ It answers a contact point's request for a patient's documents on the
 FHIR face: the patient summary, the document list and the prescriptions,
 and a dispensation the contact point posts
 ([A national contact point](../integrate/national-contact-point.md),
-[Cross-border access](regulatory-status.md#cross-border-access)).
+[Cross-border access](regulatory-status.md#cross-border-access)). The
+document list names the patient's laboratory, discharge and imaging
+reports, and the contact point reads each through the signed URL the list
+names, with no patient identifier reaching a member
+(`fhir/receive/contact_point_reports.rs`:
+`a_contact_point_lists_and_reads_a_laboratory_report`,
+`a_contact_point_lists_and_reads_a_discharge_report`,
+`a_contact_point_lists_and_reads_an_imaging_report`).
 
 Art 7(3): persons may request "a healthcare provider to transmit a part of
 their personal electronic health data to a clearly identified recipient in
