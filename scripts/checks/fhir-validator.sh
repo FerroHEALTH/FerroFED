@@ -2,11 +2,12 @@
 # SPDX-FileCopyrightText: Cadasto B.V.
 # SPDX-License-Identifier: BUSL-1.1
 # The exchange-format validator lane (#688; no specification governs the
-# lane: our own design). The tests that write a patient summary document and
-# hold it to the vendored HL7 Europe profiles also write it to the directory
+# lane: our own design). The tests that write an exchange-format document
+# and hold it to the vendored profiles also write it to the directory
 # FERROFED_EMIT_DIR names; this script runs HL7's FHIR Validator
-# (validator_cli.jar of hapifhir/org.hl7.fhir.core) over every one of them
-# and fails on an error. It is evidence for the technical documentation and
+# (validator_cli.jar of hapifhir/org.hl7.fhir.core) over every one of them,
+# the patient summaries against IGS and each other category against
+# EEHRXF_CHECKS (#2098), and fails on an error. It is evidence for the technical documentation and
 # is never shipped.
 #
 # The validator runs offline: no terminology server (-tx n/a), no HTTP access
@@ -78,6 +79,21 @@ docs/specs/eu-hl7-extensions/hl7.fhir.eu.extensions.r4-1.3.0.tgz
 docs/specs/eu-hl7-extensions/hl7.fhir.eu.extensions.r4-1.3.1.tgz
 docs/specs/ihe-pharm-mpd/ihe.pharm.mpd.r4-1.0.0-comment-2.tgz"
 
+# The documents the tests write beside the patient summaries, one
+# "directory<TAB>packages" record per line: a directory under DOCUMENTS and
+# the space-separated vendored packages holding every profile its documents
+# claim, each loaded with -ig (#2098). Their dependency closures are in the
+# cache with the packages below. A laboratory report is held to HL7 Europe
+# Laboratory 2.1.0: the 2.0.0 DiagnosticReport-eu-lab names the subject
+# profile patient-animal-eu-core, which hl7.fhir.eu.base 2.0.0, its declared
+# dependency, does not define, and 2.1.0 no longer names it.
+readonly EEHRXF_CHECKS="\
+myhealth-eu/laboratory	docs/specs/eu-hl7-laboratory/hl7.fhir.eu.laboratory-2.1.0.tgz
+myhealth-eu/discharge	docs/specs/eu-hl7-hdr/hl7.fhir.eu.hdr-1.0.0.tgz docs/specs/ehdsi-hdr/myhealth.eu.fhir.hdr-9.2.0.tgz docs/specs/ehdsi-core/myhealth.eu.fhir.core-1.0.1.tgz
+myhealth-eu/vaccination	docs/specs/ehdsi-euvac/myhealth.eu.fhir.euvac-10.0.0-preview.tgz docs/specs/ehdsi-core/myhealth.eu.fhir.core-1.0.1.tgz
+myhealth-eu/imaging	docs/specs/eu-hl7-imaging/hl7.fhir.eu.imaging-1.0.0-ballot.tgz
+myhealth-eu/prescription	docs/specs/eu-hl7-mpd/hl7.fhir.eu.mpd-1.0.0.tgz"
+
 # The MyHealth@EU guides each document the tests write is held to (#1952,
 # #2041), one "guide<TAB>tarball<TAB>profile<TAB>documents" record per line:
 # the guide's package, the profile every document is validated against with
@@ -105,6 +121,8 @@ docs/specs/ehdsi-imaging/myhealth.eu.fhir.imaging-9.1.1.tgz
 docs/specs/ehdsi-mvc/myhealth.eu.fhir.mvc-package-9.1.0.tgz
 docs/specs/eu-hl7-mpd/hl7.fhir.eu.mpd-1.0.0.tgz
 docs/specs/eu-hl7-imaging/hl7.fhir.eu.imaging-1.0.0-alpha.tgz
+docs/specs/eu-hl7-imaging/hl7.fhir.eu.imaging-1.0.0-ballot.tgz
+docs/specs/eu-hl7-health-data-api/hl7.fhir.eu.health-data-api-1.0.0-ballot.tgz
 docs/specs/eu-hl7-laboratory/hl7.fhir.eu.laboratory-2.1.0.tgz
 docs/specs/eu-hl7-hdr/hl7.fhir.eu.hdr-1.0.0.tgz
 docs/specs/eu-xtehr-models/xtehr.eu.ehds.models-1.0.0.tgz
@@ -159,7 +177,9 @@ hl7.fhir.uv.xver-r5.r4	0.0.1-snapshot-2	e28ec496b04c9fa681b4c4971afb4fefc56f4dc4
 ihe.iti.mhd	4.2.3	0a11808dd94c9eac87e4ee56f0f08c2e782f022df9554acf31a3bb64a2624f2e
 ihe.iti.balp	1.1.4	be46dda3088ee9d486d7163458dc5a4d7192e8a1c587fd47e2beb70e4bcefa90
 ihe.formatcode.fhir	1.4.0	d803d12f3b51940ae44f8a72372918cc409052e072d7e22bc968de58e301a34c
-fhir.dicom	2025.3.20250714	f101876ed4463ac7b814ba0e38c97cc2a8b15aecaee66916f4644946443ba303"
+fhir.dicom	2025.3.20250714	f101876ed4463ac7b814ba0e38c97cc2a8b15aecaee66916f4644946443ba303
+hl7.fhir.eu.base	2.0.0-ballot	8fce7bef955e58cb677721e5ce9f1c7716e45f336f2f02cd4fb76edc6922eb31
+ihe.iti.pdqm	3.2.0	61e09fbee991ff7c131b6ba5474921001e07782209961f3e85cee5f3ebcaedc2"
 
 fail=0
 bad() {
@@ -404,23 +424,25 @@ $VENDORED
 $MYHEALTH_EU_VENDORED"
 }
 
-run() {
-  local documents="$1" out="$2" jar home
-  prepare || return 1
-  local docs=() doc
-  for doc in "$documents"/*.json; do
+# check_set OUT DOCDIR IGLIST DOC...: runs the validator over each DOC with
+# every package of the whitespace-separated IGLIST loaded with -ig, writes its
+# output under OUT, and judges it, every document of DOCDIR needing an
+# outcome.
+check_set() {
+  local out="$1" docdir="$2" iglist="$3"
+  shift 3
+  local docs=() doc tarball igs=() code=0
+  for doc in "$@"; do
     [[ -f "$doc" ]] && docs+=("$doc")
   done
   if [[ "${#docs[@]}" -eq 0 ]]; then
-    echo "::error::$documents holds no document: did the tests run with FERROFED_EMIT_DIR set?" >&2
+    echo "::error::$docdir holds no document: did the tests run with FERROFED_EMIT_DIR set?" >&2
     return 1
   fi
-  local igs=()
-  while IFS= read -r tarball; do
-    [[ -n "$tarball" ]] && igs+=(-ig "$tarball")
-  done <<< "$IGS"
-
-  local code=0
+  for tarball in $iglist; do
+    igs+=(-ig "$tarball")
+  done
+  mkdir -p "$out"
   java -Xmx6g -Duser.home="$home" -jar "$jar" \
     ${docs[@]+"${docs[@]}"} \
     -version 4.0.1 \
@@ -433,11 +455,27 @@ run() {
     > "$out/validator.log" 2>&1 || code=$?
   tail -n 40 "$out/validator.log"
   if [[ ! -f "$out/validation.json" ]]; then
-    echo "::error::the validator wrote no output (exit $code); see validator.log" >&2
+    echo "::error::the validator wrote no output for $docdir (exit $code); see $out/validator.log" >&2
     return 1
   fi
   cp ${docs[@]+"${docs[@]}"} "$out/"
-  judge "$out/validation.json" "$documents" "$out"
+  judge "$out/validation.json" "$docdir" "$out"
+}
+
+# run DOCUMENTS OUT: the patient summaries at the top of DOCUMENTS and under
+# myhealth-eu/summary against IGS, then each category of EEHRXF_CHECKS
+# against its own packages, every summary appended to OUT/summary.md.
+run() {
+  local documents="$1" out="$2" jar home status=0 from iglist dir
+  prepare || return 1
+  check_set "$out" "$documents" "$IGS" "$documents"/*.json "$documents"/myhealth-eu/summary/*.json || status=1
+  while IFS=$'\t' read -r from iglist; do
+    [[ -n "$from" ]] || continue
+    dir="$out/eehrxf/${from##*/}"
+    check_set "$dir" "$documents/$from" "$iglist" "$documents/$from"/*.json || status=1
+    [[ -f "$dir/summary.md" ]] && cat "$dir/summary.md" >> "$out/summary.md"
+  done <<< "$EEHRXF_CHECKS"
+  return "$status"
 }
 
 # verdicts OUTPUT GUIDE DIR: one "guide<TAB>document<TAB>verdict" record per
