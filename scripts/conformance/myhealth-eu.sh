@@ -47,16 +47,18 @@ readonly VALIDATION=conformance/myhealth-eu-validation.tsv
 
 # One "name<TAB>package<TAB>title<TAB>suffix" record per CI-line badge: the
 # pinned package whose manifest names the version, the guide's title on the
-# badge and what the version carries after it.
+# badge and what the version carries after it. The README line sits under a
+# MyHealth@EU heading, so no label repeats it; the book page names each
+# build (owner decision 2026-11-27: a label within 30 characters).
 readonly BADGES="\
-search	docs/specs/ehdsi/myhealth.eu.fhir.ncp-api-9.1.1-ci.tgz	MyHealth@EU NCP API	 DocumentReference search
-core	docs/specs/ehdsi-core/myhealth.eu.fhir.core-1.0.1.tgz	MyHealth@EU Core	 (CI)
-laboratory	docs/specs/ehdsi-laboratory/myhealth.eu.fhir.laboratory-9.2.0.tgz	MyHealth@EU Laboratory	 (CI)
-discharge	docs/specs/ehdsi-hdr/myhealth.eu.fhir.hdr-9.2.0.tgz	MyHealth@EU HDR	 (CI)
-vaccination	docs/specs/ehdsi-euvac/myhealth.eu.fhir.euvac-10.0.0-preview.tgz	MyHealth@EU Vaccination	
-eps	docs/specs/ehdsi-eps/myhealth.eu.fhir.eps-1.0.0-poc.tgz	MyHealth@EU Patient Summary	
-epd	docs/specs/ehdsi-epd/myhealth.eu.fhir.epd-1.0.0-poc.tgz	MyHealth@EU ePrescription and eDispensation	
-imaging	docs/specs/ehdsi-imaging/myhealth.eu.fhir.imaging-9.1.1.tgz	MyHealth@EU Imaging	 (draft)"
+search	docs/specs/ehdsi/myhealth.eu.fhir.ncp-api-9.1.1-ci.tgz	NCP API	 search
+core	docs/specs/ehdsi-core/myhealth.eu.fhir.core-1.0.1.tgz	Core	
+laboratory	docs/specs/ehdsi-laboratory/myhealth.eu.fhir.laboratory-9.2.0.tgz	Laboratory	
+discharge	docs/specs/ehdsi-hdr/myhealth.eu.fhir.hdr-9.2.0.tgz	HDR	
+vaccination	docs/specs/ehdsi-euvac/myhealth.eu.fhir.euvac-10.0.0-preview.tgz	Vaccination	
+eps	docs/specs/ehdsi-eps/myhealth.eu.fhir.eps-1.0.0-poc.tgz	Patient Summary	
+epd	docs/specs/ehdsi-epd/myhealth.eu.fhir.epd-1.0.0-poc.tgz	ePrescription	
+imaging	docs/specs/ehdsi-imaging/myhealth.eu.fhir.imaging-9.1.1.tgz	Imaging	"
 
 die() {
   echo "myhealth-eu: $*" >&2
@@ -97,7 +99,7 @@ ci_badge() {
   IFS=$'\t' read -r _ package title suffix <<< "$record"
   label="$title $(version "$package")$suffix"
   if [[ "$name" == search ]]; then
-    message="$(data "$SEARCH" | awk -F'\t' '{ n++ } $3 == "answered" { a++ } END { printf "%d/%d parameters answered", a, n }')"
+    message="$(data "$SEARCH" | awk -F'\t' '{ n++ } $3 == "answered" { a++ } END { printf "%d/%d answered", a, n }')"
   else
     message="$(data "$VALIDATION" | awk -F'\t' -v guide="$name" '$1 == guide { n++; if ($3 == "valid") v++ } END { printf "%d/%d valid", v, n }')"
   fi
@@ -111,9 +113,9 @@ ci_badge() {
 badge() {
   case "${1:-self-assessed}" in
   self-assessed)
-    jq -cn --arg message "catalogue $CATALOGUE · $(count met)/$(count) met" \
+    jq -cn --arg label "MyHealth@EU catalogue $CATALOGUE" --arg message "$(count met)/$(count) met" \
       --arg color "$(badge_count_color "$(count met)" "$(count)")" --argjson logo "$(badge_logo_fields eu)" \
-      '{schemaVersion: 1, label: "MyHealth@EU", message: $message, color: $color} + $logo'
+      '{schemaVersion: 1, label: $label, message: $message, color: $color} + $logo'
     ;;
   *) ci_badge "$1" ;;
   esac
@@ -136,6 +138,8 @@ badge_names() {
 readme_block() {
   local name
   echo '<!-- myhealth-eu:begin -->'
+  echo '<br>'
+  echo '**MyHealth@EU**<br>'
   echo "[![MyHealth@EU self-assessed](${ENDPOINT})](${BOOK_PAGE})"
   awk -F'\t' '{ print $1 }' <<< "$BADGES" | while read -r name; do
     echo "[![MyHealth@EU ${name}, self-tested](https://img.shields.io/endpoint?url=${RAW}myhealth-eu%2F${name}.json)](${BOOK_PAGE})"

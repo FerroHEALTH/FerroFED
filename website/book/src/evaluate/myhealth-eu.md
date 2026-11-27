@@ -16,21 +16,23 @@ self-assessed; it never says compliant, certified or operation ready.
 Beside the self-assessment, the README carries one badge per MyHealth@EU
 guide FerroFED is tested against: the CI builds at `build-fhir.ehdsi.eu`,
 the Patient Summary and ePrescription proofs of concept the FHIR package
-registry publishes, and the imaging guide's draft build. Each label names
-the guide at the exact version FerroFED pins, and each says self-tested: the counts are FerroFED's own test
+registry publishes, and the imaging guide's draft build. They sit under a
+MyHealth@EU heading, so each label names the guide at the exact version
+FerroFED pins and leaves the build to the table below, and each says
+self-tested: the counts are FerroFED's own test
 runs, never a MyHealth@EU result, and no badge says certified, compliant or
 conformant (`scripts/checks/myhealth-eu-ci.sh` refuses one that does).
 
-| Badge | What it counts | Where it comes from |
-|---|---|---|
-| MyHealth@EU NCP API 9.1.1-ci DocumentReference search | the `DocumentReference` search parameters of the NCPeH API's server `CapabilityStatement` the document list answers, out of all of them | `conformance/myhealth-eu-search.tsv`, each row with the test that shows it |
-| MyHealth@EU Core 1.0.1 (CI) | the documents FerroFED's tests write whose `Patient` is valid against `patient-myhealtheu-core` | the HL7 FHIR Validator in CI, `conformance/myhealth-eu-validation.tsv` |
-| MyHealth@EU Laboratory 9.2.0 (CI) | the laboratory reports valid against `Bundle-lab-myhealtheu` | the same |
-| MyHealth@EU HDR 9.2.0 (CI) | the hospital discharge reports valid against `bundle-hdr-myhealtheu` | the same |
-| MyHealth@EU Vaccination 10.0.0-preview | the vaccination histories valid against `bundle-euvac-myhealtheu` | the same |
-| MyHealth@EU Patient Summary 1.0.0-poc | the patient summaries written with the `myhealth-eu` transcoding of `[eehrxf.terminology]` valid against `bundle-eps-myhealtheu` | the same |
-| MyHealth@EU ePrescription and eDispensation 1.0.0-poc | the prescriptions the map mode writes valid against `MedicationRequest-myhealtheu-epd` | the same |
-| MyHealth@EU Imaging 9.1.1 (draft) | the imaging reports valid against `bundle-img-myhealtheu` | the same |
+| Badge | Build | What it counts | Where it comes from |
+|---|---|---|---|
+| NCP API 9.1.1-ci search | the CI build | the `DocumentReference` search parameters of the NCPeH API's server `CapabilityStatement` the document list answers, out of all of them | `conformance/myhealth-eu-search.tsv`, each row with the test that shows it |
+| Core 1.0.1 | the CI build | the documents FerroFED's tests write whose `Patient` is valid against `patient-myhealtheu-core` | the HL7 FHIR Validator in CI, `conformance/myhealth-eu-validation.tsv` |
+| Laboratory 9.2.0 | the CI build | the laboratory reports valid against `Bundle-lab-myhealtheu` | the same |
+| HDR 9.2.0 | the CI build | the hospital discharge reports valid against `bundle-hdr-myhealtheu` | the same |
+| Vaccination 10.0.0-preview | the preview package | the vaccination histories valid against `bundle-euvac-myhealtheu` | the same |
+| Patient Summary 1.0.0-poc | the proof of concept | the patient summaries written with the `myhealth-eu` transcoding of `[eehrxf.terminology]` valid against `bundle-eps-myhealtheu` | the same |
+| ePrescription 1.0.0-poc | the proof of concept of ePrescription and eDispensation | the prescriptions the map mode writes valid against `MedicationRequest-myhealtheu-epd` | the same |
+| Imaging 9.1.1 | the draft build | the imaging reports valid against `bundle-img-myhealtheu` | the same |
 
 The validator lane runs HL7's FHIR Validator offline over the documents the
 tests write and fails when a verdict differs from the recorded one, so a

@@ -38,7 +38,8 @@
 #  12. a badge's colour does not follow its count: green when all pass,
 #      yellow when some do, red when none do, blue when it counts nothing
 #      (owner decision, 2026-11-25);
-#  13. a badge's label runs past 30 characters or its message past 20, or
+#  13. a badge's label runs past 30 characters or its message past 20, the
+#      MyHealth@EU badges and the static README badges included, or
 #      the shared length check lets a long badge through (owner decision,
 #      2026-11-27).
 #
@@ -288,7 +289,7 @@ badge_color_check "$BADGES"/*.json conformance/myhealth-eu-badge.json conformanc
   problem "a badge's colour does not follow its count"
 
 # 13. Every badge within the length limits, and the check refuses a long one.
-badge_length_check "$BADGES"/*.json conformance/post-quantum-badge.json ||
+badge_length_check "$BADGES"/*.json conformance/post-quantum-badge.json conformance/myhealth-eu-badge.json conformance/myhealth-eu/*.json ||
   problem "a badge runs past the length limits; its breakdown belongs on the conformance page"
 badge_length_self_test > /dev/null || problem "the shared badge length check fails its self-test"
 badge_count_color_self_test > /dev/null || problem "the shared badge colour rule fails its self-test"
