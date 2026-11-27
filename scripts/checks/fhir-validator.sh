@@ -81,13 +81,14 @@ docs/specs/ihe-pharm-mpd/ihe.pharm.mpd.r4-1.0.0-comment-2.tgz"
 # The MyHealth@EU guides each document the tests write is held to (#1952,
 # #2041), one "guide<TAB>tarball<TAB>profile<TAB>documents" record per line:
 # the guide's package, the profile every document is validated against with
-# -profile, and the documents, a directory under DOCUMENTS, `summaries` for
-# the patient summaries at its top, or `patients` for the Patient of every
-# document. The guides and the vendored packages of their closure are put in
+# -profile, and the documents, a directory under DOCUMENTS or `patients`
+# for the Patient of every document. The Patient Summary guide reads the
+# summaries written with `[eehrxf.terminology] transcode = "myhealth-eu"`
+# (#2039). The guides and the vendored packages of their closure are put in
 # the cache beside the packages above.
 readonly MYHEALTH_EU_CHECKS="\
 core	docs/specs/ehdsi-core/myhealth.eu.fhir.core-1.0.1.tgz	http://fhir.ehdsi.eu/core/StructureDefinition/patient-myhealtheu-core	patients
-eps	docs/specs/ehdsi-eps/myhealth.eu.fhir.eps-1.0.0-poc.tgz	http://fhir.ehdsi.eu/eps/StructureDefinition/bundle-eps-myhealtheu	summaries
+eps	docs/specs/ehdsi-eps/myhealth.eu.fhir.eps-1.0.0-poc.tgz	http://fhir.ehdsi.eu/eps/StructureDefinition/bundle-eps-myhealtheu	myhealth-eu/summary
 epd	docs/specs/ehdsi-epd/myhealth.eu.fhir.epd-1.0.0-poc.tgz	http://fhir.ehdsi.eu/epd/StructureDefinition/MedicationRequest-myhealtheu-epd	myhealth-eu/prescription
 imaging	docs/specs/ehdsi-imaging/myhealth.eu.fhir.imaging-9.1.1.tgz	http://fhir.ehdsi.eu/imaging/StructureDefinition/bundle-img-myhealtheu	myhealth-eu/imaging
 laboratory	docs/specs/ehdsi-laboratory/myhealth.eu.fhir.laboratory-9.2.0.tgz	http://fhir.ehdsi.eu/laboratory/StructureDefinition/Bundle-lab-myhealtheu	myhealth-eu/laboratory
@@ -478,11 +479,7 @@ myhealth_eu() {
     dir="$out/myhealth-eu/$guide"
     rm -rf "$dir"
     mkdir -p "$dir"
-    if [[ "$from" == summaries ]]; then
-      for doc in "$documents"/*.json; do
-        [[ -f "$doc" ]] && cp "$doc" "$dir/"
-      done
-    elif [[ "$from" == patients ]]; then
+    if [[ "$from" == patients ]]; then
       for doc in "$documents"/*.json "$documents"/myhealth-eu/*/*.json; do
         [[ -f "$doc" ]] || continue
         jq '[.entry[]?.resource | select(.resourceType == "Patient")][0] // empty' "$doc" > "$dir/${doc##*/}"

@@ -196,8 +196,14 @@ fn gateway(dir: &Path, (a, b): (&Server, &Server), pdq: &Server) -> Result<Route
 /// the fixture template, the uid `uid`, and every other section query with
 /// no row.
 pub(crate) async fn node_holding(uid: &str) -> Server {
-    let server = Server::start().await;
     let composition = eps::allergy_composition(uid, eps::TEMPLATE, "Synthetic substance");
+    node_answering(uid, &composition).await
+}
+
+/// A node answering the allergies section query with `composition`, the
+/// uid `uid`, and every other section query with no row.
+pub(crate) async fn node_answering(uid: &str, composition: &str) -> Server {
+    let server = Server::start().await;
     let columns = r#"[{"name":"composition","path":"c"},{"name":"uid","path":"c/uid/value"},{"name":"template_id","path":"c/archetype_details/template_id/value"}]"#;
     let held = format!(
         r#"{{"q":"node","columns":{columns},"rows":[[{composition},"{uid}","{}"]]}}"#,
