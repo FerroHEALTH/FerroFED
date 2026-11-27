@@ -31,6 +31,9 @@
 //!   `OperationOutcome`;
 //! - [`list`]: the document list of that face, a `DocumentReference` search
 //!   answering the summary written on request and each member's own one;
+//! - [`original`]: the checks a member's own document passes before that
+//!   face serves it, its `DocumentReference` header and the format of its
+//!   bytes;
 //! - [`lookup`]: the patient lookup of that face, a `Patient` search by
 //!   identifier answering the `Patient` the identity binding holds;
 //! - [`receive`]: a document received in the exchange format, checked and
@@ -74,6 +77,7 @@ pub mod laboratory;
 pub mod list;
 pub mod lookup;
 pub mod medication;
+pub mod original;
 pub mod patient_summary;
 pub mod prescriptions;
 pub mod receive;

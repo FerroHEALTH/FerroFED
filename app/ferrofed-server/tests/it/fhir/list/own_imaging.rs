@@ -48,7 +48,7 @@ const BOTH: &str = "http://loinc.org|85430-7,http://loinc.org|18748-4";
 /// The member's own `DocumentReference`, its members in the order the
 /// gateway's serialiser writes them, with a decimal of two places, so the
 /// listed bytes can be compared whole.
-const DOCUMENT: &str = r#"{"category":[{"coding":[{"code":"Medical-Imaging","system":"http://hl7.eu/fhir/health-data-api/CodeSystem/eehrxf-document-priority-category-cs"}]}],"content":[{"attachment":{"contentType":"application/fhir+json","size":63,"url":"Binary/img-1"}}],"extension":[{"url":"urn:oid:2.999.9.3","valueDecimal":3.50}],"id":"doc-img-1","masterIdentifier":{"system":"urn:ietf:rfc:3986","value":"urn:uuid:1a900000-0000-4000-8000-0000000000b1"},"resourceType":"DocumentReference","status":"current","subject":{"reference":"Patient/pat-a"},"type":{"coding":[{"code":"85430-7","system":"http://loinc.org"}]}}"#;
+const DOCUMENT: &str = r#"{"category":[{"coding":[{"code":"Medical-Imaging","system":"http://hl7.eu/fhir/health-data-api/CodeSystem/eehrxf-document-priority-category-cs"}]}],"content":[{"attachment":{"contentType":"application/fhir+json","size":63,"url":"Binary/img-1"}}],"date":"2026-10-21T08:00:00Z","description":"Synthetic imaging report","extension":[{"url":"urn:oid:2.999.9.3","valueDecimal":3.50}],"id":"doc-img-1","masterIdentifier":{"system":"urn:ietf:rfc:3986","value":"urn:uuid:1a900000-0000-4000-8000-0000000000b1"},"resourceType":"DocumentReference","status":"current","subject":{"reference":"Patient/pat-a"},"type":{"coding":[{"code":"85430-7","system":"http://loinc.org"}]}}"#;
 
 /// Node A's own endpoint, serving imaging reports.
 const IMAGING: Declared = Declared {
@@ -338,6 +338,63 @@ async fn a_members_original_image_in_png_is_read_byte_for_byte_with_its_media_ty
     assert_eq!(StatusCode::OK, status, "{}", String::from_utf8_lossy(&body));
     assert_eq!(body, ORIGINAL_PNG, "the original byte for byte");
     assert_eq!(field(&headers, "content-type"), Some("image/png"));
+    Ok(())
+}
+
+/// The image read at the member's `Binary/img-1`, answering `body` as
+/// `media`, through the gateway: its status, media type and body.
+async fn read_as(
+    body: &[u8],
+    media: &str,
+) -> Result<(StatusCode, Option<String>, Vec<u8>), Box<dyn std::error::Error>> {
+    let document = DOCUMENT
+        .replace("application/fhir+json", media)
+        .replace("85430-7", "18748-4");
+    let members = Members::holding(IMAGING, &document).await?;
+    let dir = tempfile::tempdir()?;
+    let app = members.gateway(dir.path(), ("", ""))?;
+    let (_, text) = call(app.clone(), list(IMAGING_TYPE)?).await?;
+    let url = url_of(&listed(&IMAGING, &text)?.0)?;
+    members.own.reset().await;
+    Mock::given(method("GET"))
+        .and(path("/fhir/Binary/img-1"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(body.to_vec(), media))
+        .mount(&members.own)
+        .await;
+    let (status, headers, body) = exchange(app, binary(&url)?).await?;
+    Ok((
+        status,
+        field(&headers, "content-type").map(str::to_owned),
+        body,
+    ))
+}
+
+// NOTE: draft EEHRxF implementing act Art 3(1)(d): an imaging study is exchanged in DICOM.
+#[tokio::test]
+async fn a_members_dicom_file_is_read_byte_for_byte() -> TestResult {
+    let mut dicom = vec![0_u8; 128];
+    dicom.extend_from_slice(b"DICM\x02\x00\x00\x00");
+    let (status, media, body) = read_as(&dicom, "application/dicom").await?;
+    assert_eq!(StatusCode::OK, status, "{}", String::from_utf8_lossy(&body));
+    assert_eq!(body, dicom, "the original byte for byte");
+    assert_eq!(media.as_deref(), Some("application/dicom"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn bytes_that_are_no_image_of_their_media_type_are_refused() -> TestResult {
+    let (status, _, body) = read_as(b"GIF89a\x01\x00", "image/png").await?;
+    let text = String::from_utf8_lossy(&body);
+    assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "§11.3: {text}");
+    assert!(text.contains("node-a-img (node-error)"), "{text}");
+    assert!(text.contains("no image/png file"), "{text}");
+    let (status, _, body) = read_as(b"GIF89a\x01\x00", "image/gif").await?;
+    let text = String::from_utf8_lossy(&body);
+    assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "{text}");
+    assert!(
+        text.contains("image/gif is no format the exchange takes"),
+        "{text}"
+    );
     Ok(())
 }
 

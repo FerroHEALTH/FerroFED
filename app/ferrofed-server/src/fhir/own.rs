@@ -13,6 +13,14 @@
 //! member alone for its `Binary`, by its `ehr_id` alone (§5.4.1, N33), and
 //! answers it as the member sent it. Readdressing the URLs is our own
 //! design: no specification governs it.
+//!
+//! Before either is served the gateway holds it to what the exchange needs
+//! ([`ferrofed_eehrxf::original`]): a `DocumentReference` that lacks the
+//! header data of MyHealth@EU `DocumentReference-minimal-myhealtheu` or a
+//! media type is named in `node-error` and not listed, and bytes that are
+//! no FHIR resource and no PDF/A-1, JPEG, PNG or, for imaging, DICOM file
+//! of the media type the member named are refused with `424`, the member
+//! named in `node-error` (§11.1, §11.3).
 
 use std::sync::Arc;
 
@@ -21,7 +29,9 @@ use ehds_logging::category::Category;
 use ehds_logging::classify::{Basis, Evidence};
 use ehds_logging::record::{Action, DataSubject, EhrAt, PatientLookup};
 use ferrofed_eehrxf::list::{self, Match};
+use ferrofed_eehrxf::original::Unoriginal;
 use ferrofed_engine::hygiene::Withheld;
+use ferrofed_engine::single_node::forward::Forwarded;
 use ferrofed_engine::single_node::native_search::{By, SearchAsked, Searched};
 use ferrofed_registry::id::EndpointId;
 use fhir_types::codec::Value;
@@ -79,6 +89,15 @@ pub(super) fn listed(
                         ));
                         continue;
                     };
+                    // NOTE: MyHealth@EU Requirements Catalogue 10.0.0 §1.16.1: the header data a
+                    // contact point reads; a document that lacks it is named, never listed.
+                    if let Err(unheaded) = ferrofed_eehrxf::original::header(resource) {
+                        outcomes.push((
+                            minted_urn(),
+                            list::unread(endpoint, own.kind.documents(), &unheaded.to_string()),
+                        ));
+                        continue;
+                    }
                     let id = fhir.ids.document((endpoint, held));
                     // NOTE: no specification governs this: our own design; the attachment URL alone
                     // changes, so the document is read through the gateway's access check and record.
@@ -164,7 +183,21 @@ pub(super) async fn read(
     let searched = client.native_search(asked, &options, until).await;
     let left = searched.contact().left();
     let (mut response, status) = match &searched {
-        Searched::Page(forwarded) => (super::binary::passed(forwarded), EndpointStatus::Active),
+        Searched::Page(forwarded) => match original(forwarded, kind) {
+            Ok(()) => (super::binary::passed(forwarded), EndpointStatus::Active),
+            Err(unoriginal) => (
+                outcome(
+                    StatusCode::FAILED_DEPENDENCY,
+                    "incomplete",
+                    &format!(
+                        "the document could not be read: {} (node-error) answered {unoriginal} \
+                         (§11.3)",
+                        member.native
+                    ),
+                ),
+                EndpointStatus::NodeError,
+            ),
+        },
         // NOTE: FHIR R4 `http.html` §3.1.0.2: a read of a resource the member holds no longer is
         // `404` or `410`, an answer about the document that leaves the member active.
         Searched::Erred(code) if *code == StatusCode::NOT_FOUND || *code == StatusCode::GONE => (
@@ -187,6 +220,17 @@ pub(super) async fn read(
         ),
     );
     response
+}
+
+/// Holds the bytes `forwarded` carries, a document of the kind `kind`, to
+/// the media type the member named (MyHealth@EU Requirements Catalogue
+/// 10.0.0 §1.16, draft `EEHRxF` Art 3(1) and Annex II).
+fn original(forwarded: &Forwarded, kind: Kind) -> Result<(), Unoriginal> {
+    let media = forwarded
+        .headers()
+        .get(http::header::CONTENT_TYPE)
+        .and_then(|media| media.to_str().ok());
+    ferrofed_eehrxf::original::original(media, forwarded.body(), kind.component()).map(|_| ())
 }
 
 /// The answer to a read whose member, at `endpoint`, gave no answer, with

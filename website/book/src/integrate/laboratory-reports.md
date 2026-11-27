@@ -100,10 +100,34 @@ RFC 8259 gives it no meaning. Reading that URL asks the member alone for
 `GET {endpoint}/Binary/{id}` and answers its bytes and media type as the
 member sent them.
 
+Before it serves a member's document the gateway checks what the exchange
+needs of it:
+
+- **Header data.** Each `DocumentReference` must conform to the MyHealth@EU
+  NCPeH API profile `DocumentReference-minimal-myhealtheu`
+  (`myhealth.eu.fhir.ncp-api` 9.1.1-ci): a `masterIdentifier`, `status`,
+  `type`, `subject`, `date` and `description`, and an attachment on every
+  `content`. Every attachment must also name its `contentType`, which the
+  read checks the bytes by. A `DocumentReference` that fails is not listed,
+  and an `outcome` entry names the member in `node-error` with the element
+  it lacks, never a value. The profile's `required` bindings are not
+  evaluated, since its package carries no expansion of the value sets.
+- **Format.** A read whose bytes are a FHIR resource
+  (`application/fhir+json` or `application/fhir+xml`) passes as before. An
+  original must be a PDF that declares PDF/A-1a or PDF/A-1b in its XMP
+  identification schema (the draft exchange-format implementing act, Art
+  3(1)(a) and Annex II), a JPEG or a PNG image whose bytes open with that
+  format's signature, or, for imaging, a DICOM file (Art 3(1)(d)). The read
+  of any other format, or of bytes that do not match their media type,
+  answers `424` and names the member in `node-error`. None of the bytes
+  reach you.
+
 An attachment URL that names no `Binary` under the member's endpoint, or a
 `Patient` search that names more than one patient, makes the member one in
 `node-error`. A member that does not answer fails the list under
 all-or-nothing, `424` or `504` naming it, and is named in an `outcome`
 entry under `partial`. Each list and read is recorded under
 `Laboratory-Reports` in the access log, naming the member's own endpoint
-and its `ehr_id` (`fhir/list/own_laboratory.rs`).
+and its `ehr_id` (`fhir/list/own_laboratory.rs`, with the checks
+`a_document_reference_without_the_header_data_is_named_and_not_listed` and
+`a_members_pdf_that_is_no_pdf_a_is_refused_and_its_member_named`).

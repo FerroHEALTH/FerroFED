@@ -39,7 +39,7 @@ const SUMMARY_TYPE: &str = "&type=http%3A%2F%2Floinc.org%7C60591-5";
 /// The member's own `DocumentReference`, its members in the order the
 /// gateway's serialiser writes them, with a decimal of two places, so the
 /// listed bytes can be compared whole.
-const DOCUMENT: &str = r#"{"category":[{"coding":[{"code":"Laboratory-Reports","system":"http://hl7.eu/fhir/health-data-api/CodeSystem/eehrxf-document-priority-category-cs"}]}],"content":[{"attachment":{"contentType":"application/fhir+json","size":63,"url":"Binary/lab-1"}}],"extension":[{"url":"urn:oid:2.999.9.1","valueDecimal":1.50}],"id":"doc-lab-1","masterIdentifier":{"system":"urn:ietf:rfc:3986","value":"urn:uuid:1ab00000-0000-4000-8000-0000000000a1"},"resourceType":"DocumentReference","status":"current","subject":{"reference":"Patient/pat-a"},"type":{"coding":[{"code":"11502-2","system":"http://loinc.org"}]}}"#;
+const DOCUMENT: &str = r#"{"category":[{"coding":[{"code":"Laboratory-Reports","system":"http://hl7.eu/fhir/health-data-api/CodeSystem/eehrxf-document-priority-category-cs"}]}],"content":[{"attachment":{"contentType":"application/fhir+json","size":63,"url":"Binary/lab-1"}}],"date":"2026-10-21T08:00:00Z","description":"Synthetic laboratory report","extension":[{"url":"urn:oid:2.999.9.1","valueDecimal":1.50}],"id":"doc-lab-1","masterIdentifier":{"system":"urn:ietf:rfc:3986","value":"urn:uuid:1ab00000-0000-4000-8000-0000000000a1"},"resourceType":"DocumentReference","status":"current","subject":{"reference":"Patient/pat-a"},"type":{"coding":[{"code":"11502-2","system":"http://loinc.org"}]}}"#;
 
 /// Node A's own endpoint, serving laboratory reports.
 const LABORATORY: Declared = Declared {
@@ -290,9 +290,14 @@ async fn a_binary_the_member_holds_no_longer_is_not_found_and_a_failed_read_is_n
     Ok(())
 }
 
-/// A synthetic original report in PDF, with bytes that are no UTF-8.
+/// A synthetic original report in PDF/A-1b, its identification schema in
+/// plain XMP (ISO 19005-1 6.7.11), with bytes that are no UTF-8.
 const ORIGINAL_PDF: &[u8] =
-    b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n1 0 obj << /Type /Catalog >> endobj\n%%EOF\n";
+    b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n1 0 obj << /Type /Catalog /Metadata 2 0 R >> endobj\n\
+2 0 obj << /Type /Metadata /Subtype /XML >> stream\n<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF \
+xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:Description rdf:about=\"\" \
+xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\" pdfaid:part=\"1\" pdfaid:conformance=\"B\"/>\
+</rdf:RDF></x:xmpmeta>\nendstream endobj\n%%EOF\n";
 
 // NOTE: MyHealth@EU Requirements Catalogue 10.0.0 08 and 08.01: an Original Clinical Document is
 // unmodified after its creation, in PDF, JPG or PNG.
@@ -322,6 +327,64 @@ async fn a_members_original_report_in_pdf_is_read_byte_for_byte_with_its_media_t
     assert_eq!(StatusCode::OK, status, "{}", String::from_utf8_lossy(&body));
     assert_eq!(body, ORIGINAL_PDF, "the original byte for byte");
     assert_eq!(field(&headers, "content-type"), Some("application/pdf"));
+    Ok(())
+}
+
+// NOTE: draft EEHRxF implementing act Annex II: a PDF document is PDF/A-1a or PDF/A-1b alone.
+#[tokio::test]
+async fn a_members_pdf_that_is_no_pdf_a_is_refused_and_its_member_named() -> TestResult {
+    let document = DOCUMENT.replace("application/fhir+json", "application/pdf");
+    let members = Members::holding(LABORATORY, &document).await?;
+    let dir = tempfile::tempdir()?;
+    let app = members.gateway(dir.path(), ("", ""))?;
+    let (_, text) = call(app.clone(), list(LABORATORY_TYPE)?).await?;
+    let url = url_of(&listed(&LABORATORY, &text)?.0)?;
+    let plain: &[u8] = b"%PDF-1.7\n1 0 obj << /Type /Catalog >> endobj\n%%EOF\n";
+    members.own.reset().await;
+    Mock::given(method("GET"))
+        .and(path("/fhir/Binary/lab-1"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(plain, "application/pdf"))
+        .mount(&members.own)
+        .await;
+    let (status, text) = call(app, binary(&url)?).await?;
+    assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "§11.3: {text}");
+    assert!(text.contains("node-a-lab (node-error)"), "{text}");
+    assert!(text.contains("no PDF/A-1"), "{text}");
+    assert!(!text.contains("Catalog"), "nothing of the bytes: {text}");
+    Ok(())
+}
+
+// NOTE: MyHealth@EU Requirements Catalogue 10.0.0 §1.16.1: the header data of an original.
+#[tokio::test]
+async fn a_document_reference_without_the_header_data_is_named_and_not_listed() -> TestResult {
+    let headless = DOCUMENT.replace(r#""description":"Synthetic laboratory report","#, "");
+    let members = Members::holding(LABORATORY, &headless).await?;
+    let dir = tempfile::tempdir()?;
+    let app = members.gateway(dir.path(), ("", ""))?;
+    let (status, text) = call(app, list(LABORATORY_TYPE)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let bundle: Value = serde_json::from_str(&text)?;
+    assert!(entries(&bundle, "match").is_empty(), "not listed: {bundle}");
+    let outcomes = entries(&bundle, "outcome");
+    let [outcome] = outcomes.as_slice() else {
+        return Err(format!("one outcome entry: {bundle}").into());
+    };
+    let diagnostics = outcome
+        .pointer("/issue/0/diagnostics")
+        .and_then(Value::as_str)
+        .ok_or("diagnostics")?;
+    for named in [
+        "node-a-lab (node-error)",
+        "DocumentReference-minimal-myhealtheu",
+        "description",
+    ] {
+        assert!(diagnostics.contains(named), "{named}: {diagnostics}");
+    }
+    let mediumless = DOCUMENT.replace(r#""contentType":"application/fhir+json","#, "");
+    let members = Members::holding(LABORATORY, &mediumless).await?;
+    let app = members.gateway(dir.path(), ("", ""))?;
+    let (_, text) = call(app, list(LABORATORY_TYPE)?).await?;
+    assert!(text.contains("names no contentType"), "{text}");
     Ok(())
 }
 

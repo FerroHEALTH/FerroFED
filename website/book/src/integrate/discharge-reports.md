@@ -186,7 +186,9 @@ an attachment URL that names no `Binary` under the member's endpoint, or a
 all-or-nothing, `424` or `504` naming it, and is named in an `outcome`
 entry under `partial`. Each list and read is recorded under
 `Discharge-Reports` in the access log, naming the member's own endpoint
-and its `ehr_id` (`fhir/list/own_discharge.rs`).
+and its `ehr_id` (`fhir/list/own_discharge.rs`). The gateway checks the
+header data and the format of each document as it does a laboratory
+report's.
 
 ## The component behind the category
 
