@@ -78,14 +78,18 @@ docs/specs/eu-hl7-extensions/hl7.fhir.eu.extensions.r4-1.3.0.tgz
 docs/specs/eu-hl7-extensions/hl7.fhir.eu.extensions.r4-1.3.1.tgz
 docs/specs/ihe-pharm-mpd/ihe.pharm.mpd.r4-1.0.0-comment-2.tgz"
 
-# The MyHealth@EU CI builds each report category is held to (#1952), one
-# "guide<TAB>tarball<TAB>profile<TAB>documents" record per line: the guide's
-# package, the profile every document is validated against with -profile,
-# and the documents, a directory under DOCUMENTS or `patients` for the
-# Patient of every document. The guides and the vendored packages of their
-# closure are put in the cache beside the packages above.
+# The MyHealth@EU guides each document the tests write is held to (#1952,
+# #2041), one "guide<TAB>tarball<TAB>profile<TAB>documents" record per line:
+# the guide's package, the profile every document is validated against with
+# -profile, and the documents, a directory under DOCUMENTS, `summaries` for
+# the patient summaries at its top, or `patients` for the Patient of every
+# document. The guides and the vendored packages of their closure are put in
+# the cache beside the packages above.
 readonly MYHEALTH_EU_CHECKS="\
 core	docs/specs/ehdsi-core/myhealth.eu.fhir.core-1.0.1.tgz	http://fhir.ehdsi.eu/core/StructureDefinition/patient-myhealtheu-core	patients
+eps	docs/specs/ehdsi-eps/myhealth.eu.fhir.eps-1.0.0-poc.tgz	http://fhir.ehdsi.eu/eps/StructureDefinition/bundle-eps-myhealtheu	summaries
+epd	docs/specs/ehdsi-epd/myhealth.eu.fhir.epd-1.0.0-poc.tgz	http://fhir.ehdsi.eu/epd/StructureDefinition/MedicationRequest-myhealtheu-epd	myhealth-eu/prescription
+imaging	docs/specs/ehdsi-imaging/myhealth.eu.fhir.imaging-9.1.1.tgz	http://fhir.ehdsi.eu/imaging/StructureDefinition/bundle-img-myhealtheu	myhealth-eu/imaging
 laboratory	docs/specs/ehdsi-laboratory/myhealth.eu.fhir.laboratory-9.2.0.tgz	http://fhir.ehdsi.eu/laboratory/StructureDefinition/Bundle-lab-myhealtheu	myhealth-eu/laboratory
 discharge	docs/specs/ehdsi-hdr/myhealth.eu.fhir.hdr-9.2.0.tgz	http://fhir.ehdsi.eu/hdr/StructureDefinition/bundle-hdr-myhealtheu	myhealth-eu/discharge
 vaccination	docs/specs/ehdsi-euvac/myhealth.eu.fhir.euvac-10.0.0-preview.tgz	http://fhir.ehdsi.eu/euvac/StructureDefinition/bundle-euvac-myhealtheu	myhealth-eu/vaccination"
@@ -94,7 +98,12 @@ docs/specs/ehdsi-core/myhealth.eu.fhir.core-1.0.1.tgz
 docs/specs/ehdsi-laboratory/myhealth.eu.fhir.laboratory-9.2.0.tgz
 docs/specs/ehdsi-hdr/myhealth.eu.fhir.hdr-9.2.0.tgz
 docs/specs/ehdsi-euvac/myhealth.eu.fhir.euvac-10.0.0-preview.tgz
+docs/specs/ehdsi-eps/myhealth.eu.fhir.eps-1.0.0-poc.tgz
+docs/specs/ehdsi-epd/myhealth.eu.fhir.epd-1.0.0-poc.tgz
+docs/specs/ehdsi-imaging/myhealth.eu.fhir.imaging-9.1.1.tgz
 docs/specs/ehdsi-mvc/myhealth.eu.fhir.mvc-package-9.1.0.tgz
+docs/specs/eu-hl7-mpd/hl7.fhir.eu.mpd-1.0.0.tgz
+docs/specs/eu-hl7-imaging/hl7.fhir.eu.imaging-1.0.0-alpha.tgz
 docs/specs/eu-hl7-laboratory/hl7.fhir.eu.laboratory-2.1.0.tgz
 docs/specs/eu-hl7-hdr/hl7.fhir.eu.hdr-1.0.0.tgz
 docs/specs/eu-xtehr-models/xtehr.eu.ehds.models-1.0.0.tgz
@@ -103,9 +112,10 @@ docs/specs/hl7-ips/hl7.fhir.uv.ips-2.0.1.tgz"
 # The verdicts the MyHealth@EU checks recorded, which a run must reproduce.
 readonly MYHEALTH_EU_RECORD=conformance/myhealth-eu-validation.tsv
 
-# The rest of the dependency closure of IGS, one "id<TAB>version<TAB>sha256"
-# record per line, each the registry tarball at the version a dependency
-# names. Below them are the packages the validator loads by itself:
+# The rest of the dependency closure of IGS and of the MyHealth@EU guides,
+# one "id<TAB>version<TAB>sha256" record per line, each the registry tarball
+# at the version a dependency names, or the newest release of the patch
+# range it names. Below them are the packages the validator loads by itself:
 # hl7.fhir.xver-extensions, and hl7.terminology and hl7.fhir.uv.extensions,
 # which it asks for at their newest version and, with no HTTP access, takes
 # at the newest the cache holds; they are pinned at the versions the vendored
@@ -141,7 +151,14 @@ hl7.fhir.uv.extensions.r5	5.3.0	f1039cac888d79ebd29878d7debe5e647ffe7ed962a9033d
 hl7.terminology.r5	7.1.0	473303108b5607aad7b910581739e8bbf3e61a625ed9e739c66e0ca597d4aefe
 myhealth.eu.fhir.core	1.0.0	d40b9979dd971a76fc39452aee4091a5f79a9d46192ece7c28e70b4d429a9270
 xtehr.eu.ehds.models	0.3.0	f2cb6b0b5b35cab33e9b618b38c54797ece61f5e2dda59982c952ecd9398865b
-hl7.terminology.r5	7.0.1	f2de7264bd4a9c6771f211ee96b9952d32ab866e8b5d657884f8c375a34ffb87"
+hl7.terminology.r5	7.0.1	f2de7264bd4a9c6771f211ee96b9952d32ab866e8b5d657884f8c375a34ffb87
+hl7.terminology.r4	7.0.1	7e88619af8d6ec06f0f521a64800da7d8197ceb1c451c293ec1b796efce3840e
+hl7.fhir.eu.extensions.r4	1.2.0	74ade1e941c1972d7adaceaad54c709ff1dc3226b3d6a180ab700bf869945377
+hl7.fhir.uv.xver-r5.r4	0.0.1-snapshot-2	e28ec496b04c9fa681b4c4971afb4fefc56f4dc45f2680c2935b589656731946
+ihe.iti.mhd	4.2.3	0a11808dd94c9eac87e4ee56f0f08c2e782f022df9554acf31a3bb64a2624f2e
+ihe.iti.balp	1.1.4	be46dda3088ee9d486d7163458dc5a4d7192e8a1c587fd47e2beb70e4bcefa90
+ihe.formatcode.fhir	1.4.0	d803d12f3b51940ae44f8a72372918cc409052e072d7e22bc968de58e301a34c
+fhir.dicom	2025.3.20250714	f101876ed4463ac7b814ba0e38c97cc2a8b15aecaee66916f4644946443ba303"
 
 fail=0
 bad() {
@@ -442,16 +459,18 @@ verdicts() {
   rm -f "$bases"
 }
 
-# myhealth_eu DOCUMENTS OUT: validates each report category against its
-# MyHealth@EU CI build and the Patient of every document against MyHealth@EU
+# myhealth_eu DOCUMENTS OUT: validates each document category against its
+# MyHealth@EU guide and the Patient of every document against MyHealth@EU
 # Core, writes the verdicts to OUT/myhealth-eu-validation.tsv and fails when
-# they differ from MYHEALTH_EU_RECORD, so a change of any verdict is
-# recorded on purpose (no specification governs this: our own design,
-# #1952).
+# they differ from the first three columns of MYHEALTH_EU_RECORD, so a change
+# of any verdict is recorded on purpose. A guide whose dependency closure
+# names a package no registry publishes cannot be loaded offline, and each of
+# its documents is then invalid; any other run that writes no output fails
+# (no specification governs this: our own design, #1952, #2041).
 myhealth_eu() {
   local documents="$1" out="$2" jar home
   prepare || return 1
-  local guide tarball profile from dir docs doc status=0 code
+  local guide tarball profile from dir docs doc status=0 code unresolved
   local found="$out/myhealth-eu-validation.tsv"
   : > "$found.unsorted"
   while IFS=$'\t' read -r guide tarball profile from; do
@@ -459,7 +478,11 @@ myhealth_eu() {
     dir="$out/myhealth-eu/$guide"
     rm -rf "$dir"
     mkdir -p "$dir"
-    if [[ "$from" == patients ]]; then
+    if [[ "$from" == summaries ]]; then
+      for doc in "$documents"/*.json; do
+        [[ -f "$doc" ]] && cp "$doc" "$dir/"
+      done
+    elif [[ "$from" == patients ]]; then
       for doc in "$documents"/*.json "$documents"/myhealth-eu/*/*.json; do
         [[ -f "$doc" ]] || continue
         jq '[.entry[]?.resource | select(.resourceType == "Patient")][0] // empty' "$doc" > "$dir/${doc##*/}"
@@ -490,6 +513,11 @@ myhealth_eu() {
       -profile "$profile" \
       -output "$dir.json" \
       > "$dir.log" 2>&1 || code=$?
+    if [[ ! -f "$dir.json" ]] && unresolved="$(grep -o -m 1 'Unable to resolve package id [^ ]*' "$dir.log")"; then
+      echo "::warning::MyHealth@EU $guide cannot be loaded offline ($unresolved): each of its documents is invalid" >&2
+      (cd "$dir" && ls -1 -- *.json) | awk -v guide="$guide" '{ printf "%s\t%s\tinvalid\n", guide, $0 }' >> "$found.unsorted"
+      continue
+    fi
     if [[ ! -f "$dir.json" ]]; then
       tail -n 40 "$dir.log" >&2
       echo "::error::the validator wrote no output for MyHealth@EU $guide (exit $code)" >&2
@@ -503,7 +531,7 @@ myhealth_eu() {
     LC_ALL=C sort "$found.unsorted"
   } > "$found"
   rm -f "$found.unsorted"
-  if ! diff -u <(grep -v '^#' "$MYHEALTH_EU_RECORD") "$found" > "$out/myhealth-eu-validation.diff"; then
+  if ! diff -u <(grep -v '^#' "$MYHEALTH_EU_RECORD" | cut -f 1-3) "$found" > "$out/myhealth-eu-validation.diff"; then
     cat "$out/myhealth-eu-validation.diff" >&2
     echo "::error::the MyHealth@EU verdicts differ from $MYHEALTH_EU_RECORD; record the run's $found below its comment header on purpose" >&2
     status=1

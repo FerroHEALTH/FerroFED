@@ -46,6 +46,9 @@
 [![MyHealth@EU laboratory, self-tested](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fmyhealth-eu%2Flaboratory.json)](https://ferrofed.eu/docs/evaluate/myhealth-eu.html)
 [![MyHealth@EU discharge, self-tested](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fmyhealth-eu%2Fdischarge.json)](https://ferrofed.eu/docs/evaluate/myhealth-eu.html)
 [![MyHealth@EU vaccination, self-tested](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fmyhealth-eu%2Fvaccination.json)](https://ferrofed.eu/docs/evaluate/myhealth-eu.html)
+[![MyHealth@EU eps, self-tested](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fmyhealth-eu%2Feps.json)](https://ferrofed.eu/docs/evaluate/myhealth-eu.html)
+[![MyHealth@EU epd, self-tested](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fmyhealth-eu%2Fepd.json)](https://ferrofed.eu/docs/evaluate/myhealth-eu.html)
+[![MyHealth@EU imaging, self-tested](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fmyhealth-eu%2Fimaging.json)](https://ferrofed.eu/docs/evaluate/myhealth-eu.html)
 <!-- myhealth-eu:end -->
 
 </div>
