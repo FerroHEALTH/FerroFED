@@ -32,17 +32,17 @@ use eehrxf::document::{Document, DocumentError};
 use eehrxf::mapping::Mapping;
 use eehrxf::mappings::LABORATORY;
 use ferrofed_registry::definition::{StoredDefinition, query_name};
-use fhir_types::r4::bundle::Bundle;
 use openehr_its::rest::stored_query::{QualifiedQueryName, QueryNameError};
 use openehr_query::ast::SelectQuery;
 use openehr_query::printer;
 
 use crate::prescriptions::mapped::Template;
-use crate::report::{self, Author, Report, ServedError, Writes};
+use crate::report::{self, Author, Delivered, Report, ServedError, Writes};
 use crate::reserved::{NAMESPACE, SAVED, VERSION};
 use crate::section_query::{self, Archetype};
 use async_trait::async_trait;
 use eehrxf::terminology::Terminology;
+use eehrxf::terminology::translation::Binding;
 
 /// The query's name in the reserved namespace.
 pub const SLUG: &str = "laboratory-report";
@@ -151,14 +151,16 @@ impl Writes for Served {
     ///
     /// # Errors
     ///
-    /// [`ServedError::Run`] when the composition does not map, and
+    /// [`ServedError::Run`] when the composition does not map,
+    /// [`ServedError::Translation`] when a translation the bindings ask for
+    /// gets no answer, and
     /// [`ServedError::Document`] when the document cannot be assembled.
     async fn document(
         &self,
         composition: &str,
         report: Report<'_>,
-        _terminology: &Terminology,
-    ) -> Result<Bundle, ServedError> {
+        (terminology, bindings): (&Terminology, &[Binding]),
+    ) -> Result<Delivered, ServedError> {
         let mut document = Document::of(
             &LABORATORY_REPORT_FORM,
             report.base,
@@ -174,9 +176,10 @@ impl Writes for Served {
             ),
             (&self.mapping, composition),
         )?;
-        let withheld = report::withheld(mapped.bundle());
+        let (run, unbound) = report::transcoded(mapped.bundle(), (terminology, bindings)).await?;
+        let withheld = report::withheld(&run);
         let results = document
-            .with_mapped_report(mapped.bundle())
+            .with_mapped_report(&run)
             .map_err(ServedError::Document)?;
         report::sourced(&mut document, report, &results).map_err(ServedError::Document)?;
         let slot = LAB_SLOTS
@@ -194,6 +197,9 @@ impl Writes for Served {
         document
             .with_section(section)
             .map_err(ServedError::Document)?;
-        document.into_bundle().map_err(ServedError::Document)
+        Ok(Delivered {
+            bundle: document.into_bundle().map_err(ServedError::Document)?,
+            unbound,
+        })
     }
 }

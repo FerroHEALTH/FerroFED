@@ -23,10 +23,11 @@
 //! default, since the face that asks fails closed on the first refusal. The
 //! server is sent the codes of the documents the face receives, which are
 //! health data, so its URL is held to the protected-payload policy of
-//! [`transport`]. Its `transcode = "myhealth-eu"` also translates each
-//! summary's codes into the systems the MyHealth@EU Core required bindings
-//! take ([`Transcode`]); the default, `none`, translates only into the
-//! eHealth Network's preferred systems. The table is optional: with none,
+//! [`transport`]. Its `transcode = "myhealth-eu"` also translates the codes
+//! of each summary and report into the systems the MyHealth@EU Core
+//! required bindings take ([`Transcode`]); the default, `none`, translates
+//! only a summary's codes, into the eHealth Network's preferred systems.
+//! The table is optional: with none,
 //! the component fails closed where it needs a server, refusing a received
 //! coding that carries no display, and names every `required` binding no
 //! vendored expansion decides as not evaluated. It serves the `[fhir]`
@@ -65,13 +66,13 @@ pub struct TerminologyServer {
     /// The server's FHIR base and how it is reached: `https`, `http` under
     /// development only.
     pub endpoint: EndpointSection,
-    /// The codings each summary the face writes gains through the server
-    /// beside the recorded ones.
+    /// The codings each summary and report the face writes gains through
+    /// the server beside the recorded ones.
     pub transcode: Transcode,
 }
 
-/// The codings a summary gains through the terminology server, as
-/// `[eehrxf.terminology] transcode` names them.
+/// The codings a summary or a report gains through the terminology
+/// server, as `[eehrxf.terminology] transcode` names them.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Transcode {
@@ -88,7 +89,8 @@ pub enum Transcode {
 }
 
 impl Transcode {
-    /// The required bindings each summary's codes are translated to meet.
+    /// The required bindings the codes of each summary and report are
+    /// translated to meet.
     #[must_use]
     pub const fn bindings(self) -> &'static [Binding] {
         match self {
@@ -122,7 +124,7 @@ pub struct TerminologySettings {
     /// How the server is reached, its URL known to parse and held to the
     /// protected-payload policy.
     pub endpoint: EndpointSection,
-    /// The codings each summary gains through the server.
+    /// The codings each summary and report gains through the server.
     pub transcode: Transcode,
 }
 
@@ -197,8 +199,8 @@ impl Config {
 }
 
 /// The terminology of [`terminology`]: the component's seam, the client the
-/// validator of a received document asks, and the bindings each summary's
-/// codes are translated to meet.
+/// validator of a received document asks, and the bindings the codes of
+/// each summary and report are translated to meet.
 pub type Built = (Terminology, Option<BridgeTerminology>, &'static [Binding]);
 
 /// Builds the terminology `settings` describe.
