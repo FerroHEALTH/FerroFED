@@ -40,6 +40,7 @@
 //! design.
 
 mod accessor;
+mod anomaly;
 mod emergency;
 pub(crate) mod patient;
 pub(crate) mod routed;
@@ -582,13 +583,15 @@ fn carries_data(response: &Response) -> bool {
 
 /// The answer of `next` to `request`, which `reach` says reaches patient
 /// data, from `caller`: or the refusal of an emergency access the limit
-/// denies or the store cannot count, with nothing sent ([`emergency`]).
+/// denies or the store cannot count, with nothing sent ([`emergency`]);
+/// either carries the anomaly warnings the request raised ([`anomaly`]).
 async fn served(
     gate: &Gate,
     (caller, reach): (Option<&Caller>, Reach),
     (request_id, logged): (&str, &str),
     (request, next): (Request, Next),
 ) -> Response {
+    let warnings = anomaly::counted(&gate.state, caller, reach, logged).await;
     let attempt = emergency::Attempt {
         method: request.method(),
         path: request.uri().path(),
@@ -597,10 +600,14 @@ async fn served(
         request_id,
         logged,
     };
-    match emergency::held(&gate.state, caller, attempt).await {
+    let mut response = match emergency::held(&gate.state, caller, attempt).await {
         Some(refused) => refused,
         None => next.run(request).await,
+    };
+    if let Some(warnings) = warnings {
+        response.extensions_mut().insert(warnings);
     }
+    response
 }
 
 /// `response` once `sink` stored `record`, within what is left of the time
@@ -711,6 +718,7 @@ pub async fn record(State(gate): State<Arc<Gate>>, request: Request, next: Next)
     }
     let mut record = accessed.record(&caller, address, &logged, response.status());
     emergency::describe(&mut record, &response);
+    anomaly::describe(&mut record, &response);
     contact_point_described(&mut record, &caller, &response);
     if record.emergency.is_some() {
         tracing::warn!(

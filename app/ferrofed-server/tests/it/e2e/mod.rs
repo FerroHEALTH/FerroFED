@@ -93,6 +93,7 @@ use crate::support::settings;
 
 mod admission;
 mod aggregate;
+mod anomaly;
 mod attributes;
 #[cfg(feature = "binding-ihe")]
 mod budget;

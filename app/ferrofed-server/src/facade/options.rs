@@ -48,7 +48,10 @@ pub async fn options_root(
     };
     let described = describe(&federation, state.definitions().is_some()).and_then(|body| {
         contact_points
-            .declared_in(body, federation.emergency_limit())
+            .declared_in(
+                body,
+                (federation.emergency_limit(), federation.anomaly_rules()),
+            )
             .map_err(DescribeError::from)
     });
     match described {

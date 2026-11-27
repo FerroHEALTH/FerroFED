@@ -162,6 +162,7 @@ impl Config {
             stored_queries,
             store,
             emergency: crate::config::emergency::resolve(&self.emergency)?,
+            anomaly: crate::config::anomaly::resolve(&self.anomaly)?,
             metrics,
             signing,
             access_log: crate::config::access_log::resolve(&self.access_log)?,
