@@ -6,6 +6,8 @@
 `[store]` connects FerroFED to one PostgreSQL database of its own. The
 store holds the state that must both survive a restart and be one on every
 replica. No specification governs the store: it is FerroFED's own design.
+**Audience:** operators. [What the gateway keeps](deployment-shape.md#what-the-gateway-keeps)
+lists every store a gateway can have; this page is the PostgreSQL one.
 
 ## When you need it
 
