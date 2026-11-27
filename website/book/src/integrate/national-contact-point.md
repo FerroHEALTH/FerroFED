@@ -607,13 +607,9 @@ the NCPeH API), the eHDSI CDA reference test documents, and the OpenNCP
 Transformation Manager's Schematrons and coded element list.
 
 The decisions were checked again on 2026-10-29 against the MyHealth@EU
-Requirements Catalogue v10.0.0 (W10-Operation Ready, 2026-03-06), which the
-owner read under an EU Login reading grant: its requirements on health
-professional identification (01), patient identification (02), the contact
-point's operation and data protection (03, 04), the patient summary (05),
-information quality (10), security, traceability and auditability (11),
-non-repudiation (12), the summary use case and the exception handling,
-and on 2026-11-10 its original clinical documents (08). They
+Requirements Catalogue v10.0.0 (W10-Operation Ready, 2026-03-06), cited by
+requirement id only: rows 01 to 05, 10, 11 and 12, the summary use case
+(§1.1) and the exception handling (§1.25), and on 2026-11-10 row 08. They
 hold, with two amendments of FerroFED's own: the gateway never refuses on
 the professional's role or point of care, and the PDF of the original is
 the contact point's, rendered from the narrative. The catalogue is
