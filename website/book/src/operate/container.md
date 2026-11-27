@@ -3,7 +3,7 @@
 
 # The container image and the quickstart
 
-FerroFED ships one static binary, `ferrofed`, and an image that carries it on
+**Audience:** operators, and integrators who try the gateway. FerroFED ships one static binary, `ferrofed`, and an image that carries it on
 distroless static. Every release carries `compose.yaml`, which runs that image
 alone in front of the CDRs you already run, with an example `ferrofed.toml`
 and `registry.toml` ([The gateway from a

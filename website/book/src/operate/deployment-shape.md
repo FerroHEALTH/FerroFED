@@ -3,7 +3,7 @@
 
 # What FerroFED runs beside
 
-The binary serves the federated query over a registry of member CDRs
+**Audience:** operators planning a deployment. The binary serves the federated query over a registry of member CDRs
 ([Configuration](configuration.md)). This page describes what a running
 gateway needs around it, taken from the roles the specification names, and
 says which binding FerroFED ships for each role and which is planned.
@@ -90,19 +90,25 @@ verifies the token needs the same JWK Set location
 
 ## What the gateway keeps
 
-The gateway holds no clinical data. It keeps the registry of organisations,
-endpoints and the `system_id` mapping that routing depends on (§3.1, N21), and,
-if the deployment offers it, the federated stored-query definitions it is
-authoritative for (§12.7). The specification is silent on storage, so this is
-FerroFED's own design: the registry is a reviewed document, loaded at boot
-and on each reload into an immutable snapshot, and the `ehr_id` index and the
-learned `creating_system_id` routes are held in memory, bounded, and lost on a
-restart. The stored-query registry is the
-one durable store, holding parameterised AQL and never a patient identifier,
-over the backend [`[stored_queries]`](queries-and-areas.md#stored-queries)
-names: an embedded `redb` file for one gateway process, FerroFED's own
-PostgreSQL store for several replicas ([`[store]`](store.md)), or read-only
-definition files. A contact-point issuer needs that store too.
+The gateway holds no clinical data. The specification is silent on storage,
+so where each piece of state lives is FerroFED's own design. This table is
+every store a gateway can have; each row names the setting that turns it on.
+
+| Store | Where | What it holds | Set by |
+|---|---|---|---|
+| The registry | a document you review, or an IHE mCSD directory, loaded into an immutable snapshot at boot and on each reload | the organisations, nodes, endpoints, `system_id`s and `creating_system_id` mappings (§3.1, §15.1, N21) | `registry.document` or `[registry.mcsd]` ([The registry](registry.md)) |
+| Routing state | process memory, bounded, lost on a restart | the `ehr_id` index, the `creating_system_id` routes learned from answers, the resolution bindings per verified caller, and the tokens of each node's token endpoint | `federation.ehr_index_capacity`, `binding_ttl`, `binding_capacity` ([The registry](registry.md)) |
+| The stored-query store | an embedded `redb` file for one process, FerroFED's own PostgreSQL store for several replicas, or read-only definition files | the stored-query definitions the gateway is authoritative for, parameterised AQL with no patient identifier (§12.7, N44) | `[stored_queries]` ([Queries and API areas](queries-and-areas.md#stored-queries)) |
+| FerroFED's own PostgreSQL store | the `ferrofed` schema of a PostgreSQL 19 database | the `postgres` stored-query backend's definitions, a contact point's emergency accesses, the `DPoP` proofs accepted, a contact point's dispensations and the FHIR face's sealed ids, each swept when its window ends | `[store]` ([FerroFED's own store](store.md#what-it-holds)) |
+| The configuration revisions | an embedded `redb` file, or a PostgreSQL database, and a secrets directory on a volume every replica shares | every revision of the configuration the console manages, with the write-only secrets in their own files | `config.ui = "managed"` ([Configuration revisions](configuration-revisions.md)) |
+| The audit spools | a directory on a durable volume each | the IHE audit records and the access records not yet delivered to the Audit Record Repository | `audit.repository.spool_dir`, `xcpd.audit_repository.spool_dir` ([The audit spool](hardening.md#the-audit-spool)) |
+| The usage report's state | a directory | the instance id the report to FerroPULSE counts the installation by | `usage_report.state_dir` ([The usage report](usage-report.md)) |
+| Keys and credentials | one secret file each, which you provide | the signing keys, the onward credentials, the TLS material and `fhir.id_key` | the `_file` keys ([Configuration](configuration.md#secrets-inline-or-from-a-file)) |
+
+No store holds a result row. A patient identifier is held only in process
+memory for the request that carries it, and sealed in the FHIR face's id
+table for `fhir.id_lifetime`. Back up every durable store before an upgrade
+([Upgrading](upgrading.md#before-you-upgrade)).
 
 ## Running several replicas
 

@@ -3,7 +3,7 @@
 
 # Configuration
 
-The `ferrofed` binary reads one TOML file and the environment. It serves the
+**Audience:** operators. The `ferrofed` binary reads one TOML file and the environment. It serves the
 process shape (health, readiness, the request log, graceful shutdown) and, once
 a registry is configured, the federated query `POST {base}/v1/query/aql`, the
 EHR resources and the definition area routed to one node, and, when

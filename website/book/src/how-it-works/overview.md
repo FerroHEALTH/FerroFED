@@ -149,6 +149,8 @@ so where each piece of state lives is FerroFED's own design.
 | Stored-query definitions | `redb`, PostgreSQL or read-only files | yes |
 | Outbound credentials and the signing keys | one secret file each | yes, they are your files |
 
-It never writes a patient identifier, a value derived from one, or a result
+[What the gateway keeps](../operate/deployment-shape.md#what-the-gateway-keeps)
+lists every store, with the setting that turns each on. It never writes a
+patient identifier, a value derived from one, or a result
 row to disk. A stored query names its patient through a `$parameter`, and a
 definition with a literal patient identifier is refused (§5.4.1, N33).
