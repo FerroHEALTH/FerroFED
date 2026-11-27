@@ -8,7 +8,7 @@ the country of affiliation to make a patient's vaccination history
 available to the health professional. The gateway writes it from the
 members' openEHR immunisation lists, in the MyHealth@EU Vaccination
 10.0.0-preview form, and the
-[document list](patient-summary.md#the-document-list) names it beside the
+[document list](document-list.md#the-document-list) names it beside the
 patient summary, under the same admission, treatment relationship and
 access record as the other documents.
 

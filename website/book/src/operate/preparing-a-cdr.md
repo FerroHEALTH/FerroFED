@@ -35,7 +35,7 @@ N42a); the rest are what the gateway needs to reach the member.
   [step 6](production.md#6-identity-resolution)).
 - [ ] **ITS-REST is reachable from the gateway** at one base URL per
   endpoint, over `https` whenever the gateway sends it a credential
-  ([What must travel encrypted](configuration.md#what-must-travel-encrypted)).
+  ([What must travel encrypted](service-endpoints.md#what-must-travel-encrypted)).
 - [ ] **The member accepts the gateway's credential**: a user and a
   password, or an OAuth 2.0 client registered under the gateway's
   `client_id` for the client credentials grant

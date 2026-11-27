@@ -75,7 +75,7 @@ each Art 14(1) category the face receives, naming the member its
 `[[fhir.receive]]` entry declares, and one line naming the categories this
 release carries that no member receives. These are the categories
 `GET {fhir-base}/metadata` names
-([Receiving a document](../integrate/patient-summary.md#receiving-a-document)).
+([Receiving a document](../integrate/receiving-a-document.md#receiving-a-document)).
 A configuration with no `[fhir]` gets neither line.
 
 ```text
@@ -166,7 +166,7 @@ words without it, and an operator reads the same profile from
 `Unencrypted` lines name, by key, each credential or
 patient identifier that travels unencrypted, which only the development
 profile allows
-([What must travel encrypted](#what-must-travel-encrypted)).
+([What must travel encrypted](service-endpoints.md#what-must-travel-encrypted)).
 
 Colour follows the terminal, and an explicit `format = "pretty"` keeps it
 into a pipe. A `NO_COLOR` environment variable that is set and not empty
@@ -187,7 +187,7 @@ The sections, and the page that covers each:
 
 | Key or section | What it sets | Page |
 |---|---|---|
-| `profile` | `production`, the default, or `development`, which relaxes the transport rules below | [What must travel encrypted](#what-must-travel-encrypted) |
+| `profile` | `production`, the default, or `development`, which relaxes the transport rules below | [What must travel encrypted](service-endpoints.md#what-must-travel-encrypted) |
 | `[server]`, `[telemetry]`, `[credentials]`, `[signing]` | the listener, the console, the onward credentials, the signing keys | this page |
 | `server.max_concurrent_requests`, `[server.caller_rate]`, `federation.max_in_flight_per_node`, `federation.max_node_answer_size` | the overload limits and the answer bound | [Overload protection](overload.md) |
 | `federation.offset_strategy`, `federation.max_offset_window`, `federation.max_node_rows` | paging across nodes, and the most rows read of one node for a query with no `LIMIT`, 9999 by default (a node is asked for one row more, so set it one under the largest page your nodes serve) | [Queries and API areas](queries-and-areas.md#paging-with-offset) |
@@ -364,213 +364,10 @@ replaced: `postgres://***@db.example.org:5432/ferrofed?***`. A libpq
 key/value connection string shows as `***` whole. The value itself is sent
 unchanged.
 
-### The endpoint table of a service
+### The services the gateway calls
 
-Every outbound service a binding names is written as one `endpoint` table,
-the `EndpointSection` of `ferrohealth-smart` that every FerroHEALTH product
-reads for an outbound integration: `[pixm.manager.endpoint]` under each
-`[[pixm.manager]]`, `[pdqm.endpoint]`, `[pmir.endpoint]`,
-`[registry.mcsd.endpoint]`, `[xcpd.gateway.endpoint]` under each
-`[[xcpd.gateway]]`, `[nl_gf.nvi.endpoint]` and `[nl_gf.mitz.endpoint]`, as
-`[audit.repository.endpoint]` and `[eehrxf.terminology.endpoint]` are:
-
-```toml
-[pdqm.endpoint]
-url = "https://pdq.example.org/fhir/"   # required
-timeout = "1s"                          # one whole call, every try and wait included
-# connect_timeout = "500ms"             # opening the connection; unset, timeout bounds it
-# retry = { max_attempts = 1, initial_backoff = "200ms", max_backoff = "5s" }
-
-[pdqm.endpoint.tls]
-client_identity_file = "/run/secrets/pdq-client.pem"
-
-[pdqm.endpoint.credentials]
-user = "ferrofed-pdq-consumer"
-password_file = "/run/secrets/pdq-password"
-```
-
-- `url` is the service's base. It carries no credential: one with a user
-  name or a password in it is refused naming the key, as an endpoint URL in
-  the registry document is.
-- `timeout` bounds one call. Each table keeps its own default, so a key you
-  leave out keeps the value the service had before it moved under
-  `endpoint`: `1s` for `[pdqm]` and `[nl_gf.mitz]`, `5s` for `[pmir]`, and
-  `10s` for the others.
-- `retry` tries a call again when the service could not be reached, the try
-  timed out, or it answered `5xx`. Each identity, localization and consent
-  table tries a call once unless you raise `max_attempts`, so a failure
-  fails the step at once within the query's budget.
-- `tls` is the TLS material of [Mutual TLS to the identity
-  services](#mutual-tls-to-the-identity-services).
-- `credentials` takes a user and a password, or the `oauth`
-  client-credentials grant authenticated by a client secret or a client
-  assertion ([Identity resolution](identity.md#a-pix-manager-behind-oauth-20)),
-  never a `nuts` grant. Each grant a node's section can name is described in
-  [Onward credentials](onward-credentials.md). Mitz takes the same: a user
-  and a password, or the `oauth` grant, whose token each question carries
-  as a bearer token. A grant a table does not take is refused at load,
-  naming it, and never read as no credential. `[nl_gf.nvi.endpoint.credentials]`
-  takes a user and a password and refuses `oauth`; the NVI's `nuts` grant
-  sits in `[nl_gf.nvi.nuts]`
-  ([Dutch localization](localization.md#dutch-localization-nl_gfnvi)). An
-  XCPD responding gateway takes no credential: the XUA assertion is the
-  gateway's, and a `[xcpd.gateway.endpoint.credentials]` is refused.
-
-When a service refuses a token with `401`, the gateway drops the token and
-sends the call once more with a fresh one, and a second `401` fails the
-call (RFC 6750 §3.1).
-
-### A PIX Manager asked by `GET` or `POST`
-
-ITI-83 is an HTTP `GET` with the parameters in the URL: "the HTTP GET
-operation shall be used" (PIXm 3.1.0 §2:3.83.4.1.2), and FHIR R4 requires a
-server to support that `GET` (FHIR R4 Operations §3.2.0.1). The patient
-identifier is then in the request URL, where a proxy, a load balancer or the
-Manager's access log can record it. `method = "get"` is the default, because
-every PIXm Manager answers it.
-
-FHIR R4 invokes an operation "generally" by a `POST` of a `Parameters`
-resource to the operation's endpoint (FHIR R4 Operations §3.2.0.1), and the
-PIXm IG gives the request in that form (its Query Parameters In profile and
-request example). With `method = "post"` the gateway posts the same
-`sourceIdentifier` and `targetSystem` parameters as `valueString`s, with
-`Content-Type: application/fhir+json`, to `[base]/Patient/$ihe-pix`, and the
-request URL carries no parameter. PIXm does not require a Manager to accept a
-`POST`, so set it only for a Manager that says it does:
-
-```toml
-[[pixm.manager]]
-method = "post"   # the patient identifier travels in the body, never the URL
-
-[pixm.manager.endpoint]
-url = "https://pix.example.org/fhir/"
-```
-
-Any other value is refused naming the key. The answer is read the same way
-under either method, and the audit record of each exchange holds the request
-as sent: the URL of a `GET`, or the request line, media type and body of a
-`POST` ([The audit trail](audit.md)).
-
-### Mutual TLS to the identity services
-
-A national identity service often authenticates the gateway by its client
-certificate instead of, or beside, a password or a token. Every outbound
-service takes its TLS material in the `tls` table of its `endpoint`
-([The endpoint table of a service](#the-endpoint-table-of-a-service)), and a
-node in the `tls` sub-table of its `[credentials."<endpoint id>"]`:
-
-```toml
-[[pixm.manager]]
-
-[pixm.manager.endpoint]
-url = "https://pix.example.org/fhir/"
-
-[pixm.manager.endpoint.tls]
-client_identity_file = "/run/secrets/pix-client.pem"  # mutual TLS
-trust_roots_file = "/etc/ferrofed/pix-roots.pem"      # optional
-# min_version = "1.2"                                 # "1.3" unless lowered
-```
-
-- `client_identity`, or its `client_identity_file` sibling, holds the PEM
-  client certificate chain and its private key, which the gateway presents
-  in the TLS handshake. It is a secret: it shows as `***` wherever the
-  configuration is rendered, and setting both forms is refused naming
-  `<table>.endpoint.tls.client_identity`.
-- `trust_roots_file` names a PEM bundle of trust roots the service's
-  certificate chains to, added to the platform's roots.
-- `min_version` is the oldest TLS version the gateway speaks to the
-  service: `"1.3"` unless lowered to `"1.2"`. Lower it only for a service
-  that speaks no TLS 1.3, such as a MyHealth@EU responding gateway
-  ([Localization](localization.md#a-myhealtheu-route)).
-- Every file is read at boot and on each reload of a reloadable table. A
-  file that cannot be read, or material that holds no certificate and key
-  in PEM, is refused naming its key, without quoting the file.
-- The keys sat on the table itself before release 0.0.18; set there, they
-  are refused as unknown keys ([Upgrading](upgrading.md)).
-
-Each of these services is reached through the outbound client of
-`ferrohealth-smart` its endpoint table builds, with no redirect followed, the
-credential marked sensitive, and the TLS material above. A MyHealth@EU
-responding gateway's client completes a connection only over a chain its
-revocation check cleared ([Localization](localization.md#a-myhealtheu-route)).
-
-### What must travel encrypted
-
-Every outbound connection in the configuration is held to one of three
-rules, by what it carries.
-
-**Credentials and patient identifiers.** Outside `profile = "development"`,
-a URL that a configured credential or a patient identifier is sent to must
-be `https`. `serve`, `config check`, `admission check`, `conformance run`
-and every [reload](registry.md#reloading-the-registry) refuse anything else, with exit
-code 78 and one line naming the URL's key and what would travel over it,
-never a value. The rule covers:
-
-- the URL of a registry endpoint that has a `[credentials."<id>"]` section,
-  which receives its basic credentials or the access token its `oauth`
-  grant obtains;
-- the `token_endpoint` of an `oauth` section, which receives the client
-  secret or the client assertion;
-- the `authorization_server` of a `nuts` section, which receives the
-  gateway's credentials in a Verifiable Presentation;
-- the `issuer` of a node's `oauth` section, whose token endpoint receives
-  the client assertion and, under an `onward` table, the callers' tokens;
-- the `endpoint.url` of every PIX Manager, which is asked for patient
-  identifiers with or without `[pixm.manager.endpoint.credentials]`;
-- the `endpoint.url` of `[pdqm]`, the PDQm Supplier, which is sent the
-  patient identifier with or without `[pdqm.endpoint.credentials]`;
-- the `endpoint.url` of every XCPD responding gateway, which is sent the
-  patient identifier and, when one is configured, the XUA assertion;
-- the `endpoint.url` of `[nl_gf.nvi]`, which is sent the pseudonymised BSN
-  and, when one is configured, its credentials;
-- `telemetry.otlp.endpoint` when it carries a user name or a password; an
-  `https://` collector meets the rule.
-
-```text
-ferrofed: cannot start: the url of endpoint hospital-a in registry.document is not an https URL, and credentials.hospital-a would travel over it in cleartext: outside profile = "development" a credential or a patient identifier is sent only encrypted
-```
-
-A node URL no credential is sent to may stay `http`, for example a node on a
-private network whose transport a sidecar protects with mutual TLS: the
-gateway sends a node its own `ehr_id`, never the patient identifier (§5.4,
-N33). A node the gateway presents its own client certificate to
-([Mutual TLS to a node](onward-credentials.md#mutual-tls-to-a-node-rfc-8705))
-is `https` under every profile.
-
-**A database password.** FerroFED's own store is reached over TLS under
-every profile: its connection string must set `sslmode=require`, or
-`config check`, the start and a reload refuse it, naming `store.url`
-([FerroFED's own store](store.md#tls-is-required)). Outside the development
-profile, the revision store's connection string, `config.url`, must set
-`sslmode=require` when it carries a password and reaches its host over the
-network. The driver reads `sslmode` as `disable`, `prefer` (its default,
-which falls back to no TLS) or `require`, and refuses any other value, so
-`disable` and `prefer` are refused, naming `config.url`, by the same
-commands and on a reload. A revision store connection with no password, or
-whose every host is a Unix socket and that names no `hostaddr`, crosses no
-network with a secret and may leave `sslmode` as it is
-([Configuration revisions](configuration-revisions.md)).
-
-Under the development profile the same configuration starts, so the
-[quickstart](container.md#the-quickstart) can reach its nodes over `http`
-inside its Docker network. Each credential or patient identifier that
-travels unencrypted is named by key in the startup banner, in a `WARN` log
-line at boot and after each reload, and on stderr by `config check`.
-
-**Trust anchors.** A URL the gateway verifies its callers against, an
-issuer itself, the key set its metadata names, or an introspection endpoint
-in [`[auth]`](authentication.md), must be `https`, or `http` to a loopback
-host, under every profile, development included. A key set fetched in the
-clear would let anyone on the network substitute keys and forge callers.
-
-**The profile takes a restart.** A reload whose file changes `profile` is
-refused (class `profile`), and the running configuration stays. Every
-decision the development profile admits, these transport rules and an
-`http` XCPD gateway, reads the profile the process started with.
-
-The specification assumes a protected transport and leaves it to the
-security profiles (§2.2, §13); no specification governs these rules, which
-are FerroFED's own design.
+The endpoint table every service takes, its TLS and what must travel
+encrypted are on [Service endpoints and their TLS](service-endpoints.md).
 
 ## The environment
 
@@ -681,80 +478,7 @@ node.
 
 ## TLS on the listeners
 
-The client listener and the admin listener each run in one of two modes.
-
-- **Plain HTTP**, the default. Use it behind a reverse proxy, a load
-  balancer or a service mesh that terminates TLS and reaches the gateway
-  over a network you trust, such as the loopback interface or a pod's own
-  network namespace. Bearer tokens and patient identifiers cross the hop
-  from the proxy to the gateway in the clear, so pick this mode only where
-  that hop cannot be read.
-- **TLS**, with `[server.tls]` or `[metrics.tls]`. Use it when the hop from
-  the proxy to the gateway crosses a network others share, or when your
-  policy forbids a cleartext hop inside the network (NEN 7510 is one such
-  policy). Set `client_auth = "required"` with a `client_ca_file` to admit
-  only the proxy: a client that presents no certificate that CA signed fails
-  its handshake and reaches nothing.
-
-```toml
-[server.tls]
-certificate_file = "/run/secrets/ferrofed/listener.crt"
-key_file = "/run/secrets/ferrofed/listener.key"
-client_auth = "required"
-client_ca_file = "/run/secrets/ferrofed/proxy-ca.pem"
-healthcheck_identity_file = "/run/secrets/ferrofed/healthcheck.pem"
-```
-
-- `certificate_file` holds the chain the listener presents, its own
-  certificate first, and `key_file` its private key, both PEM.
-- `client_auth` says whether the listener asks a client certificate:
-  `none`, the default, asks none; `optional` verifies one a client presents;
-  `required` refuses a client that presents none.
-- `client_ca_file` holds the CA certificates a client certificate must chain
-  to. It is required with `optional` or `required`, and refused with `none`,
-  where it would do nothing (a client sends a certificate only when the
-  listener asks for one, RFC 8446 §4.3.2).
-- `min_version` is the oldest TLS version the listener speaks: `"1.3"`, the
-  default, or `"1.2"` to keep a TLS 1.2 client. `"1.1"` and `"1.0"` are
-  refused (RFC 8996).
-- `reload_interval`, optional, reads the files again on that period, beside
-  `SIGHUP` and an applied configuration revision.
-- `healthcheck_identity_file`, `[server.tls]` only, holds a client
-  certificate chain and its key, PEM, which `ferrofed healthcheck` presents
-  to a listener that requires one. It is refused anywhere else.
-
-The listener speaks TLS 1.3 (RFC 8446) alone by default. With `min_version
-= "1.2"` it speaks TLS 1.2 too, and picks TLS 1.3 whenever the client offers
-it, as BCP 195 asks (RFC 9325 §3.1.1); its TLS 1.2 cipher suites are then the
-four ECDHE AES-GCM suites RFC 9325 §4.2 recommends, each with forward
-secrecy. It offers HTTP/2 and HTTP/1.1 in ALPN. A client that does not
-finish its handshake within 10 seconds is dropped, and one that does not
-send a request head within `server.header_read_timeout` (30 seconds by
-default, counted from the head's first byte) is disconnected. A kept-alive
-HTTP/1.1 connection that sends no next request within
-`server.idle_timeout` (120 seconds by default) is closed with a clean end
-of stream; keep it longer than the idle timeout of the clients and proxies in
-front, so they close an idle connection first.
-
-`config check` reads every file, and refuses, with exit code 78 and the key
-named, a missing certificate or key, a file that holds no PEM, a key that
-does not match its certificate, and a client CA that is no usable trust
-anchor. It never prints the content of a file.
-
-To renew the certificate, write the new files over the old ones and send
-`SIGHUP`, as for [a registry reload](registry.md). Every handshake after the
-signal presents the new certificate and checks clients against the new CA
-file; connections already open keep the certificate they began with. Files
-that do not form a valid pair refuse the whole reload, logged with their
-table, and the running certificate, registry and `[auth]` stay. Where no
-signal reaches the process, `POST /admin/reload` on the admin listener runs
-the same reload. A changed path in `[server.tls]` or
-`[metrics.tls]` takes a restart.
-
-`ferrofed healthcheck` follows `[server.tls]`: it asks over `https` on
-loopback and accepts exactly the certificate `certificate_file` holds. If
-the files were replaced and the gateway has not been sent `SIGHUP`, it
-reports so and exits `1`.
+TLS on the client and admin listeners is on [TLS on the listeners](listener-tls.md).
 
 ## What the log records
 

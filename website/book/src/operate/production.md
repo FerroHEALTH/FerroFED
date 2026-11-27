@@ -522,7 +522,7 @@ The listener speaks plain HTTP by default. Choose one of two shapes:
 - **TLS on the listener**, with `[server.tls]`, where the hop from your
   proxy or load balancer to the gateway crosses a network others share. Add
   `client_auth = "required"` and a `client_ca_file` to admit the proxy alone
-  ([TLS on the listeners](configuration.md#tls-on-the-listeners)).
+  ([TLS on the listeners](listener-tls.md#tls-on-the-listeners)).
 
 `ferrofed.conf` is the nginx configuration for the settings above, and
 every release carries it with its checksum. Download it from the release
@@ -571,7 +571,7 @@ header and the log line.
 
 Under the Dutch Nuts grant, the gateway also serves its DID document at the
 path its `did:web` names, outside the base; pass that path as well
-([The Nuts grant](onward-credentials.md#the-nuts-grant-annex-b-b4)).
+([The Nuts grant](onward-credentials-nl.md#the-nuts-grant-annex-b-b4)).
 
 ## 9. Check, start and admit
 

@@ -219,7 +219,7 @@ configuration that does not load: the two codes a container runtime's health
 check reads. With `[server.tls]` set it asks over `https` and accepts exactly the
 certificate `certificate_file` holds, presenting `healthcheck_identity_file`
 where the listener requires a client certificate
-([TLS on the listeners](configuration.md#tls-on-the-listeners)). The [image](container.md#the-image) runs it as its
+([TLS on the listeners](listener-tls.md#tls-on-the-listeners)). The [image](container.md#the-image) runs it as its
 `HEALTHCHECK`, and so does the `compose.yaml` gateway service.
 
 The line uses the words every FerroHEALTH product's `healthcheck` prints:

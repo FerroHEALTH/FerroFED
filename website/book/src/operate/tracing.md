@@ -30,7 +30,7 @@ in the same pod; over `https://` it speaks gRPC over TLS
 ([A remote collector over TLS](#a-remote-collector-over-tls)). They also
 refuse an `http://` `endpoint` with a user name or a password in it, outside
 `profile = "development"`, since that credential would travel in cleartext
-([What must travel encrypted](configuration.md#what-must-travel-encrypted)).
+([What must travel encrypted](service-endpoints.md#what-must-travel-encrypted)).
 `serve` refuses a `[telemetry.otlp]` table with no `endpoint`.
 
 Spans leave in batches. On `SIGTERM` the gateway flushes the spans and the

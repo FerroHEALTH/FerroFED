@@ -112,8 +112,8 @@ Released on 2026-10-04. It carries §13 to §15, Annex A and Annex B.
   attributes in an RFC 9396 `authorization_details` object (Annex B §B.4a)
   ([#88](https://github.com/FerroHEALTH/FerroFED/issues/88),
   [#497](https://github.com/FerroHEALTH/FerroFED/issues/497),
-  [The Nuts grant](../operate/onward-credentials.md#the-nuts-grant-annex-b-b4),
-  [The FAPI 2.0 grant](../operate/onward-credentials.md#the-fapi-20-grant-annex-b-b4a)).
+  [The Nuts grant](../operate/onward-credentials-nl.md#the-nuts-grant-annex-b-b4),
+  [The FAPI 2.0 grant](../operate/onward-credentials-nl.md#the-fapi-20-grant-annex-b-b4a)).
 - A `patient/` grant honoured only for an issuer the deployment binds to one
   member: the token's `ehrId` resolved through the cross-reference at every
   member (§5.2), every request held to the patient's own `{node, ehr_id}`
@@ -766,7 +766,7 @@ These are the ones to know before you deploy FerroFED; the
   the gateway, or set `[server.tls]`, with a client CA to admit only your
   proxy, when the hop from the proxy to the gateway crosses a network
   others share
-  ([TLS on the listeners](../operate/configuration.md#tls-on-the-listeners)).
+  ([TLS on the listeners](../operate/listener-tls.md#tls-on-the-listeners)).
 - **Members in several Member States are not detected.** FerroFED neither
   detects nor refuses a federation whose members sit in different Member
   States ([Regulatory status](regulatory-status.md#cross-border-access)).

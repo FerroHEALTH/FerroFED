@@ -109,7 +109,7 @@ scrape_configs:
 
 Mutual TLS authenticates the scrape as well: with `[metrics.tls]`,
 `client_auth = "required"` and its `client_ca_file`, every client of the
-listener must present a certificate that CA signed ([TLS on the listeners](configuration.md#tls-on-the-listeners)).
+listener must present a certificate that CA signed ([TLS on the listeners](listener-tls.md#tls-on-the-listeners)).
 Give the scraper such a certificate with `tls_config` in its job.
 
 `config check` says who a listener that is not on a loopback address

@@ -515,7 +515,7 @@ them:
   ([The patient summary over FHIR](../integrate/patient-summary.md)). The
   same face lists the summaries that exist for a patient, the members' own
   ones included
-  ([The document list](../integrate/patient-summary.md#the-document-list)).
+  ([The document list](../integrate/document-list.md#the-document-list)).
   It also searches and reads a patient's electronic prescriptions and
   receives a dispensation into the member that owns its prescription,
   passed through in the HL7 Europe MPD profiles from the members that serve

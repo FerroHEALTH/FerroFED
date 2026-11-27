@@ -452,7 +452,7 @@ Nine sections take effect on a reload:
 | `[trust]`: each issuer's policy, its edge and its purpose of use | `[usage_report]` |
 
 The same reload reads the certificate files of `[server.tls]` and
-`[metrics.tls]` again ([TLS on the listeners](configuration.md#tls-on-the-listeners)).
+`[metrics.tls]` again ([TLS on the listeners](listener-tls.md#tls-on-the-listeners)).
 A request admitted before the reload finishes as admitted, and every request
 that arrives after it is verified against the new `[auth]`, on the client
 face and the admin listener alike. Every file and check is read before
@@ -466,7 +466,7 @@ endpoint is refused (`demographic-endpoint`, below).
 A reload whose file changes `profile` is refused (`profile`, below), so
 everything the development profile admits, such as a credential or patient
 identifier over plain `http`
-([What must travel encrypted](configuration.md#what-must-travel-encrypted)),
+([What must travel encrypted](service-endpoints.md#what-must-travel-encrypted)),
 follows the profile the process started with.
 
 A valid configuration replaces the running registry at once. A request that

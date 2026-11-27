@@ -36,7 +36,7 @@ You connect a contact point in four steps:
    ([Authentication](../operate/authentication.md)).
 3. Name that issuer in a `[[federation.contact_point]]`, with the header the
    connector sends its correlation identifier in
-   ([National contact points](../operate/authentication.md#national-contact-points)).
+   ([National contact points](../operate/contact-point-issuers.md#national-contact-points)).
 4. Give FerroFED its own PostgreSQL store with `[store]`, which a
    contact-point issuer needs; without it the gateway refuses to start
    ([FerroFED's own store](../operate/store.md)).

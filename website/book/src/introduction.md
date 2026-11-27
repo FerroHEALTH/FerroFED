@@ -7,18 +7,46 @@ FerroFED is a pure-Rust openEHR federation gateway, one of the
 [FerroHEALTH](https://ferrohealth.eu/) family. It sits in front of several
 openEHR CDRs as a transparent ITS-REST intermediary. A client sends it an
 ordinary AQL query with no federation syntax, and gets back an ordinary
-ITS-REST result set whose `meta.federation` names each node with its status.
-The gateway resolves the patient first, outside the query, through an
-identifier cross-reference service. It then sends each node standard AQL
-scoped to that node's own `ehr_id`, so no request the gateway composes for a
-node carries a directly identifying patient identifier, and it merges the
-answers with each node's provenance. It holds no clinical
-data of its own.
+ITS-REST result set whose `meta.federation` names each member with its
+status. The gateway resolves the patient first, outside the query, through
+an identifier cross-reference service, sends each member standard AQL scoped
+to that member's own `ehr_id`, and merges the answers with each member's
+provenance. No request it composes for a member carries a directly
+identifying patient identifier, and it holds no clinical data of its own.
+
+Beside that ITS-REST face, a FHIR face serves the same members in the
+European electronic health record exchange format: the patient summary, the
+laboratory, discharge and imaging reports, prescriptions and dispensations,
+for any client and for a national contact point of MyHealth@EU.
 
 FerroFED implements the openEHR Federation Working Group's
 [Federation Tier with AQL](https://syntaric.github.io/openehr-federation-spec/)
-specification, release 1.0.1, and reaches every node over openEHR
+specification, release 1.0.1, and reaches every member over openEHR
 ITS-REST 1.1.0.
+
+## Where to start
+
+| You are | Start with | Then |
+|---|---|---|
+| An integrator writing a client | [Your first federated query](tutorials/first-federated-query.md) | [The client contract](integrate/client-contract.md), [Follow-ups](integrate/follow-ups.md), [Errors and status codes](integrate/errors.md), [The patient summary over FHIR](integrate/patient-summary.md) |
+| A national contact point's integrator | [A national contact point](integrate/national-contact-point.md) | [Prescriptions and dispensations over FHIR](integrate/prescriptions.md), [National contact point issuers](operate/contact-point-issuers.md) |
+| An operator who deploys and runs it | [A production deployment](operate/production.md) | [Configuration](operate/configuration.md), [Upgrading](operate/upgrading.md), [FerroFED's own store](operate/store.md), [Troubleshooting](operate/troubleshooting.md), the [command-line reference](reference/cli.md) |
+| A decision maker, or compliance and procurement | [How FerroFED federates](explanation/how-ferrofed-federates.md) | [What FerroFED claims](evaluate/what-ferrofed-claims.md), [Regulatory status](evaluate/regulatory-status.md), [Conformance statement](evaluate/conformance-statement.md), [Licensing](evaluate/licensing.md) |
+| A contributor | [How the work is organised](contribute/how-the-work-is-organised.md) | [Checks and gates](contribute/checks-and-gates.md) |
+
+## How this book is organised
+
+The book follows the [Diátaxis](https://diataxis.fr/) framework:
+
+- **Tutorials** take you through a first task, step by step.
+- **How-to guides** do one task each: integrating a client, and deploying
+  and operating the gateway.
+- **Reference** lists what the code holds: the commands, the error codes,
+  the metrics, the conformance matrix and the version pins. The command-line
+  reference is generated from the binary.
+- **Explanation** says how the gateway works and why.
+- **Compliance** is the record a release is assessed against: the claims,
+  the regulatory status, the technical documentation and the risk files.
 
 This book covers FerroFED alone. What every FerroHEALTH product shares is in
 the [family book](https://ferrohealth.eu/docs/):
@@ -29,75 +57,10 @@ and the [Cyber Resilience Act](https://ferrohealth.eu/docs/cra.html) from the
 manufacturer's side, and
 [licensing and trademarks](https://ferrohealth.eu/docs/licensing.html).
 
-See how it works: [the gateway in diagrams](how-it-works/overview.md).
-
-## What it does today
-
-The [latest release](https://github.com/FerroHEALTH/FerroFED/releases/latest)
-ships the `ferrofed` binary for Linux and the image
-`ghcr.io/ferrohealth/ferrofed`, both signed, and a `compose.yaml` that runs
-the gateway alone in front of your own CDRs
-([The gateway from a release](operate/container.md#the-gateway-from-a-release)).
-[The quickstart](operate/container.md#the-quickstart) runs it beside four
-member CDRs. This book describes the gateway as it is built on `main`, and
-the [changelog](https://github.com/FerroHEALTH/FerroFED/blob/main/CHANGELOG.md)
-says which release first shipped each part. Over the members of a registry,
-the gateway:
-
-- answers the federated query, `POST {base}/v1/query/aql` and its `GET`
-  form, with one ITS-REST `RESULT_SET` and a `meta.federation` report that
-  names every member with its status;
-- resolves the patient through an IHE PIXm PIX Manager (ITI-83), after an
-  IHE PDQm query (ITI-78 or ITI-119) where the client names the patient by
-  an identifier the cross-reference does not know, and refuses any query
-  that would carry the patient identifier to a node;
-- can ask only the members that may hold the patient, localized through IHE
-  XCPD (ITI-55), the Dutch NVI or the PIX Manager, can leave out the members
-  a consent pre-filter such as the Dutch Mitz denies, and can read its
-  members from an IHE mCSD care services directory;
-- authenticates to each node as itself, with an OAuth 2.0 token, by client
-  credentials or token exchange and optionally bound with DPoP, a token of
-  the Dutch Nuts or FAPI 2.0 track, or a static credential, and tells each
-  node who is asking in a token it signs for that node;
-- audits every IHE transaction it makes or receives to an ATNA Audit Record
-  Repository;
-- fails a query when a node it asked does not answer, unless you ask for a
-  partial answer, and shapes the merged rows as one CDR would: `ORDER BY`
-  with `LIMIT`, bounded `OFFSET` pages, `DISTINCT`, recombined aggregates and
-  opt-in de-duplication of copied versions;
-- lets you direct a query at named nodes, in the AQL or in a header;
-- routes the EHR resources under a path `ehr_id` to the one node that holds
-  that EHR, and a versioned write only to the CDR that controls the version;
-- sends a template or another definition request to the node you name, and
-  can fan a template upload out to several;
-- holds stored queries itself, as immutable versions it runs by name, and
-  can distribute them to the members;
-- describes itself at `OPTIONS {base}/`;
-- gives you, the operator, a check to run before you admit a node, a
-  registry reload on `SIGHUP`, health probes, metrics for Prometheus or
-  an OpenTelemetry collector, and traces over OTLP.
-
-Every client authenticates with an access token from an issuer you trust
-([Client authentication](operate/authentication.md)). Each page says what is
-built, and the claims page lists the
-[limitations](evaluate/what-ferrofed-claims.md#limitations) to know before
-you deploy it.
-
-## How this book is organised
-
-The four parts follow what you came to do.
-
-- **Evaluate:** whether FerroFED fits your problem. How the gateway works,
-  one question per page, what the Federation Tier is, what FerroFED claims,
-  the conformance matrix and the obligations checklist, the version pins and
-  the licence.
-- **Integrate:** what a client sends and what it gets back.
-- **Operate:** installing, configuring and running the gateway, what it
-  needs around it, and what each release added.
-- **Contribute:** how the work is tracked and which checks a change has to
-  pass.
-
-The tracker is the scope. Open issues are the worklist, milestones are
-releases, and the
-[milestones page](https://github.com/FerroHEALTH/FerroFED/milestones) is the
-public view of both.
+The book describes the gateway as it is built on `main`. The
+[latest release](https://github.com/FerroHEALTH/FerroFED/releases/latest)
+ships the `ferrofed` binary for Linux, the signed image
+`ghcr.io/ferrohealth/ferrofed`, and a `compose.yaml` that runs the gateway
+in front of your own CDRs; the
+[changelog](https://github.com/FerroHEALTH/FerroFED/blob/main/CHANGELOG.md)
+says which release first shipped each part.
