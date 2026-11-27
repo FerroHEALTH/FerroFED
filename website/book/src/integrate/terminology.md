@@ -133,6 +133,9 @@ path alone. The document then does not meet that MyHealth@EU binding, which
 the contact point sees. The default, `none`, asks only for the eHealth
 Network's preferred systems. Transcoding does not apply to a received
 document or to the laboratory, discharge, imaging and vaccination reports.
+A received dispensation is translated the other way, into the code systems
+its owner records, when its `[[fhir.serve]]` entry names them
+([Translating a dispensation](prescriptions.md#translating-a-dispensation-into-the-members-code-systems)).
 
 FerroTERM is the terminology server of the Ferro family. The gateway reaches
 it, or any other FHIR R4 terminology server, over HTTP, and links no part of

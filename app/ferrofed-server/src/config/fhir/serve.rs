@@ -74,6 +74,12 @@ pub struct DeclaredMember {
     /// The territory each such composition is written in, an ISO 3166-1
     /// code, with `language`.
     pub territory: Option<String>,
+    /// The code systems the member records, as URIs, on an
+    /// `Electronic-Dispensations` entry: under `[eehrxf.terminology]
+    /// transcode = "myhealth-eu"` a dispensation it owns is translated into
+    /// them before it is written
+    /// ([`ferrofed_eehrxf::back_translation`]).
+    pub systems: Vec<String>,
 }
 
 /// How a member serves a category on the FHIR face.
@@ -89,6 +95,45 @@ pub enum ServeMode {
 }
 
 impl Fhir {
+    /// Whether a `[[fhir.serve]]` member names the code systems it records.
+    #[must_use]
+    pub(crate) fn declares_systems(&self) -> bool {
+        self.serve.iter().any(|entry| {
+            entry.members.iter().any(|member| {
+                matches!(member, ServeMember::Declared(declared) if !declared.systems.is_empty())
+            })
+        })
+    }
+
+    /// The code systems each member of an `Electronic-Dispensations` entry
+    /// records, by its node id, for each member that names any.
+    ///
+    /// # Errors
+    ///
+    /// [`FhirError::SystemsCategory`] for a member that names code systems
+    /// on an entry of another category.
+    pub(super) fn translating(&self) -> Result<BTreeMap<String, Vec<String>>, FhirError> {
+        let mut translating = BTreeMap::new();
+        for (position, entry) in self.serve.iter().enumerate() {
+            for member in &entry.members {
+                let ServeMember::Declared(declared) = member else {
+                    continue;
+                };
+                if declared.systems.is_empty() {
+                    continue;
+                }
+                if entry.category != Category::Dispensation.code() {
+                    return Err(FhirError::SystemsCategory {
+                        position,
+                        member: declared.member.clone(),
+                    });
+                }
+                translating.insert(declared.member.clone(), declared.systems.clone());
+            }
+        }
+        Ok(translating)
+    }
+
     /// Reads the `[[fhir.serve]]` entries.
     ///
     /// # Errors

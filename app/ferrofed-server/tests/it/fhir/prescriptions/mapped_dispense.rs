@@ -108,11 +108,19 @@ async fn writes(a: &Server) -> Result<Vec<Value>, Box<dyn Error>> {
 
 /// The response to the test dispensation at the gateway over `a`.
 async fn dispensed(a: &Server) -> Result<(StatusCode, String), Box<dyn Error>> {
+    dispensed_as(a, (&served(), &dispensation())).await
+}
+
+/// The response to `body` at the gateway over `a`, declared by `tables`.
+async fn dispensed_as(
+    a: &Server,
+    (tables, body): (&str, &str),
+) -> Result<(StatusCode, String), Box<dyn Error>> {
     let b = Server::start().await;
     let own_b = own(page(searchset("https://cdr-b.example.org", &[RX_B], None))).await;
     let dir = tempfile::tempdir()?;
-    let router = gateway_with(dir.path(), (a, &b, &own_b), &served())?;
-    call(router, post(&dispensation())?).await
+    let router = gateway_with(dir.path(), (a, &b, &own_b), tables)?;
+    call(router, post(body)?).await
 }
 
 #[tokio::test]
@@ -201,5 +209,43 @@ async fn an_owner_that_does_not_answer_is_asked_once_and_the_outcome_is_unknown(
     let (status, text) = dispensed(&a).await?;
     assert_eq!(StatusCode::GATEWAY_TIMEOUT, status, "{text}");
     assert!(text.contains("unknown"), "{text}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_medicine_coded_in_atc_is_translated_before_it_is_mapped() -> TestResult {
+    use ferrofed_testkit::dispensation_codes::{self, ATC, RECORDED, SENT, SNOMED};
+    let version = "9e1d2a3b-0000-4000-8000-0000000000d2::cdr-a.example.org::1";
+    let a = node_a("", created(version)).await?;
+    let terminology = dispensation_codes::start().await;
+    let tables = format!(
+        "{}{}",
+        served_with(
+            ", language = \"en\", territory = \"NL\"",
+            &format!(
+                "\n[[fhir.serve]]\ncategory = \"Electronic-Dispensations\"\nmembers = [{{ member = \"node-a\", systems = [\"{SNOMED}\"] }}]\n"
+            ),
+        ),
+        dispensation_codes::table(&terminology)
+    );
+    let body = dispensation().replace(
+        r#""system":"http://example.org/fhir/CodeSystem/ferrofed-products","code":"SYN-PRODUCT-0001""#,
+        &format!(r#""system":"{ATC}","code":"{}""#, SENT.0),
+    );
+    assert!(body.contains(SENT.0), "the fixture is coded in ATC");
+    let (status, text) = dispensed_as(&a, (&tables, &body)).await?;
+    assert_eq!(StatusCode::CREATED, status, "{text}");
+    let written = writes(&a).await?;
+    let [composition] = written.as_slice() else {
+        return Err(format!("one composition written, got {}", written.len()).into());
+    };
+    let kept = composition
+        .pointer("/feeder_audit/original_content/value")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    assert!(
+        kept.contains(RECORDED.0) && kept.contains(SENT.0),
+        "the dispensation the map mode takes carries the member's coding beside the one sent: {kept}"
+    );
     Ok(())
 }
