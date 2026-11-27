@@ -18,8 +18,10 @@
 # 2026-11-25). Beside it, on the MyHealth@EU
 # CI line (#1952), one badge per NAME of BADGES: the NCPeH API
 # DocumentReference search parameters the gateway answers, from conformance/myhealth-eu-search.tsv, and the
-# documents valid against MyHealth@EU Core, Laboratory Report and Hospital
-# Discharge Report, from conformance/myhealth-eu-validation.tsv, which the
+# documents valid against MyHealth@EU Core, Laboratory Report, Hospital
+# Discharge Report, Vaccination, Patient Summary, ePrescription and
+# eDispensation, and Medical Imaging Report, from
+# conformance/myhealth-eu-validation.tsv, which the
 # validator lane holds to its run (scripts/checks/fhir-validator.sh
 # --myhealth-eu). Each label names its guide at the version its pinned
 # package manifest names. The README block between the myhealth-eu:begin and
@@ -51,7 +53,10 @@ search	docs/specs/ehdsi/myhealth.eu.fhir.ncp-api-9.1.1-ci.tgz	MyHealth@EU NCP AP
 core	docs/specs/ehdsi-core/myhealth.eu.fhir.core-1.0.1.tgz	MyHealth@EU Core	 (CI)
 laboratory	docs/specs/ehdsi-laboratory/myhealth.eu.fhir.laboratory-9.2.0.tgz	MyHealth@EU Laboratory	 (CI)
 discharge	docs/specs/ehdsi-hdr/myhealth.eu.fhir.hdr-9.2.0.tgz	MyHealth@EU HDR	 (CI)
-vaccination	docs/specs/ehdsi-euvac/myhealth.eu.fhir.euvac-10.0.0-preview.tgz	MyHealth@EU Vaccination	"
+vaccination	docs/specs/ehdsi-euvac/myhealth.eu.fhir.euvac-10.0.0-preview.tgz	MyHealth@EU Vaccination	
+eps	docs/specs/ehdsi-eps/myhealth.eu.fhir.eps-1.0.0-poc.tgz	MyHealth@EU Patient Summary	
+epd	docs/specs/ehdsi-epd/myhealth.eu.fhir.epd-1.0.0-poc.tgz	MyHealth@EU ePrescription and eDispensation	
+imaging	docs/specs/ehdsi-imaging/myhealth.eu.fhir.imaging-9.1.1.tgz	MyHealth@EU Imaging	 (draft)"
 
 die() {
   echo "myhealth-eu: $*" >&2
