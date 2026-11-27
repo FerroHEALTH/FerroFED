@@ -454,7 +454,7 @@ v0.0.18 ships.
   and `[credentials."<endpoint id>".tls]`. This release refuses a key left
   on its table at start-up and in `config check`, naming the `tls` key that
   replaces it
-  ([Mutual TLS to the identity services](../operate/configuration.md#mutual-tls-to-the-identity-services),
+  ([Mutual TLS to the identity services](service-endpoints.md#mutual-tls-to-the-identity-services),
   #1750).
 - The gateway speaks TLS 1.3 alone to every outbound service unless the
   table's `tls` sub-table lowers it with `min_version = "1.2"`. Set it on
@@ -804,4 +804,4 @@ Check before upgrading: a receiving member's template that admits several
 `COMPOSITION.category` codes and assumes none now refuses every received
 document of its category (`MissingRequiredSuffix` on `<root>/category|code`),
 where the composition took `event` before. Give the template's category an
-assumed value ([The template's category](../integrate/patient-summary.md#the-templates-category)).
+assumed value ([The template's category](../integrate/receiving-a-document.md#the-templates-category)).

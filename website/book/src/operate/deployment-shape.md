@@ -49,7 +49,7 @@ signed. A request without one is refused before any node is asked
 for a proxy that terminates TLS in front of it on a hop nobody else can
 read, or TLS itself with `[server.tls]`, with an optional client CA that
 admits only the proxy, where that hop crosses a shared network
-([TLS on the listeners](configuration.md#tls-on-the-listeners)). The gateway never forwards a client's
+([TLS on the listeners](listener-tls.md#tls-on-the-listeners)). The gateway never forwards a client's
 `Authorization` header to a node. The resolution bindings of §12.5.1 are
 kept per verified caller
 ([The registry](registry.md#resolution-bindings)).

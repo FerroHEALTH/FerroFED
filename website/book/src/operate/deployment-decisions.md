@@ -86,7 +86,7 @@ every attribute of the 2026/2099 Annex Tables 1 and 2 and a purpose of use,
 and passes them to the node and the access record marked as asserted by the
 contact point. Trust in the professional stops at the contact point's
 assertion ([National contact
-points](authentication.md#national-contact-points)).
+points](contact-point-issuers.md#national-contact-points)).
 
 **The node relies on the gateway's statement.** It does not re-authenticate
 the caller either. It reads who asks from the `openEHR-federation-client`
@@ -122,7 +122,7 @@ well: the `purpose_of_use`, and for the query use case the
 every request to it, a declaration of the gateway's organisation for the
 token, never derived from the caller. The caller's own purpose still
 reaches the node in `openEHR-federation-client`
-([The FAPI 2.0 grant](onward-credentials.md#the-fapi-20-grant-annex-b-b4a)).
+([The FAPI 2.0 grant](onward-credentials-nl.md#the-fapi-20-grant-annex-b-b4a)).
 
 **What changes the answer:** `trust.purpose_of_use.required = false` admits a
 token with no purpose. A deployment that sets it records why here, because
@@ -155,11 +155,11 @@ another certificate
 ([Mutual TLS to a node](onward-credentials.md#mutual-tls-to-a-node-rfc-8705)).
 A `nuts` section binds every token with DPoP, as the Dutch
 binding's Nuts track requires
-([The Nuts grant](onward-credentials.md#the-nuts-grant-annex-b-b4)), and so
+([The Nuts grant](onward-credentials-nl.md#the-nuts-grant-annex-b-b4)), and so
 does an `oauth` section under the FAPI 2.0 profile, with DPoP or with the
 certificate, since the FAPI
 2.0 Security Profile issues only sender-constrained tokens
-([The FAPI 2.0 grant](onward-credentials.md#the-fapi-20-grant-annex-b-b4a)).
+([The FAPI 2.0 grant](onward-credentials-nl.md#the-fapi-20-grant-annex-b-b4a)).
 
 **Transport identity.** Toward the gateway, a transport identity is never
 read as an organisation's identity. TLS protects the connection: outside the

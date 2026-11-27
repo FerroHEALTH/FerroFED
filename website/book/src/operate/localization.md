@@ -75,7 +75,7 @@ What a deployment must provide:
   community a gateway answers that the map does not name belongs to no
   member and adds no candidate.
 - **One endpoint table per gateway.** Each `[[xcpd.gateway]]` names its
-  own [endpoint table](configuration.md#the-endpoint-table-of-a-service),
+  own [endpoint table](service-endpoints.md#the-endpoint-table-of-a-service),
   since the gateway posts to a responding gateway only on the origin its
   table's `url` names. It takes no `credentials`: the XUA assertion is the
   credential, and a credentials table there is refused.
@@ -335,13 +335,13 @@ What a deployment must provide:
   URAs is refused as well. The map is rebuilt on every reload and directory
   refresh ([The registry from an mCSD directory](registry.md)).
 - **TLS and credentials.** `[nl_gf.nvi.endpoint]` is the NVI's
-  [endpoint table](configuration.md#the-endpoint-table-of-a-service). Its
+  [endpoint table](service-endpoints.md#the-endpoint-table-of-a-service). Its
   `url` must be `https` outside `profile = "development"`; a plain `http`
   URL is refused at boot, naming its key, as is a URL that carries a user
   name or a password. The gateway authenticates with the basic credentials
   of `endpoint.credentials` or with the Nuts grant of GF-Authentication in
   `[nl_gf.nvi.nuts]`
-  ([The NVI's Nuts grant](onward-credentials.md#the-nvis-nuts-grant)),
+  ([The NVI's Nuts grant](onward-credentials-nl.md#the-nvis-nuts-grant)),
   one of them; an `oauth` table is refused, naming its key, as
   the IG defines no such grant for the Localization Service. The IG asks a
   requester for authorization attributes (its organization, practitioner and
