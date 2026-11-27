@@ -180,7 +180,7 @@ secrecy = "0.10.3"
 # aws_lc_rs is its one crypto backend, the provider rustls already builds on;
 # enabling a second backend makes it refuse to pick one. Verified against
 # crates.io on 2026-10-03.
-jsonwebtoken = { version = "11.1.0", default-features = false, features = ["aws_lc_rs", "use_pem"] }
+jsonwebtoken = { version = "12.0.0", default-features = false, features = ["aws_lc_rs", "use_pem"] }
 http = "1.5.0"
 # The media types and ranges of Accept and Content-Type on a routed request
 # (#261; RFC 9110 §8.3, §12.5.1).
