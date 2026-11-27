@@ -169,8 +169,9 @@ async fn the_composition_names_the_member_its_custodian() -> TestResult {
 
 #[tokio::test]
 async fn a_written_imaging_report_conforms_to_bundle_report_eu_imaging() -> TestResult {
+    let report = written().await?.to_string();
     let breaks = conforming::breaks(
-        &written().await?.to_string(),
+        &report,
         IMAGING_BUNDLE,
         (
             fhir_packages::imaging(),
@@ -179,6 +180,11 @@ async fn a_written_imaging_report_conforms_to_bundle_report_eu_imaging() -> Test
     )
     .await?;
     assert!(breaks.is_empty(), "{breaks:#?}");
+    ferrofed_testkit::emit::document(
+        ferrofed_testkit::emit::Lane::Imaging,
+        "ferrofed-eehrxf-imaging-report",
+        &report,
+    )?;
     Ok(())
 }
 

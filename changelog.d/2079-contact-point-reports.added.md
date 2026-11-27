@@ -1,0 +1,1 @@
+- A test shows a national contact point listing and reading a patient's laboratory, discharge and imaging reports on the FHIR face, and the rights page marks Regulation (EU) 2025/327 Art 7(2) met (#2079).

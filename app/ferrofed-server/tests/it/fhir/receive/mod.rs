@@ -11,6 +11,7 @@
 #[cfg(feature = "binding-ihe")]
 mod audit;
 mod check;
+mod contact_point_reports;
 mod discharge;
 mod discharge_received;
 mod display;

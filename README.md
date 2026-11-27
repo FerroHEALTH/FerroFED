@@ -32,13 +32,21 @@
 **Conformance and compliance**<br>
 <sub>(self-tested and self-assessed counts; none is a certification)</sub><br>
 <!-- conformance:begin -->
-[![Federation Tier 1.0.1 gateway points](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fbadges%2Ffederation-gateway.json)](https://ferrofed.eu/docs/evaluate/conformance.html)
-[![Federation Tier 1.0.1 node points](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fbadges%2Ffederation-node.json)](https://ferrofed.eu/docs/evaluate/conformance.html)
-[![Federation Tier 1.0.1 operator points](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fbadges%2Ffederation-operator.json)](https://ferrofed.eu/docs/evaluate/conformance.html)
+[![Federation Tier 1.0.1 points](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fbadges%2Ffederation-gateway.json)](https://ferrofed.eu/docs/evaluate/conformance.html#the-readme-badges)
+[![Federation Tier 1.0.1 node](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fbadges%2Ffederation-node.json)](https://ferrofed.eu/docs/evaluate/conformance.html#the-readme-badges)
+[![Federation Tier 1.0.1 operator](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fbadges%2Ffederation-operator.json)](https://ferrofed.eu/docs/evaluate/conformance.html#the-readme-badges)
+[![Federation Tier 1.0.1](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fbadges%2Ffederation-obligations.json)](https://ferrofed.eu/docs/evaluate/obligations.html)
+[![Federation Tier 1.0.1 tracks](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fbadges%2Ffederation-tracks.json)](https://ferrofed.eu/docs/evaluate/conformance.html#the-readme-badges)
 [![AQL golden cases](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fbadges%2Faql-golden.json)](conformance/aql-golden/pass-list.txt)
 <!-- conformance:end -->
 [![EHDS](https://img.shields.io/badge/EHDS-regulatory%20status-blue?logo=europeanunion&labelColor=003399&logoColor=FFCC00)](https://ferrofed.eu/docs/evaluate/regulatory-status.html)
 [![CRA](https://img.shields.io/badge/CRA-risk%20assessment-blue?logo=europeanunion&labelColor=003399&logoColor=FFCC00)](https://ferrofed.eu/docs/evaluate/cra-risk-assessment.html)
+<!-- compliance:begin -->
+[![EHDS Annex II](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fbadges%2Fehds-annex-ii.json)](https://ferrofed.eu/docs/evaluate/conformance.html#the-readme-badges)
+[![EHDS Chapter III, Annex IV](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fbadges%2Fehds-chapter-iii.json)](https://ferrofed.eu/docs/evaluate/conformance.html#the-readme-badges)
+[![EHDS Annex III](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fbadges%2Fehds-annex-iii.json)](https://ferrofed.eu/docs/evaluate/conformance.html#the-readme-badges)
+[![CRA Annex VII](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fbadges%2Fcra-annex-vii.json)](https://ferrofed.eu/docs/evaluate/conformance.html#the-readme-badges)
+<!-- compliance:end -->
 <!-- myhealth-eu:begin -->
 [![MyHealth@EU self-assessed](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fmyhealth-eu-badge.json)](https://ferrofed.eu/docs/evaluate/myhealth-eu.html)
 [![MyHealth@EU search, self-tested](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fmyhealth-eu%2Fsearch.json)](https://ferrofed.eu/docs/evaluate/myhealth-eu.html)
@@ -46,6 +54,9 @@
 [![MyHealth@EU laboratory, self-tested](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fmyhealth-eu%2Flaboratory.json)](https://ferrofed.eu/docs/evaluate/myhealth-eu.html)
 [![MyHealth@EU discharge, self-tested](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fmyhealth-eu%2Fdischarge.json)](https://ferrofed.eu/docs/evaluate/myhealth-eu.html)
 [![MyHealth@EU vaccination, self-tested](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fmyhealth-eu%2Fvaccination.json)](https://ferrofed.eu/docs/evaluate/myhealth-eu.html)
+[![MyHealth@EU eps, self-tested](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fmyhealth-eu%2Feps.json)](https://ferrofed.eu/docs/evaluate/myhealth-eu.html)
+[![MyHealth@EU epd, self-tested](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fmyhealth-eu%2Fepd.json)](https://ferrofed.eu/docs/evaluate/myhealth-eu.html)
+[![MyHealth@EU imaging, self-tested](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FFerroHEALTH%2FFerroFED%2Fmain%2Fconformance%2Fmyhealth-eu%2Fimaging.json)](https://ferrofed.eu/docs/evaluate/myhealth-eu.html)
 <!-- myhealth-eu:end -->
 
 </div>
