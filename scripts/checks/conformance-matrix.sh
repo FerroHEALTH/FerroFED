@@ -37,7 +37,10 @@
 #      says once what the badges count (owner decision, 2026-11-25);
 #  12. a badge's colour does not follow its count: green when all pass,
 #      yellow when some do, red when none do, blue when it counts nothing
-#      (owner decision, 2026-11-25).
+#      (owner decision, 2026-11-25);
+#  13. a badge's label runs past 30 characters or its message past 20, or
+#      the shared length check lets a long badge through (owner decision,
+#      2026-11-27).
 #
 # The golden test, in the Rust tier, fails when a listed case stops passing or
 # an unlisted case passes, so the pass list this reads is what the tests hold.
@@ -283,6 +286,15 @@ badge_caption_check README.md || problem "the README has no conformance caption"
 # 12. Every badge's colour follows its count, and an uncounted badge is blue.
 badge_color_check "$BADGES"/*.json conformance/myhealth-eu-badge.json conformance/myhealth-eu/*.json conformance/post-quantum-badge.json ||
   problem "a badge's colour does not follow its count"
+
+# 13. Every badge within the length limits, and the check refuses a long one.
+badge_length_check "$BADGES"/*.json conformance/post-quantum-badge.json ||
+  problem "a badge runs past the length limits; its breakdown belongs on the conformance page"
+badge_length_self_test > /dev/null || problem "the shared badge length check fails its self-test"
+jq -c '.message = "364/383 tested, 7 deferred by decision"' "$BADGES/federation-obligations.json" > "$work/long.json"
+if badge_length_check "$work/long.json" 2> /dev/null; then
+  problem "a badge message past 20 characters passes the length check"
+fi
 
 if [[ "$fail" -ne 0 ]]; then
   exit 1
