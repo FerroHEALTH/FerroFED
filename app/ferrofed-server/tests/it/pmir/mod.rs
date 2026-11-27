@@ -10,6 +10,7 @@
 
 mod config;
 mod feed;
+mod propagation;
 mod replicas;
 mod subscription;
 
