@@ -790,10 +790,10 @@ record_badge() {
     fi
   done
   message="$held/$total $word"
-  for pair in "${parts[@]}"; do message+=", $pair"; done
+  for pair in ${parts[@]+"${parts[@]}"}; do message+=", $pair"; done
   if [[ "${#apart[@]}" -gt 0 ]]; then
     message+="; not counted:"
-    for pair in "${apart[@]}"; do message+=" $pair,"; done
+    for pair in ${apart[@]+"${apart[@]}"}; do message+=" $pair,"; done
     message="${message%,}"
   fi
   badge_json "$(label_of "$name")" "$message" "$(colour_of "$held" "$total")" "$logo"
