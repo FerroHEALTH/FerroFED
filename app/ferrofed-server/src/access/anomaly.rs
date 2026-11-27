@@ -33,7 +33,7 @@ use secrecy::ExposeSecret;
 use crate::access::Reach;
 use crate::auth::caller::Caller;
 use crate::config::anomaly::AnomalyRules;
-use crate::facade::trc::pseudonym;
+use crate::digest::pseudonym;
 use crate::security::{Event, TARGET};
 use crate::state::AppState;
 use crate::store::anomaly::{Counting, Subject};
