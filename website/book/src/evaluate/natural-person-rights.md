@@ -31,15 +31,15 @@ This page is not legal advice.
 
 | Right | Who acts | FerroFED | Status |
 |---|---|---|---|
-| Art 3(1), access | the access service | the summary is served to a person's own grant, confined to them, and so are their prescriptions where members serve them and their laboratory reports; imaging and discharge reports have no interface | partial |
-| Art 3(2), a download in the exchange format | the access service | patient summaries only | partial |
+| Art 3(1), access | the access service | every category the face serves is served to a person's own grant, confined to them: the summary, their laboratory, discharge and imaging reports, and their prescriptions where members serve them | met |
+| Art 3(2), a download in the exchange format | the access service | each document the person's grant lists downloads in its HL7 Europe exchange format | met |
 | Art 4(2), a proxy or a legal representative | the proxy service | admits the token its issuer grants, records who acted, and marks what a declared representative inserts as theirs | not the gateway's |
 | Art 5, inserting information | the access service and the member CDR | a person's grant writes only into its own EHR, marked as the person's or as a representative's the token names, and the record says so; the member keeps a person from changing a professional's entry | met |
 | Art 6, rectification | the access service and the controller | routes the controller's correction | not the gateway's |
 | Art 7(1), transmission to another provider | the healthcare provider | adds no fee, limit or format | met |
-| Art 7(2), cross-border transmission | the national contact point | serves the requests a national connector relays: patient summaries, and prescriptions and dispensations where members serve them | partial |
+| Art 7(2), cross-border transmission | the national contact point | serves the requests a national connector relays: patient summaries, laboratory, discharge and imaging reports, and prescriptions and dispensations where members serve them | met |
 | Art 7(3), transmission to social security | the healthcare provider | outside the intended purpose | not the gateway's |
-| Art 7(4), sending a downloaded copy | the receiving provider | receives patient summaries and laboratory reports, and dispensations where members serve them | partial |
+| Art 7(4), sending a downloaded copy | the receiving provider | receives patient summaries and laboratory, discharge and imaging reports, and dispensations where members serve them; the reports wait on their hazards (#2044) | partial |
 | Art 8, restricting access | the person, the consent service and the member | carries the restriction out and hides its fact | met |
 | Art 9, information on access | the access service | records every access for at least three years and serves the search | met |
 | Art 10, opting out | the Member State | an opt-out is carried out as a restriction is | not the gateway's |
@@ -98,11 +98,30 @@ any member is asked
 `a_persons_own_grant_lists_and_reads_their_laboratory_report`,
 `a_persons_own_grant_asking_for_another_patients_laboratory_reports_is_refused`).
 
-The document list also names discharge and imaging reports, from a
-member's composition or its own FHIR endpoint, read through the same
-signed `Binary/{token}` reads
-([Discharge reports over FHIR](../integrate/discharge-reports.md),
-[Imaging reports over FHIR](../integrate/imaging-reports.md)).
+A person's own grant lists and reads their discharge and imaging reports
+the same way, and is refused another patient's list before any member is
+asked ([Discharge reports over FHIR](../integrate/discharge-reports.md),
+[Imaging reports over FHIR](../integrate/imaging-reports.md);
+`fhir/receive/report_grant.rs`:
+`a_persons_own_grant_lists_and_downloads_their_discharge_report`,
+`a_persons_own_grant_lists_and_downloads_their_imaging_report`,
+`a_persons_own_grant_asking_for_another_patients_reports_is_refused`).
+A restriction the consent service reports is carried out on the person's
+grant as on any other caller's, and the restricted member reads as one
+that holds nothing (Art 8;
+`a_member_the_consent_service_restricts_reads_to_the_persons_grant_as_one_holding_nothing`).
+Whom a restriction binds is the consent service's to decide: the gateway
+passes it the verified caller and never sets a restriction aside itself.
+
+**The download.** The summary is a `bundle-eu-eps` document `Bundle`
+from `Patient/$summary`. Each report the list names carries a signed
+`Binary/{token}` URL, whose read is the whole document in its HL7 Europe
+exchange format: a laboratory report as a `Bundle-eu-lab`, a discharge
+report as a `bundle-eu-hdr` and an imaging report as a
+`BundleReportEuImaging`, each read back as its category by the
+component's own reader in the tests above. Prescriptions are served as
+HL7 Europe MPD resources, their exchange format. These answers are the
+copy Art 3(2) asks for, free of charge (Art 18).
 
 ## Art 4(2): proxies and legal representatives
 
@@ -259,7 +278,14 @@ It answers a contact point's request for a patient's documents on the
 FHIR face: the patient summary, the document list and the prescriptions,
 and a dispensation the contact point posts
 ([A national contact point](../integrate/national-contact-point.md),
-[Cross-border access](regulatory-status.md#cross-border-access)).
+[Cross-border access](regulatory-status.md#cross-border-access)). The
+document list names the patient's laboratory, discharge and imaging
+reports, and the contact point reads each through the signed URL the list
+names, with no patient identifier reaching a member
+(`fhir/receive/contact_point_reports.rs`:
+`a_contact_point_lists_and_reads_a_laboratory_report`,
+`a_contact_point_lists_and_reads_a_discharge_report`,
+`a_contact_point_lists_and_reads_an_imaging_report`).
 
 Art 7(3): persons may request "a healthcare provider to transmit a part of
 their personal electronic health data to a clearly identified recipient in

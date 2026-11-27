@@ -26,6 +26,7 @@ use crate::access::AccessLog;
 use crate::binding::seam::PublicDocument;
 use crate::binding::{self, Role};
 use crate::config::NodeSelection;
+use crate::config::anomaly::AnomalyRules;
 use crate::config::auth::PatientBinding;
 use crate::config::emergency::EmergencyLimit;
 use crate::config::settings::{ConsentDisclosure, Scheme, Settings};
@@ -192,7 +193,6 @@ impl Federation {
             .with_demographics(demographics.is_some());
         let requests = NodeRequests::new(snapshot.endpoints().map(Endpoint::id))
             .with_latencies(Arc::clone(&observed.latencies));
-        let documents = documents(settings)?;
         let access = access_log(settings, &snapshot)?.map(Arc::new);
         let federation = Self {
             id,
@@ -217,10 +217,11 @@ impl Federation {
             signing: settings.signing.clone(),
             signer: Some(signer),
             client_keys: client_keys(settings),
-            documents,
+            documents: documents(settings)?,
             access,
             emergency: settings.access_log.emergency.clone(),
             emergency_limit: settings.emergency,
+            anomaly: settings.anomaly,
         };
         describe::describe(&federation, false).map_err(FederationError::Describe)?;
         Ok(Some(federation))
@@ -287,6 +288,7 @@ impl Federation {
             access: None,
             emergency: EmergencyPurposes::default(),
             emergency_limit: EmergencyLimit::default(),
+            anomaly: AnomalyRules::default(),
         }
     }
 }

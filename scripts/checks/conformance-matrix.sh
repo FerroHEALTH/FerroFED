@@ -30,14 +30,17 @@
 #      runs too; the site renders both, #912);
 #   8. conformance/aql-golden/pass-list.txt is unsorted, names a case the
 #      vendored corpus does not hold, or records another total than it holds;
-#   9. a file under conformance/badges/ or the README conformance block
+#   9. a file under conformance/badges/ or the README conformance or compliance block
 #      differs from what `scripts/conformance/matrix.sh --badges-write` writes;
 #  10. a badge file, or a static badge of the README, carries no logo;
 #  11. the README lacks the small caption under the conformance heading that
 #      says once what the badges count (owner decision, 2026-11-25);
 #  12. a badge's colour does not follow its count: green when all pass,
 #      yellow when some do, red when none do, blue when it counts nothing
-#      (owner decision, 2026-11-25).
+#      (owner decision, 2026-11-25);
+#  13. a badge's label runs past 30 characters or its message past 20, or
+#      the shared length check lets a long badge through (owner decision,
+#      2026-11-27).
 #
 # The golden test, in the Rust tier, fails when a listed case stops passing or
 # an unlisted case passes, so the pass list this reads is what the tests hold.
@@ -262,12 +265,14 @@ if bash scripts/conformance/matrix.sh --badges "$work/badges" > /dev/null; then
 else
   problem "the badges could not be rendered"
 fi
-bash scripts/conformance/matrix.sh --readme-block > "$work/block.md" || exit 1
-sed -n '/^<!-- conformance:begin -->$/,/^<!-- conformance:end -->$/p' README.md > "$work/block.held"
-if ! diff -u "$work/block.held" "$work/block.md" > "$work/diff" 2>&1; then
-  problem "the README.md conformance block is stale (run scripts/conformance/matrix.sh --badges-write):"
-  sed "$INDENT" "$work/diff" >&2
-fi
+for block in conformance compliance; do
+  bash scripts/conformance/matrix.sh --readme-block "$block" > "$work/block.md" || exit 1
+  sed -n "/^<!-- $block:begin -->\$/,/^<!-- $block:end -->\$/p" README.md > "$work/block.held"
+  if ! diff -u "$work/block.held" "$work/block.md" > "$work/diff" 2>&1; then
+    problem "the README.md $block block is stale (run scripts/conformance/matrix.sh --badges-write):"
+    sed "$INDENT" "$work/diff" >&2
+  fi
+done
 
 # 10. Every badge carries a logo of scripts/checks/badge-logos/.
 # shellcheck source=scripts/checks/badge-logos/logo.sh
@@ -281,6 +286,15 @@ badge_caption_check README.md || problem "the README has no conformance caption"
 # 12. Every badge's colour follows its count, and an uncounted badge is blue.
 badge_color_check "$BADGES"/*.json conformance/myhealth-eu-badge.json conformance/myhealth-eu/*.json conformance/post-quantum-badge.json ||
   problem "a badge's colour does not follow its count"
+
+# 13. Every badge within the length limits, and the check refuses a long one.
+badge_length_check "$BADGES"/*.json conformance/post-quantum-badge.json ||
+  problem "a badge runs past the length limits; its breakdown belongs on the conformance page"
+badge_length_self_test > /dev/null || problem "the shared badge length check fails its self-test"
+jq -c '.message = "364/383 tested, 7 deferred by decision"' "$BADGES/federation-obligations.json" > "$work/long.json"
+if badge_length_check "$work/long.json" 2> /dev/null; then
+  problem "a badge message past 20 characters passes the length check"
+fi
 
 if [[ "$fail" -ne 0 ]]; then
   exit 1

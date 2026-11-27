@@ -50,6 +50,7 @@ use crate::access::AccessLog;
 use crate::binding::seam::DemographicsStep;
 use crate::binding::seam::PublicDocument;
 use crate::config::EmergencyConsent;
+use crate::config::anomaly::AnomalyRules;
 use crate::config::emergency::EmergencyLimit;
 use crate::config::settings::{ConsentDisclosure, SigningSettings};
 use crate::health::dependencies::Dependencies;
@@ -87,6 +88,7 @@ pub struct Federation {
     access: Option<Arc<AccessLog>>,
     emergency: EmergencyPurposes,
     emergency_limit: EmergencyLimit,
+    anomaly: AnomalyRules,
 }
 
 /// What the process learns while it serves, which a registry reload carries
@@ -253,6 +255,13 @@ impl Federation {
     #[must_use]
     pub fn emergency_purposes(&self) -> &EmergencyPurposes {
         &self.emergency
+    }
+
+    /// The anomaly rules the requests national contact points relay are
+    /// counted against (`NCPeH` Architecture Specifications 10.0.0 §5.1.9).
+    #[must_use]
+    pub fn anomaly_rules(&self) -> AnomalyRules {
+        self.anomaly
     }
 
     /// This federation, holding each relayed professional's emergency

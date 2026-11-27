@@ -2,28 +2,49 @@
 # SPDX-License-Identifier: BUSL-1.1
 #
 # The verdicts of HL7's FHIR Validator over the documents FerroFED's tests
-# write (FERROFED_EMIT_DIR), each against the MyHealth@EU CI build of its
+# write (FERROFED_EMIT_DIR), each against the MyHealth@EU build of its
 # guide: the Patient of every document against MyHealth@EU Core 1.0.1, each
 # laboratory report against Laboratory Report 9.2.0, each discharge report
-# against Hospital Discharge Report 9.2.0 (#1952) and each vaccination
-# history against Vaccination 10.0.0-preview (#1980). The validator lane
-# (scripts/checks/fhir-validator.sh --myhealth-eu) fails when a run's
-# verdicts differ from these rows, so a change is recorded on purpose, and
-# scripts/conformance/myhealth-eu.sh counts them on the README badges.
-# FerroFED's own test run, no MyHealth@EU result.
-guide	document	verdict
-core	ferrofed-eehrxf-discharge-report.json	valid
-core	ferrofed-eehrxf-laboratory-report.json	valid
-core	ferrofed-eehrxf-summary-beside-own-summary.json	valid
-core	ferrofed-eehrxf-summary-header.json	valid
-core	ferrofed-eehrxf-summary-lossy.json	valid
-core	ferrofed-eehrxf-summary-name-only.json	valid
-core	ferrofed-eehrxf-summary-two-members.json	valid
-core	ferrofed-eehrxf-vaccination-history.json	valid
-core	ferrofed-server-summary-beside-native-member.json	valid
-core	ferrofed-server-summary-partial.json	valid
-core	ferrofed-server-summary-supplier-header.json	valid
-core	ferrofed-server-summary-two-members.json	valid
-discharge	ferrofed-eehrxf-discharge-report.json	valid
-laboratory	ferrofed-eehrxf-laboratory-report.json	valid
-vaccination	ferrofed-eehrxf-vaccination-history.json	valid
+# against Hospital Discharge Report 9.2.0 (#1952), each vaccination history
+# against Vaccination 10.0.0-preview (#1980), each patient summary against
+# Patient Summary 1.0.0-poc, each prescription the map mode writes against
+# ePrescription and eDispensation 1.0.0-poc, and each imaging report
+# against Medical Imaging Report 9.1.1 (#2041). The gateway writes no
+# dispensation: a received one reaches its member byte for byte. The
+# validator lane (scripts/checks/fhir-validator.sh --myhealth-eu) fails when
+# a run's verdicts differ from the first three columns, so a change is
+# recorded on purpose, and scripts/conformance/myhealth-eu.sh counts them on
+# the README badges. The cause of an invalid verdict is the issue that holds
+# it: #2039 for a summary whose allergy code carries no coding from the
+# required eHDSIAllergenWithExceptions value set, and the upstream report on
+# #212 for the imaging guide, whose closure names hl7.fhir.eu.base
+# 2.0.0-gamma, which no registry publishes. FerroFED's own test run, no
+# MyHealth@EU result.
+guide	document	verdict	cause
+core	ferrofed-eehrxf-discharge-report.json	valid	-
+core	ferrofed-eehrxf-imaging-report.json	valid	-
+core	ferrofed-eehrxf-laboratory-report.json	valid	-
+core	ferrofed-eehrxf-summary-beside-own-summary.json	valid	-
+core	ferrofed-eehrxf-summary-header.json	valid	-
+core	ferrofed-eehrxf-summary-lossy.json	valid	-
+core	ferrofed-eehrxf-summary-name-only.json	valid	-
+core	ferrofed-eehrxf-summary-two-members.json	valid	-
+core	ferrofed-eehrxf-vaccination-history.json	valid	-
+core	ferrofed-server-summary-beside-native-member.json	valid	-
+core	ferrofed-server-summary-partial.json	valid	-
+core	ferrofed-server-summary-supplier-header.json	valid	-
+core	ferrofed-server-summary-two-members.json	valid	-
+discharge	ferrofed-eehrxf-discharge-report.json	valid	-
+epd	ferrofed-eehrxf-mapped-prescription.json	valid	-
+eps	ferrofed-eehrxf-summary-beside-own-summary.json	valid	-
+eps	ferrofed-eehrxf-summary-header.json	valid	-
+eps	ferrofed-eehrxf-summary-lossy.json	invalid	#2039
+eps	ferrofed-eehrxf-summary-name-only.json	valid	-
+eps	ferrofed-eehrxf-summary-two-members.json	invalid	#2039
+eps	ferrofed-server-summary-beside-native-member.json	invalid	#2039
+eps	ferrofed-server-summary-partial.json	invalid	#2039
+eps	ferrofed-server-summary-supplier-header.json	invalid	#2039
+eps	ferrofed-server-summary-two-members.json	invalid	#2039
+imaging	ferrofed-eehrxf-imaging-report.json	invalid	#212
+laboratory	ferrofed-eehrxf-laboratory-report.json	valid	-
+vaccination	ferrofed-eehrxf-vaccination-history.json	valid	-

@@ -10,7 +10,8 @@
 #   scripts/conformance/matrix.sh --render        print the book page to stdout
 #   scripts/conformance/matrix.sh --render-write  write the book page
 #   scripts/conformance/matrix.sh --badges DIR    write the badge files into DIR
-#   scripts/conformance/matrix.sh --readme-block  print the README conformance block
+#   scripts/conformance/matrix.sh --readme-block [NAME]  print the README block NAME
+#                                                 (conformance, the default, or compliance)
 #   scripts/conformance/matrix.sh --badges-write  write conformance/badges/ and the README block
 #   scripts/conformance/matrix.sh --statement     print the conformance statement block
 #   scripts/conformance/matrix.sh --tests-page    print the page of marked tests
@@ -39,7 +40,20 @@
 # cases recorded in conformance/aql-golden/pass-list.txt, which the golden test
 # rewrites when FERROFED_CONFORMANCE_UPDATE is 1. Each label names the
 # specification version docs/VERSIONS.md pins. The README block between the
-# conformance:begin and conformance:end markers renders those files. The book
+# conformance:begin and conformance:end markers renders those files, with
+# two more counted from the Federation Tier tables: the obligations of
+# conformance/obligations.tsv a test asserts, of every statement that binds
+# the gateway, and the §16.3 tracks of conformance/tracks.tsv covered. The
+# block between compliance:begin and compliance:end renders four more, one
+# per regulatory record: the Annex II points of conformance/annex-ii.tsv met,
+# the Chapter III and Annex IV provisions of conformance/chapter-iii.tsv met,
+# the Annex III elements of conformance/technical-documentation.tsv and the
+# CRA Annex VII points of conformance/cra-technical-documentation.tsv
+# documented. A provision or element with several rows takes the furthest
+# status of its rows from done. A badge shows its count alone, within the
+# family's length limits (owner decision, 2026-11-27); the matrix page's
+# README badges section names the rest of each denominator by status and
+# each count kept out of it. The book
 # page links the specification site at that same pin, so a re-pin moves both.
 # Each badge carries a pictogram of scripts/checks/badge-logos/ as its logo.
 #
@@ -78,6 +92,12 @@ readonly BADGES=conformance/badges
 readonly PASS_LIST=conformance/aql-golden/pass-list.txt
 readonly README=README.md
 readonly BOOK_PAGE=https://ferrofed.eu/docs/evaluate/conformance.html
+readonly OBLIGATIONS=conformance/obligations.tsv
+readonly ANNEX_II=conformance/annex-ii.tsv
+readonly CHAPTER_III=conformance/chapter-iii.tsv
+readonly ANNEX_III=conformance/technical-documentation.tsv
+readonly CRA_VII=conformance/cra-technical-documentation.tsv
+readonly EVALUATE=https://ferrofed.eu/docs/evaluate
 readonly STATEMENT=website/book/src/evaluate/conformance-statement.md
 readonly TESTS_PAGE=website/book/src/evaluate/conformance-tests.md
 readonly ANTORA=docs/specs/federation-spec/antora.yml
@@ -209,7 +229,14 @@ refresh() {
 }
 
 # Markdown for one table cell list: issue references become tracker links.
+# The matrix page: the points, the tracks, the requirements and the README
+# badge breakdown.
 render_page() {
+  render_matrix_page
+  render_badge_breakdown
+}
+
+render_matrix_page() {
   local site
   site="$(spec_site)"
   awk -F'\t' -v site="$site" '
@@ -700,12 +727,162 @@ label_of() {
   local name="$1" version
   version="$(spec_version)"
   case "$name" in
-  federation-gateway) echo "Federation Tier $version gateway points" ;;
-  federation-node) echo "Federation Tier $version node points" ;;
-  federation-operator) echo "Federation Tier $version operator points" ;;
+  federation-gateway) echo "Federation Tier $version points" ;;
+  federation-node) echo "Federation Tier $version node" ;;
+  federation-operator) echo "Federation Tier $version operator" ;;
   aql-golden) echo "AQL golden cases" ;;
+  federation-obligations) echo "Federation Tier $version" ;;
+  federation-tracks) echo "Federation Tier $version tracks" ;;
+  ehds-annex-ii) echo "EHDS Annex II" ;;
+  ehds-chapter-iii) echo "EHDS Chapter III, Annex IV" ;;
+  ehds-annex-iii) echo "EHDS Annex III" ;;
+  cra-annex-vii) echo "CRA Annex VII" ;;
   *) die "no badge named $name" ;;
   esac
+}
+
+# status_counts FILE COLUMN RANKING: one "<status> <count>" line per status
+# of the data rows of the TSV FILE, counted once per distinct first cell. A
+# key with rows of several statuses takes the one RANKING, a space-separated
+# list, names first; a status the ranking does not name fails.
+status_counts() {
+  local file="$1" column="$2" ranking="$3"
+  awk -F'\t' -v col="$column" -v ranking="$ranking" '
+    BEGIN { n = split(ranking, order, " "); for (i = 1; i <= n; i++) rank[order[i]] = i }
+    /^#/ || /^$/ { next }
+    ++row == 1 { next }
+    {
+      if (!($col in rank)) { printf "%s: status %s is not one of %s\n", FILENAME, $col, ranking > "/dev/stderr"; bad = 1; next }
+      if (!($1 in held) || rank[$col] < rank[held[$1]]) held[$1] = $col
+    }
+    END {
+      if (bad) exit 1
+      for (key in held) count[held[key]]++
+      for (i = 1; i <= n; i++) print order[i], count[order[i]] + 0
+    }
+  ' "$file"
+}
+
+# count_of COUNTS STATUS: the count status_counts printed for STATUS.
+count_of() {
+  awk -v s="$2" '$1 == s { print $2 }' <<< "$1"
+}
+
+# record_spec NAME: sets the array spec to the record of badge NAME: its
+# file, status column, done status, word, logo, and the status=word pairs
+# naming every status of the record, furthest from done first. A pair
+# written !status=word is a status that binds no one the badge counts (not
+# applicable, or another actor's), kept out of the denominator.
+record_spec() {
+  case "$1" in
+  # NOTE: obligations.tsv header: node, operator and n/a statements bind no gateway, so they stay out of the gateway's count.
+  federation-obligations)
+    spec=("$OBLIGATIONS" 8 tested tested network
+      missing=missing planned=planned built-untested="built, untested" deferred="deferred by decision"
+      new-gap="upstream gaps" contradiction="upstream contradictions" tested=tested
+      !node="node's" !operator="operator's" !n/a="not applicable") ;;
+  federation-tracks)
+    spec=("$TRACKS" 5 covered covered network planned=planned deferred="deferred (provisional, §16.3)" covered=covered) ;;
+  ehds-annex-ii)
+    spec=("$ANNEX_II" 3 met met eu planned=planned partial=partial met=met !not-applicable="not applicable") ;;
+  ehds-chapter-iii)
+    spec=("$CHAPTER_III" 4 met met eu open=open awaits-act="await an implementing act"
+      manufacturer="manufacturer's tasks" met=met !not-applicable="not applicable") ;;
+  ehds-annex-iii)
+    spec=("$ANNEX_III" 5 documented documented eu planned=planned partial=partial documented=documented) ;;
+  cra-annex-vii)
+    spec=("$CRA_VII" 5 documented documented eu planned=planned partial=partial documented=documented
+      !not-applicable="not applicable") ;;
+  *) die "no record badge named $1" ;;
+  esac
+}
+
+# The record badges, in the order the breakdown lists them.
+readonly RECORD_BADGES="federation-obligations federation-tracks ehds-annex-ii ehds-chapter-iii ehds-annex-iii cra-annex-vii"
+
+# record_counts NAME: the count of the record of badge NAME, as lines of
+# "held <n>", "total <n>", then "rest <n> <word>" for each other counted
+# status and "apart <n> <word>" for each kept-out one, in ranking order.
+# A provision or element with several rows takes the furthest status.
+record_counts() {
+  local spec=() file column finished ranking="" pair status counts total=0 n held=0 lines=()
+  record_spec "$1"
+  file="${spec[0]}" column="${spec[1]}" finished="${spec[2]}"
+  for pair in "${spec[@]:5}"; do
+    status="${pair%%=*}"
+    ranking+="${status#!} "
+  done
+  counts="$(status_counts "$file" "$column" "${ranking% }")" || die "$file holds a status its badge does not know"
+  for pair in "${spec[@]:5}"; do
+    status="${pair%%=*}"
+    n="$(count_of "$counts" "${status#!}")"
+    if [[ "$status" == !* ]]; then
+      [[ "$n" -gt 0 ]] && lines+=("apart $n ${pair#*=}")
+      continue
+    fi
+    total=$((total + n))
+    if [[ "$status" == "$finished" ]]; then
+      held="$n"
+    elif [[ "$n" -gt 0 ]]; then
+      lines+=("rest $n ${pair#*=}")
+    fi
+  done
+  printf 'held %s\ntotal %s\n' "$held" "$total"
+  for pair in ${lines[@]+"${lines[@]}"}; do printf '%s\n' "$pair"; done
+}
+
+# record_badge NAME: the badge of a record, its count of items done out of
+# the counted ones; the breakdown is the conformance page's.
+record_badge() {
+  local spec=() counts held total
+  record_spec "$1"
+  counts="$(record_counts "$1")"
+  held="$(awk '$1 == "held" { print $2 }' <<< "$counts")"
+  total="$(awk '$1 == "total" { print $2 }' <<< "$counts")"
+  badge_json "$(label_of "$1")" "$held/$total ${spec[3]}" "$(colour_of "$held" "$total")" "${spec[4]}"
+}
+
+# record_link NAME: the book page that holds the rows of the record of badge NAME.
+record_link() {
+  case "$1" in
+  federation-obligations) echo "[the obligations checklist](obligations.md)" ;;
+  federation-tracks) echo "[the test tracks](#test-tracks)" ;;
+  ehds-annex-ii) echo "[the Annex II checklist](annex-ii.md)" ;;
+  ehds-chapter-iii) echo "[the conformity record](conformity-record.md)" ;;
+  ehds-annex-iii) echo "[the Annex III index](technical-documentation.md#the-annex-iii-index)" ;;
+  cra-annex-vii) echo "[the Cyber Resilience Act's part](technical-documentation.md#the-cyber-resilience-acts-part)" ;;
+  *) die "no record badge named $1" ;;
+  esac
+}
+
+# The matrix page's section that breaks every README badge count down.
+render_badge_breakdown() {
+  local name spec=() counts held total rest apart
+  echo
+  echo "## The README badges"
+  echo
+  echo "Each README badge shows one count. This table breaks each count down:"
+  echo "the rest of the counted items by status, and the items kept out of the"
+  echo "count because they bind no one the badge counts."
+  echo
+  echo "| Badge | Count | The rest of the count | Not counted | Rows |"
+  echo "|---|---|---|---|---|"
+  printf '| %s | %s/%s covered | %s planned, %s deferred | the node and operator points | [Conformance points](#conformance-points) |\n' \
+    "$(label_of federation-gateway)" "$(matrix_count Gateway covered)" "$(matrix_count Gateway)" \
+    "$(matrix_count Gateway planned)" "$(matrix_count Gateway deferred)"
+  printf "| %s | %s points | - | a member node's to meet | [Conformance points](#conformance-points) |\n" \
+    "$(label_of federation-node)" "$(matrix_count Node)"
+  printf "| %s | %s points | - | the operator's to meet | [Conformance points](#conformance-points) |\n" \
+    "$(label_of federation-operator)" "$(matrix_count Operator)"
+  for name in $RECORD_BADGES; do
+    record_spec "$name"
+    counts="$(record_counts "$name")"
+    held="$(awk '$1 == "held" { print $2 }' <<< "$counts")"
+    total="$(awk '$1 == "total" { print $2 }' <<< "$counts")"
+    rest="$(awk '$1 == "rest" { $1 = ""; sub(/^ /, ""); out = out (out == "" ? "" : ", ") $0 } END { print (out == "" ? "-" : out) }' <<< "$counts")"
+    apart="$(awk '$1 == "apart" { $1 = ""; sub(/^ /, ""); out = out (out == "" ? "" : ", ") $0 } END { print (out == "" ? "-" : out) }' <<< "$counts")"
+    printf '| %s | %s/%s %s | %s | %s | %s |\n' "$(label_of "$name")" "$held" "$total" "${spec[3]}" "$rest" "$apart" "$(record_link "$name")"
+  done
 }
 
 # Write every badge file into a directory.
@@ -720,22 +897,42 @@ write_badges() {
   total="$(sed -n 's/^total \([0-9][0-9]*\)$/\1/p' "$PASS_LIST")"
   [[ -n "$total" ]] || die "$PASS_LIST has no total line"
   mkdir -p "$dir"
-  badge_json "$(label_of federation-gateway)" "$covered / $gateway covered" "$(colour_of "$covered" "$gateway")" network > "$dir/federation-gateway.json"
-  badge_json "$(label_of federation-node)" "$node, a member node's to meet" blue network > "$dir/federation-node.json"
-  badge_json "$(label_of federation-operator)" "$operator, the operator's to meet" blue network > "$dir/federation-operator.json"
-  badge_json "$(label_of aql-golden)" "$passed / $total" "$(colour_of "$passed" "$total")" database > "$dir/aql-golden.json"
+  badge_json "$(label_of federation-gateway)" "$covered/$gateway covered" "$(colour_of "$covered" "$gateway")" network > "$dir/federation-gateway.json"
+  badge_json "$(label_of federation-node)" "$node points" blue network > "$dir/federation-node.json"
+  badge_json "$(label_of federation-operator)" "$operator points" blue network > "$dir/federation-operator.json"
+  badge_json "$(label_of aql-golden)" "$passed/$total" "$(colour_of "$passed" "$total")" database > "$dir/aql-golden.json"
+  local name
+  for name in $RECORD_BADGES; do
+    record_badge "$name" > "$dir/$name.json"
+  done
+  badge_length_check "$dir"/*.json || die "a badge runs past the length limits; its breakdown belongs on the conformance page"
 }
 
-# The README block with its markers: the three matrix badges, linked to the
-# book's conformance page, then the golden badge, linked to its pass list.
+# The README block with its markers: the matrix badges, linked to the
+# breakdown on the book's conformance page, then the golden badge, linked to
+# its pass list.
 render_block() {
   local name
   echo '<!-- conformance:begin -->'
   for name in federation-gateway federation-node federation-operator; do
-    echo "[![$(label_of "$name")](${ENDPOINT}${name}.json)]($BOOK_PAGE)"
+    echo "[![$(label_of "$name")](${ENDPOINT}${name}.json)]($BOOK_PAGE#the-readme-badges)"
   done
+  echo "[![$(label_of federation-obligations)](${ENDPOINT}federation-obligations.json)]($EVALUATE/obligations.html)"
+  echo "[![$(label_of federation-tracks)](${ENDPOINT}federation-tracks.json)]($BOOK_PAGE#the-readme-badges)"
   echo "[![$(label_of aql-golden)](${ENDPOINT}aql-golden.json)]($PASS_LIST)"
   echo '<!-- conformance:end -->'
+}
+
+# The README compliance block with its markers: one badge per regulatory
+# record, linked to its breakdown on the book's conformance page, which
+# links the record.
+render_compliance_block() {
+  local name
+  echo '<!-- compliance:begin -->'
+  for name in ehds-annex-ii ehds-chapter-iii ehds-annex-iii cra-annex-vii; do
+    echo "[![$(label_of "$name")](${ENDPOINT}${name}.json)]($BOOK_PAGE#the-readme-badges)"
+  done
+  echo '<!-- compliance:end -->'
 }
 
 # Replace the README block, markers included, with a fresh rendering.
@@ -744,6 +941,8 @@ write_block() {
   block="$(mktemp)"
   render_block > "$block"
   replace_block "$README" conformance "$block"
+  render_compliance_block > "$block"
+  replace_block "$README" compliance "$block"
   rm -f "$block"
 }
 
@@ -789,7 +988,11 @@ case "${1:-}" in
   write_badges "$2"
   ;;
 --readme-block)
-  render_block
+  case "${2:-conformance}" in
+  conformance) render_block ;;
+  compliance) render_compliance_block ;;
+  *) die "usage: $0 --readme-block [conformance | compliance]" ;;
+  esac
   ;;
 --badges-write)
   rm -f "$BADGES"/*.json

@@ -86,6 +86,11 @@ fn an_order_composition_maps_to_one_mpd_prescription_with_its_product() -> TestR
         included,
         "the product, and no Provenance"
     );
+    ferrofed_testkit::emit::document(
+        ferrofed_testkit::emit::Lane::Prescription,
+        "ferrofed-eehrxf-mapped-prescription",
+        &serde_json::to_string(resource)?,
+    )?;
     Ok(())
 }
 

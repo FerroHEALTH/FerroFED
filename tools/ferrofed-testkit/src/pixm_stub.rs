@@ -43,6 +43,16 @@ const UNKNOWN: u8 = 10;
 /// other patient.
 pub async fn manager(known: &[CrossReferenceSeed]) -> Server {
     let server = Server::start().await;
+    mount(&server, known).await;
+    server
+}
+
+/// Mounts on `server` the answers [`manager`] starts with.
+///
+/// Each patient of `known` gets the `ehr_id`s it names, and any other `404`.
+/// After a `reset` of `server`, it stands for a Manager whose
+/// cross-reference has changed, as one does after a merge.
+pub async fn mount(server: &Server, known: &[CrossReferenceSeed]) {
     for (index, cross_reference) in known.iter().enumerate() {
         let patient = cross_reference.patient;
         let answer = Answer {
@@ -54,7 +64,7 @@ pub async fn manager(known: &[CrossReferenceSeed]) -> Server {
             .and(body_string_contains(patient.value()))
             .respond_with(answer.clone())
             .with_priority(KNOWN)
-            .mount(&server)
+            .mount(server)
             .await;
         Mock::given(method("GET"))
             .and(path(PATH))
@@ -64,15 +74,14 @@ pub async fn manager(known: &[CrossReferenceSeed]) -> Server {
             ))
             .respond_with(answer)
             .with_priority(KNOWN)
-            .mount(&server)
+            .mount(server)
             .await;
     }
     Mock::given(path(PATH))
         .respond_with(ResponseTemplate::new(404).set_body_raw(not_found().into_bytes(), FHIR_JSON))
         .with_priority(UNKNOWN)
-        .mount(&server)
+        .mount(server)
         .await;
-    server
 }
 
 /// Returns the FHIR base of `server`, with its trailing slash, that a
