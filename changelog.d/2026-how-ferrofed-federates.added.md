@@ -1,0 +1,1 @@
+- The book explains how FerroFED federates on one page: the two faces, the federated query, the identity services, identity and trust, the FHIR face, a national contact point and MyHealth@EU, and the EHDS articles the gateway answers, each citing the specification or the Regulation and labelling FerroFED's own design.
