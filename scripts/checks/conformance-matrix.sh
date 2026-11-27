@@ -30,7 +30,7 @@
 #      runs too; the site renders both, #912);
 #   8. conformance/aql-golden/pass-list.txt is unsorted, names a case the
 #      vendored corpus does not hold, or records another total than it holds;
-#   9. a file under conformance/badges/ or the README conformance block
+#   9. a file under conformance/badges/ or the README conformance or compliance block
 #      differs from what `scripts/conformance/matrix.sh --badges-write` writes;
 #  10. a badge file, or a static badge of the README, carries no logo;
 #  11. the README lacks the small caption under the conformance heading that
@@ -262,12 +262,14 @@ if bash scripts/conformance/matrix.sh --badges "$work/badges" > /dev/null; then
 else
   problem "the badges could not be rendered"
 fi
-bash scripts/conformance/matrix.sh --readme-block > "$work/block.md" || exit 1
-sed -n '/^<!-- conformance:begin -->$/,/^<!-- conformance:end -->$/p' README.md > "$work/block.held"
-if ! diff -u "$work/block.held" "$work/block.md" > "$work/diff" 2>&1; then
-  problem "the README.md conformance block is stale (run scripts/conformance/matrix.sh --badges-write):"
-  sed "$INDENT" "$work/diff" >&2
-fi
+for block in conformance compliance; do
+  bash scripts/conformance/matrix.sh --readme-block "$block" > "$work/block.md" || exit 1
+  sed -n "/^<!-- $block:begin -->\$/,/^<!-- $block:end -->\$/p" README.md > "$work/block.held"
+  if ! diff -u "$work/block.held" "$work/block.md" > "$work/diff" 2>&1; then
+    problem "the README.md $block block is stale (run scripts/conformance/matrix.sh --badges-write):"
+    sed "$INDENT" "$work/diff" >&2
+  fi
+done
 
 # 10. Every badge carries a logo of scripts/checks/badge-logos/.
 # shellcheck source=scripts/checks/badge-logos/logo.sh
