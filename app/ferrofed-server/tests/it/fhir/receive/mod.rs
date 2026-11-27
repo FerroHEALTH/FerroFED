@@ -20,6 +20,7 @@ mod inserted;
 mod laboratory;
 mod laboratory_grant;
 mod refused;
+mod report_grant;
 mod representative;
 mod start;
 mod vaccination;
