@@ -19,18 +19,22 @@ use eehrxf::document::discharge::{
 };
 use eehrxf::document::language::LanguageError;
 use eehrxf::terminology::Terminology;
+use eehrxf::terminology::translation::MYHEALTH_EU_CORE;
 use ferrofed_eehrxf::discharge::{self, COMPOSITION, ELEMENT, SLUG, Served};
 use ferrofed_eehrxf::prescriptions::mapped::Template;
-use ferrofed_eehrxf::report::ServedError;
+use ferrofed_eehrxf::report::{Delivered, ServedError};
 use ferrofed_eehrxf::reserved::{self, NAMESPACE, SAVED, VERSION};
 use ferrofed_eehrxf::section_query::{self, ISSUER, PATIENT};
 use ferrofed_identity::role::header::{PatientHeader, PersonName};
 use ferrofed_testkit::discharge as fixture;
+use ferrofed_testkit::eps::transcoding::{CATEGORY, DIAGNOSIS, ICD_10, SNOMED};
 use ferrofed_testkit::fhir_packages;
 use openehr_query::parser;
 
 use crate::conforming;
 use serde_json::Value;
+use wiremock::matchers::{method, path};
+use wiremock::{Mock, ResponseTemplate};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -304,6 +308,122 @@ async fn a_report_of_a_patient_the_binding_holds_nothing_of_conforms_to_bundle_e
 {
     let breaks = breaks(&written_with(&PatientHeader::default()).await?).await?;
     assert!(breaks.is_empty(), "{breaks:#?}");
+    Ok(())
+}
+
+/// The codings of each `Condition.code` in `bundle`, as system and code.
+fn condition_codes(bundle: &Value) -> Vec<Vec<(String, String)>> {
+    of_type(bundle, "Condition")
+        .into_iter()
+        .map(|condition| {
+            condition
+                .pointer("/code/coding")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|coding| {
+                    Some((
+                        coding.get("system")?.as_str()?.to_owned(),
+                        coding.get("code")?.as_str()?.to_owned(),
+                    ))
+                })
+                .collect()
+        })
+        .collect()
+}
+
+/// What `served` writes from the synthetic composition with its diagnosis
+/// coded in SNOMED CT, transcoded for MyHealth@EU through `terminology`.
+async fn transcoded(
+    terminology: &Terminology,
+) -> Result<Result<Delivered, ServedError>, Box<dyn Error>> {
+    Ok(conforming::delivered(
+        &served()?,
+        (
+            &fixture::snomed_composition(UID),
+            "urn:uuid:5b0c3f7e-0000-4000-8000-00000000d101",
+        ),
+        (&header(), &[]),
+        (terminology, &MYHEALTH_EU_CORE),
+    )
+    .await)
+}
+
+// NOTE: MyHealth@EU HDR 9.2.0 condition-hdr-myhealtheu binds Condition.code required to
+// eHDSIProblemWithExceptions; Implementing Regulation (EU) 2026/2083 Art 3(4) gives the mapping to the Member State.
+#[tokio::test]
+async fn under_myhealth_eu_transcoding_a_snomed_diagnosis_gains_its_icd_10_category() -> TestResult
+{
+    let (_server, terminology) = conforming::transcoding_terminology().await?;
+    let delivered = transcoded(&terminology).await??;
+    assert!(delivered.unbound.is_empty(), "{:?}", delivered.unbound);
+    let bundle = serde_json::to_value(&delivered.bundle)?;
+    let codes = condition_codes(&bundle);
+    assert_eq!(1, codes.len(), "one diagnosis: {codes:?}");
+    for codings in &codes {
+        assert_eq!(
+            Some(&(ICD_10.to_owned(), CATEGORY.to_owned())),
+            codings.last(),
+            "the ICD-10 category after the recorded coding: {codings:?}"
+        );
+        assert!(
+            codings
+                .iter()
+                .any(|coding| coding == &(SNOMED.to_owned(), DIAGNOSIS.0.to_owned())),
+            "the recorded SNOMED CT coding stays: {codings:?}"
+        );
+    }
+    let breaks = breaks(&bundle).await?;
+    assert!(breaks.is_empty(), "{breaks:#?}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_diagnosis_no_translation_reaches_is_kept_as_recorded_and_listed_unbound() -> TestResult {
+    let (server, terminology) = conforming::language_terminology().await?;
+    Mock::given(method("POST"))
+        .and(path("/fhir/ConceptMap/$translate"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(
+            r#"{"resourceType":"Parameters","parameter":[{"name":"result","valueBoolean":false}]}"#,
+            "application/fhir+json",
+        ))
+        .mount(&server)
+        .await;
+    let delivered = transcoded(&terminology).await??;
+    let locations: Vec<&str> = delivered
+        .unbound
+        .iter()
+        .map(|unbound| unbound.location.as_str())
+        .collect();
+    assert_eq!(1, locations.len(), "{locations:?}");
+    assert!(
+        locations
+            .iter()
+            .all(|location| location.starts_with("Condition.code")),
+        "{locations:?}"
+    );
+    for codings in condition_codes(&serde_json::to_value(&delivered.bundle)?) {
+        assert!(
+            codings.iter().all(|(system, _)| system != ICD_10),
+            "no ICD-10 coding is invented: {codings:?}"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_terminology_server_that_refuses_a_translation_refuses_the_report() -> TestResult {
+    let (server, terminology) = conforming::language_terminology().await?;
+    Mock::given(method("POST"))
+        .and(path("/fhir/ConceptMap/$translate"))
+        .respond_with(ResponseTemplate::new(500))
+        .mount(&server)
+        .await;
+    let answer = transcoded(&terminology).await?;
+    assert!(
+        matches!(answer, Err(ServedError::Translation(_))),
+        "{answer:?}"
+    );
     Ok(())
 }
 

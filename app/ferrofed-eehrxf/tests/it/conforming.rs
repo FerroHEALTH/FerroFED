@@ -15,12 +15,14 @@ use ferrobridge_validator::set::PackageSet;
 use std::sync::Arc;
 
 use eehrxf::terminology::Terminology;
-use ferrofed_eehrxf::report::{Report, ServedError, Writes};
+use eehrxf::terminology::translation::{Binding, MYHEALTH_EU_CORE};
+use ferrofed_eehrxf::report::{Delivered, Report, ServedError, Writes};
 use ferrofed_eehrxf::summary::Organisation;
 use ferrofed_eehrxf::terminology::BridgeTerminology;
 use ferrofed_eehrxf::vaccination::Attester;
 use ferrofed_identity::role::header::PatientHeader;
 use ferrofed_testkit::ehdsi_language;
+use ferrofed_testkit::eps::transcoding;
 use ferrofed_testkit::mock::Server;
 use fhir_types::r4::bundle::Bundle;
 use serde_json::Value;
@@ -63,6 +65,24 @@ pub(crate) async fn attested(
     (header, attesters): (&PatientHeader, &[Attester]),
     terminology: &Terminology,
 ) -> Result<Bundle, ServedError> {
+    delivered(
+        served,
+        (composition, identifier),
+        (header, attesters),
+        (terminology, &[]),
+    )
+    .await
+    .map(|delivered| delivered.bundle)
+}
+
+/// What [`attested`] answers with the mapped resources translated through
+/// `terminology` to meet `bindings`, with each concept left unbound.
+pub(crate) async fn delivered(
+    served: &dyn Writes,
+    (composition, identifier): (&str, &str),
+    (header, attesters): (&PatientHeader, &[Attester]),
+    (terminology, bindings): (&Terminology, &[Binding]),
+) -> Result<Delivered, ServedError> {
     let organisation = |name: &str| Organisation {
         id: name.to_lowercase().replace(' ', "-"),
         name: Some(name.to_owned()),
@@ -82,9 +102,51 @@ pub(crate) async fn attested(
                 member: &member,
                 attesters,
             },
-            terminology,
+            (terminology, bindings),
         )
         .await
+}
+
+/// The terminology of [`language_terminology`], whose server also maps
+/// codes for MyHealth@EU as [`transcoding::mount`] describes.
+pub(crate) async fn transcoding_terminology() -> Result<(Server, Terminology), Box<dyn Error>> {
+    let (server, terminology) = language_terminology().await?;
+    transcoding::mount(&server).await;
+    Ok((server, terminology))
+}
+
+/// Holds that transcoding for MyHealth@EU leaves the report `served` writes
+/// from `composition` as it is and asks the server for no translation: no
+/// MyHealth@EU Core binding is on an element the report writes.
+pub(crate) async fn untouched(
+    served: &dyn Writes,
+    (composition, identifier): (&str, &str),
+    (header, attesters): (&PatientHeader, &[Attester]),
+) -> Result<(), Box<dyn Error>> {
+    let (stub, terminology) = transcoding_terminology().await?;
+    let write = |bindings| {
+        delivered(
+            served,
+            (composition, identifier),
+            (header, attesters),
+            (&terminology, bindings),
+        )
+    };
+    let recorded = write(&[]).await?;
+    let transcoded = write(&MYHEALTH_EU_CORE).await?;
+    assert!(transcoded.unbound.is_empty(), "{:?}", transcoded.unbound);
+    assert_eq!(
+        serde_json::to_value(&recorded.bundle)?,
+        serde_json::to_value(&transcoded.bundle)?,
+        "the report is written as recorded"
+    );
+    let asked = ferrofed_testkit::mock::recorded(&stub)
+        .await?
+        .iter()
+        .filter(|request| request.url.path().ends_with("/ConceptMap/$translate"))
+        .count();
+    assert_eq!(0, asked, "no translation is asked");
+    Ok(())
 }
 
 /// The name of the member [`written`] reads the report at.

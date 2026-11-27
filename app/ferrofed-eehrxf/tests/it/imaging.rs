@@ -98,6 +98,24 @@ async fn written_with(
     Ok(serde_json::to_value(&bundle)?)
 }
 
+#[tokio::test]
+async fn transcoding_for_myhealth_eu_leaves_an_imaging_report_as_recorded() -> TestResult {
+    let written = fixture::template()?;
+    let template = Template::Adl2 {
+        template: &written.template,
+        archetypes: &written.archetypes,
+    };
+    conforming::untouched(
+        &Served::compile(template)?,
+        (
+            &fixture::composition(&template.source()?, UID)?,
+            "urn:uuid:5b0c3f7e-0000-4000-8000-00000000e101",
+        ),
+        (&PatientHeader::default(), &[]),
+    )
+    .await
+}
+
 /// The resources of `bundle` of the type `kind`.
 fn of_type<'a>(bundle: &'a Value, kind: &str) -> Vec<&'a Value> {
     bundle["entry"]

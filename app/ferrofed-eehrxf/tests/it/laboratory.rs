@@ -173,6 +173,29 @@ async fn written(header: &PatientHeader) -> Result<String, Box<dyn Error>> {
     Ok(serde_json::to_string(&bundle)?)
 }
 
+#[tokio::test]
+async fn transcoding_for_myhealth_eu_leaves_a_laboratory_report_as_recorded() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let composition = fixture::composition(
+        dir.path(),
+        &[("urn:oid:2.999.1", "synthetic-patient-0001")],
+        (
+            "7c4e1d20-0000-4000-8000-0000000008b1::cdr-a.example.org::1",
+            &[],
+        ),
+    )?;
+    let opt = std::fs::read_to_string(fixture::opt())?;
+    conforming::untouched(
+        &Served::compile(Template::of(&opt, &[]))?,
+        (
+            &composition,
+            "urn:uuid:7c4e1d20-0000-4000-8000-0000000008b1",
+        ),
+        (&PatientHeader::default(), &[]),
+    )
+    .await
+}
+
 /// Every error FerroBRIDGE's validator finds in `document` against
 /// `Bundle-eu-lab`, over the Laboratory Report package and its dependency
 /// closure.
