@@ -260,6 +260,7 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+      issues: read # record-issues reads the state of the issues the records name
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -548,6 +549,21 @@ jobs:
           set -euo pipefail
           bash scripts/checks/chapter-iii.sh --self-test
           bash scripts/checks/chapter-iii.sh
+
+      # ---- record-issues -----------------------------------------------
+      # The open-issue guard of the four conformity records (#2043): a row of
+      # the Annex II checklist, the Chapter III record or either technical
+      # documentation index that is not met names at least one open issue.
+      # It asks GitHub for each issue's state, so it needs the token; its
+      # self-test runs against a stub and proves each refusal offline.
+      - name: record-issues
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          bash scripts/checks/record-issues.sh --self-test
+          bash scripts/checks/record-issues.sh
 
       # ---- myhealth-eu -------------------------------------------------
       # The MyHealth@EU self-assessment guard: every requirement id of the

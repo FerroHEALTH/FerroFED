@@ -120,6 +120,8 @@ bash scripts/checks/annex-ii.sh --self-test
 bash scripts/checks/annex-ii.sh
 bash scripts/checks/chapter-iii.sh --self-test
 bash scripts/checks/chapter-iii.sh
+bash scripts/checks/record-issues.sh --self-test
+bash scripts/checks/record-issues.sh
 bash scripts/checks/site-links.sh --self-test
 bash scripts/checks/site-links.sh
 bash scripts/checks/crate-version-guard.sh --self-test

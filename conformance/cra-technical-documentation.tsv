@@ -11,8 +11,8 @@
 # Regulation that names the point); target (a file of this repository);
 # section (a heading of that file, or - for the whole file); status
 # (documented, partial, planned, or not-applicable when the point does not
-# apply and the target says why); issue (#N, required for partial and
-# planned, or -).
+# apply and the target says why); issue (#N, several separated by one
+# space, required for partial and planned, or -).
 #
 # scripts/checks/technical-documentation.sh holds every row to the vendored
 # text and the tree. No specification governs the index form: our own design.
@@ -35,10 +35,11 @@ item	element	target	section	status	issue
 3	an assessment of the cybersecurity risks against which the product with digital elements is designed, developed, produced, delivered and maintained pursuant to Article 13	website/book/src/evaluate/cra-risk-assessment.md	-	documented	-
 4	relevant information that was taken into account to determine the support period pursuant to Article 13(8)	SECURITY.md	Supported versions	documented	-
 4	relevant information that was taken into account to determine the support period pursuant to Article 13(8)	website/book/src/evaluate/regulatory-status.md	The support period	documented	-
-5	a list of the harmonised standards applied in full or in part	website/book/src/evaluate/cra-risk-assessment.md	Annex I, Part I, point (2), point by point	partial	#525
-5	a list of the harmonised standards applied in full or in part	website/book/src/evaluate/information-sheet.md	(e) Standards, formats and specifications	partial	#525
-6	reports of the tests carried out to verify the conformity of the product with digital elements and of the vulnerability handling processes	website/book/src/evaluate/conformance-statement.md	-	partial	#525
-6	reports of the tests carried out to verify the conformity of the product with digital elements and of the vulnerability handling processes	website/book/src/evaluate/conformance.md	-	partial	#525
-6	reports of the tests carried out to verify the conformity of the product with digital elements and of the vulnerability handling processes	website/book/src/evaluate/threat-model.md	-	partial	#525
+5	a list of the harmonised standards applied in full or in part	website/book/src/evaluate/cra-risk-assessment.md	How the risks were analysed	documented	-
+5	a list of the harmonised standards applied in full or in part	website/book/src/evaluate/cra-risk-assessment.md	Annex I, Part I, point (2), point by point	documented	-
+5	a list of the harmonised standards applied in full or in part	website/book/src/evaluate/information-sheet.md	(e) Standards, formats and specifications	documented	-
+6	reports of the tests carried out to verify the conformity of the product with digital elements and of the vulnerability handling processes	website/book/src/evaluate/conformance-statement.md	-	partial	#2060
+6	reports of the tests carried out to verify the conformity of the product with digital elements and of the vulnerability handling processes	website/book/src/evaluate/conformance.md	-	partial	#2060
+6	reports of the tests carried out to verify the conformity of the product with digital elements and of the vulnerability handling processes	website/book/src/evaluate/threat-model.md	-	partial	#2060
 7	a copy of the EU declaration of conformity	website/book/src/evaluate/technical-documentation.md	The EU declaration of conformity	partial	#940
 8	where applicable, the software bill of materials	website/book/src/operate/container.md	The release binaries	documented	-

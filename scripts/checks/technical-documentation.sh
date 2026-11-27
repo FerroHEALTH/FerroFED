@@ -161,10 +161,10 @@ check_index() {
       ;;
     esac
     case "$status" in
-    documented) [[ "$issue" == - || "$issue" =~ ^#[0-9]+$ ]] ||
-      fail "$index line $line: issue \"$issue\" is neither - nor #N." ;;
-    partial | planned) [[ "$issue" =~ ^#[0-9]+$ ]] ||
-      fail "$index line $line: a $status row names its issue as #N." ;;
+    documented) [[ "$issue" == - || "$issue" =~ ^#[0-9]+( #[0-9]+)*$ ]] ||
+      fail "$index line $line: issue \"$issue\" is neither - nor #N, several separated by one space." ;;
+    partial | planned) [[ "$issue" =~ ^#[0-9]+( #[0-9]+)*$ ]] ||
+      fail "$index line $line: a $status row names its issue as #N, several separated by one space." ;;
     not-applicable) [[ "$na" == yes ]] ||
       fail "$index line $line: status \"$status\" is not $statuses."
       [[ "$issue" == - ]] || fail "$index line $line: a not-applicable row names no issue." ;;
@@ -367,6 +367,10 @@ self_test() {
   expect "a planned row with no issue" 1 "a planned row names its issue"
   row 5 6 '#12'
   expect "a planned row with its issue" 0
+  row 5 6 '#12 #13'
+  expect "a planned row with two issues" 0
+  row 5 6 '#12  #13'
+  expect "two issues not separated by one space" 1 "a planned row names its issue"
   fixture
   row 6 5 'done'
   expect "an unknown status" 1 "status \"done\""
