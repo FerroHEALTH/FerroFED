@@ -409,6 +409,74 @@ record and is still the security event `emergency-limit-reached`. The
 `[[access_log.emergency_purpose]]` entries and the store are what the count
 needs either way.
 
+## Anomaly detection
+
+The NCPeH Architecture Specifications 10.0.0 §5.1.9 give the contact point
+an anomaly detection "based on a configurable rule", with three warnings:
+
+| Warning | Raised when |
+|---|---|
+| `EHDSI_WARNING_SEC_UNEXPECTED_NUMBER_OF_REQUESTS_FOR_UNIQUE_PATIENT` | too many requests for one patient in the window, counted "even in case of a request for a non existing patient" |
+| `EHDSI_WARNING_SEC_UNEXPECTED_NUMBER_OF_REQUESTS_FOR_UNIQUE_POINT_OF_CARE` | too many requests from one point of care in the window |
+| `EHDSI_WARNING_SEC_UNEXPECTED_NUMBER_OF_REQUESTS` | too many requests in all in the window |
+
+A breach is persisted "as a warning" in the audit record, and "does not
+block traffic". FerroFED sees every request a contact point relays with
+what these rules count by, so it counts them behind the contact point, as
+it does the emergency access limit. Where the counts are kept is FerroFED's
+own design. The notice to the national service desk stays the contact
+point's, raised from the security event and the record below.
+
+Each rule is a table of its own, and a rule you leave out is not counted.
+No rule is in effect by default:
+
+```toml
+[anomaly.patient]          # by the patient of the treatment relationship confirmation
+threshold = 20
+window = "1h"
+
+[anomaly.point_of_care]    # by the identity assertion's point of care
+threshold = 200
+window = "1h"
+
+[anomaly.requests]         # every request of every contact point
+threshold = 5000
+window = "1h"
+```
+
+| Key | What it sets |
+|---|---|
+| `threshold` | how many requests one window holds; each request past it raises the rule's warning, at least 1 |
+| `window` | the window, at least one second; it opens at the first request counted in it |
+
+A `threshold` or a `window` of zero is refused, naming the key. A reload
+applies changed rules. `OPTIONS {base}/` declares the rules in effect
+under `federation.national_contact_point.anomaly`, beside the emergency
+limit, each as `threshold` and `window_s`, or `null` when left out.
+
+How the gateway counts:
+
+- **Every request that reaches patient data**, the patient lookup
+  included, since §5.1.9 counts a request for a patient who does not exist.
+  A request with no treatment relationship confirmation is not counted by
+  patient, and one whose assertion names no point of care is not counted by
+  point of care.
+- **In fixed windows.** A window opens at the first request it counts and
+  ends `window` later; the next request after that opens a new one.
+- **Across replicas and restarts**, in FerroFED's own store
+  (`ferrofed.contact_point_requests`), one statement per request for every
+  rule. The table names each patient and point of care by a SHA-256
+  digest alone.
+- **Whether or not an access log is kept.**
+
+A request past a rule's threshold is served. It is the security event
+`unexpected-number-of-requests` under `ferrofed::security`, one line per
+warning, naming the warning, the contact point and the patient by its
+pseudonym alone; with an access log, its record's outcome description
+carries each warning, separated by `; `, after any description the record
+already had. When the store does not answer, the request is served
+uncounted and is the security event `anomaly-uncounted`.
+
 ## Failures the connector relays
 
 The contact points exchange a common set of exceptions, and the national

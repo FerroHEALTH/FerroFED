@@ -8,7 +8,9 @@
 //! the definitions of the stored-query registry's `postgres` backend
 //! (§12.7, N44), the count of each relayed health professional's
 //! emergency accesses ([`emergency`]; eHDSI Section II Security Services
-//! 10.0.0 §2.5), the `DPoP` proofs accepted inside their window
+//! 10.0.0 §2.5), the requests national contact points relay, counted per
+//! anomaly rule ([`anomaly`]; `NCPeH` Architecture Specifications 10.0.0
+//! §5.1.9), the `DPoP` proofs accepted inside their window
 //! ([`replay`]; RFC 9449 §11.1), and who dispensed each dispensation a
 //! national contact point wrote, for the 24 hours its discard may follow
 //! ([`dispensed`]; MyHealth@EU Requirements Catalogue 10.0.0 07.04), and
@@ -31,6 +33,7 @@
 //! with a typed error, so nothing that needs the store is answered without
 //! it. No specification governs the store: our own design.
 
+pub mod anomaly;
 pub mod connection;
 pub mod dispensed;
 pub mod emergency;

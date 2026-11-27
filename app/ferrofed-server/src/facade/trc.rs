@@ -216,7 +216,7 @@ static PSEUDONYM_KEY: LazyLock<Option<hmac::Key>> = LazyLock::new(|| {
 
 /// The pseudonym of `identifier`: the first 16 bytes of its HMAC-SHA256
 /// under this process's key, in hexadecimal.
-fn pseudonym(identifier: &str) -> String {
+pub(crate) fn pseudonym(identifier: &str) -> String {
     let Some(key) = PSEUDONYM_KEY.as_ref() else {
         return String::from("unavailable");
     };

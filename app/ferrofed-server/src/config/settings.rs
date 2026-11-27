@@ -88,6 +88,8 @@ pub struct Settings {
     pub store: Option<crate::config::store::StoreSettings>,
     /// The limit of each relayed health professional's emergency accesses.
     pub emergency: crate::config::emergency::EmergencyLimit,
+    /// The anomaly rules of the requests national contact points relay.
+    pub anomaly: crate::config::anomaly::AnomalyRules,
     /// The FHIR R4 face of the exchange format, when it is served (Regulation
     /// (EU) 2025/327 Annex II 2.1).
     pub fhir: Option<crate::config::fhir::FhirSettings>,

@@ -47,6 +47,7 @@ use http::HeaderMap;
 use secrecy::{ExposeSecret, SecretString};
 
 use crate::auth::refusal::Refusal;
+use crate::config::anomaly::{AnomalyRules, Rule};
 use crate::config::auth::AuthSettings;
 use crate::config::auth::contact_point::ContactPoint;
 use crate::config::emergency::EmergencyLimit;
@@ -482,8 +483,8 @@ impl ContactPoints {
     }
 
     /// `body`, with the `national_contact_point` member when some issuer is
-    /// declared one, declaring `emergency` as the emergency access limit in
-    /// effect.
+    /// declared one, declaring `emergency` as the emergency access limit and
+    /// `anomaly` as the anomaly rules in effect, each rule left out `null`.
     ///
     /// # Errors
     ///
@@ -491,7 +492,7 @@ impl ContactPoints {
     pub fn declared_in(
         &self,
         mut body: OptionsRoot,
-        emergency: EmergencyLimit,
+        (emergency, anomaly): (EmergencyLimit, AnomalyRules),
     ) -> Result<OptionsRoot, WireError> {
         #[derive(serde::Serialize)]
         struct Member<'a> {
@@ -499,6 +500,7 @@ impl ContactPoints {
             professional: &'static str,
             purpose_of_use: &'static str,
             emergency: Emergency,
+            anomaly: Anomaly,
             issuers: &'a [DeclaredContactPoint],
         }
         #[derive(serde::Serialize)]
@@ -506,6 +508,18 @@ impl ContactPoints {
             threshold: u32,
             window_s: u64,
         }
+        #[derive(serde::Serialize)]
+        struct Anomaly {
+            patient: Option<Emergency>,
+            point_of_care: Option<Emergency>,
+            requests: Option<Emergency>,
+        }
+        let declared = |rule: Option<Rule>| {
+            rule.map(|rule| Emergency {
+                threshold: rule.threshold.get(),
+                window_s: rule.window.as_secs(),
+            })
+        };
         if self.0.is_empty() {
             return Ok(body);
         }
@@ -516,6 +530,11 @@ impl ContactPoints {
             emergency: Emergency {
                 threshold: emergency.threshold.get(),
                 window_s: emergency.window.as_secs(),
+            },
+            anomaly: Anomaly {
+                patient: declared(anomaly.patient),
+                point_of_care: declared(anomaly.point_of_care),
+                requests: declared(anomaly.requests),
             },
             issuers: &self.0,
         };
