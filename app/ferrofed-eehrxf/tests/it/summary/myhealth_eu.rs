@@ -16,7 +16,7 @@ use eehrxf::terminology::translation::MYHEALTH_EU_CORE;
 use ferrofed_eehrxf::summary::mappings::Mappings;
 use ferrofed_eehrxf::summary::{Answer, Assembled, Held};
 use ferrofed_testkit::eps;
-use ferrofed_testkit::eps::transcoding::{self, ATC, INGREDIENT, SUBSTANCE};
+use ferrofed_testkit::eps::transcoding::{self, ATC, INGREDIENT, SNOMED, SUBSTANCE};
 use ferrofed_testkit::mock::Server;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
@@ -111,9 +111,10 @@ async fn each_allergy_gains_its_atc_ingredient_beside_its_recorded_coding()
             codings.last(),
             "the ATC ingredient after the recorded coding: {codings:?}"
         );
-        assert!(
-            codings.iter().any(|(_, code)| code == SUBSTANCE.0),
-            "the recorded SNOMED CT coding stays: {codings:?}"
+        assert_eq!(
+            Some(&(SNOMED.to_owned(), SUBSTANCE.0.to_owned())),
+            codings.first(),
+            "the recorded SNOMED CT coding stays first, under its URI: {codings:?}"
         );
     }
     ferrofed_testkit::emit::document(

@@ -39,7 +39,7 @@ fn mapped_allergy(relation_code: &str) -> Result<Held, Box<dyn Error>> {
             "match": relation_code,
             "target": {
                 "_type": "CODE_PHRASE",
-                "terminology_id": { "_type": "TERMINOLOGY_ID", "value": "SNOMED-CT" },
+                "terminology_id": { "_type": "TERMINOLOGY_ID", "value": "http://snomed.info/sct" },
                 "code_string": MAPPED_CODE
             }
         }]),
@@ -75,8 +75,9 @@ fn mapped_section(relation_code: &str) -> Result<(serde_json::Value, String), Bo
 /// narrative line naming `words`, the target and the member.
 fn withheld_into_the_narrative(relation_code: &str, words: &str) -> Result<(), Box<dyn Error>> {
     let (bundle, div) = mapped_section(relation_code)?;
-    let line =
-        format!("AllergyIntolerance.code: {words} SNOMED-CT {MAPPED_CODE}, from Synthetic org-a.");
+    let line = format!(
+        "AllergyIntolerance.code: {words} http://snomed.info/sct {MAPPED_CODE}, from Synthetic org-a."
+    );
     assert!(div.contains(&line), "eHN PS Art 10(3): {div}");
     assert!(
         !bundle
@@ -110,6 +111,14 @@ fn an_equivalent_term_mapping_is_a_coding_and_no_narrative_line() -> Result<(), 
             .to_string()
             .contains(&format!("\"code\":\"{MAPPED_CODE}\"")),
         "RM TERM_MAPPING `=`: an equivalent term is written as a coding"
+    );
+    assert!(
+        bundle.to_string().contains(&format!(
+            "\"system\":\"http://snomed.info/sct\",\"code\":\"{MAPPED_CODE}\""
+        )) || bundle.to_string().contains(&format!(
+            "\"code\":\"{MAPPED_CODE}\",\"system\":\"http://snomed.info/sct\""
+        )),
+        "FHIR R4 Coding.system is the SNOMED CT URI: {bundle}"
     );
     assert!(!div.contains(MAPPED_CODE), "{div}");
     Ok(())
