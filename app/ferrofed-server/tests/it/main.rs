@@ -14,6 +14,7 @@ mod ask_all;
 mod audit_repository;
 mod auth;
 mod banner;
+mod banner_book;
 mod base_url;
 mod book_tutorial;
 mod caller_bindings;

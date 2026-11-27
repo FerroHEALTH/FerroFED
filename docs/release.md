@@ -234,7 +234,10 @@ slow one.
    `deploy/kubernetes/base/statefulset.yaml` and in
    `deploy/kubernetes/components/console/deployment.yaml`. `scripts/checks/versions.sh` fails on
    any file left behind, and the `plan` job checks the first three and the
-   release asset's tags against the tag.
+   release asset's tags against the tag. The startup banner sample of the
+   book's configuration page names the version too: write it again with
+   `cargo nextest run -p ferrofed-server --test it --run-ignored only
+   banner_book`, or the test beside it fails.
 3. **The changelog names the release.** Every change since the last release
    is a fragment under `changelog.d/` (`changelog.d/README.md`), and entries
    written before the fragments may still sit under `[Unreleased]`. Run
