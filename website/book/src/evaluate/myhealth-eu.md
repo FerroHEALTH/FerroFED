@@ -28,7 +28,7 @@ conformant (`scripts/checks/myhealth-eu-ci.sh` refuses one that does).
 | MyHealth@EU Laboratory 9.2.0 (CI) | the laboratory reports valid against `Bundle-lab-myhealtheu` | the same |
 | MyHealth@EU HDR 9.2.0 (CI) | the hospital discharge reports valid against `bundle-hdr-myhealtheu` | the same |
 | MyHealth@EU Vaccination 10.0.0-preview | the vaccination histories valid against `bundle-euvac-myhealtheu` | the same |
-| MyHealth@EU Patient Summary 1.0.0-poc | the patient summaries valid against `bundle-eps-myhealtheu` | the same |
+| MyHealth@EU Patient Summary 1.0.0-poc | the patient summaries written with the `myhealth-eu` transcoding of `[eehrxf.terminology]` valid against `bundle-eps-myhealtheu` | the same |
 | MyHealth@EU ePrescription and eDispensation 1.0.0-poc | the prescriptions the map mode writes valid against `MedicationRequest-myhealtheu-epd` | the same |
 | MyHealth@EU Imaging 9.1.1 (draft) | the imaging reports valid against `bundle-img-myhealtheu` | the same |
 
@@ -38,12 +38,14 @@ change of any count is recorded on purpose. The gateway writes no
 dispensation: one it receives reaches its member byte for byte, so the
 ePrescription badge counts prescriptions alone.
 
-Each invalid verdict names its cause in the record. A summary that carries
-an allergy is invalid against the Patient Summary guide, which binds
-`AllergyIntolerance.code` to the eHDSI value set `eHDSIAllergenWithExceptions`
-as required, while the test documents code the substance in text alone;
-transcoding to the Master Value Sets Catalogue is
-[#2039](https://github.com/FerroHEALTH/FerroFED/issues/2039). The imaging
+Each invalid verdict names its cause in the record. The Patient Summary
+badge counts the summaries the gateway writes for a contact point, with
+the `myhealth-eu` transcoding of `[eehrxf.terminology]`
+([Transcoding for MyHealth@EU](../integrate/terminology.md#transcoding-for-myhealtheu)).
+A summary written without it carries the codes as recorded, which the
+guide's required bindings, such as `AllergyIntolerance.code` to
+`eHDSIAllergenWithExceptions`, need not hold, so it is held to the HL7
+Europe profiles and MyHealth@EU Core alone. The imaging
 report cannot be validated against the imaging guide at all: the guide's
 dependency closure names `hl7.fhir.eu.base` `2.0.0-gamma`, which no package
 registry publishes, so the validator loads nothing and the report counts as

@@ -21,20 +21,24 @@
 //! the mutual TLS the server asks for, its `credentials` HTTP Basic or a
 //! client credentials grant, and its `retry` the tries of one call, once by
 //! default, since the face that asks fails closed on the first refusal. The
-//! server is sent the codes of the
-//! documents the face receives, which are health data, so its URL is held to
-//! the protected-payload policy of [`transport`]. The table is optional:
-//! with none, the component fails closed where it needs a server, refusing a
-//! received coding that carries no display, and names every `required`
-//! binding no vendored expansion decides as not evaluated. It serves the
-//! `[fhir]` face, so it is refused without one. No specification governs the
-//! shape of the table: our own design.
+//! server is sent the codes of the documents the face receives, which are
+//! health data, so its URL is held to the protected-payload policy of
+//! [`transport`]. Its `transcode = "myhealth-eu"` also translates each
+//! summary's codes into the systems the MyHealth@EU Core required bindings
+//! take ([`Transcode`]); the default, `none`, translates only into the
+//! eHealth Network's preferred systems. The table is optional: with none,
+//! the component fails closed where it needs a server, refusing a received
+//! coding that carries no display, and names every `required` binding no
+//! vendored expansion decides as not evaluated. It serves the `[fhir]`
+//! face, so it is refused without one. No specification governs the shape
+//! of the table: our own design.
 
 use ferrohealth_config::units;
 use ferrohealth_smart::config::endpoint::{EndpointSection, RetrySection};
 use std::sync::Arc;
 
 use eehrxf::terminology::Terminology;
+use eehrxf::terminology::translation::{Binding, MYHEALTH_EU_CORE};
 use ferrobridge_term::error::Error as TermError;
 use ferrofed_eehrxf::terminology::BridgeTerminology;
 use serde::Deserialize;
@@ -61,6 +65,37 @@ pub struct TerminologyServer {
     /// The server's FHIR base and how it is reached: `https`, `http` under
     /// development only.
     pub endpoint: EndpointSection,
+    /// The codings each summary the face writes gains through the server
+    /// beside the recorded ones.
+    pub transcode: Transcode,
+}
+
+/// The codings a summary gains through the terminology server, as
+/// `[eehrxf.terminology] transcode` names them.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Transcode {
+    /// Only the eHealth Network's preferred systems for a code recorded in
+    /// none of them (eHN PS Art 10).
+    #[default]
+    None,
+    /// Also the code systems of the MyHealth@EU Core required bindings that
+    /// take no SNOMED CT code, the ICD-10 problem and the ATC allergen, as
+    /// the Master Value Sets Catalogue draws them, for a deployment that is
+    /// a national contact point's infrastructure (Implementing Regulation
+    /// (EU) 2026/2083 Art 3(4)).
+    MyhealthEu,
+}
+
+impl Transcode {
+    /// The required bindings each summary's codes are translated to meet.
+    #[must_use]
+    pub const fn bindings(self) -> &'static [Binding] {
+        match self {
+            Self::None => &[],
+            Self::MyhealthEu => &MYHEALTH_EU_CORE,
+        }
+    }
 }
 
 impl Default for TerminologyServer {
@@ -76,6 +111,7 @@ impl Default for TerminologyServer {
                 },
                 ..EndpointSection::default()
             },
+            transcode: Transcode::None,
         }
     }
 }
@@ -86,6 +122,8 @@ pub struct TerminologySettings {
     /// How the server is reached, its URL known to parse and held to the
     /// protected-payload policy.
     pub endpoint: EndpointSection,
+    /// The codings each summary gains through the server.
+    pub transcode: Transcode,
 }
 
 /// Why the terminology server's client cannot be built.
@@ -135,23 +173,33 @@ impl Config {
         )?;
         Ok(Some(TerminologySettings {
             endpoint: table.endpoint.clone(),
+            transcode: table.transcode,
         }))
     }
 }
 
-/// Builds the terminology `settings` describe: none without a server, or
-/// the HTTP client of the server, as the component's seam and as the client
-/// the validator of a received document asks.
+/// The terminology of [`terminology`]: the component's seam, the client the
+/// validator of a received document asks, and the bindings each summary's
+/// codes are translated to meet.
+pub type Built = (Terminology, Option<BridgeTerminology>, &'static [Binding]);
+
+/// Builds the terminology `settings` describe.
+///
+/// None without a server, or the HTTP client of the server, as the
+/// component's seam and as the client the validator of a received document
+/// asks, with the bindings its `transcode` names.
 ///
 /// # Errors
 /// The [`TerminologyFault`] that keeps the client from being built.
-pub fn terminology(
-    settings: Option<&TerminologySettings>,
-) -> Result<(Terminology, Option<BridgeTerminology>), TerminologyFault> {
+pub fn terminology(settings: Option<&TerminologySettings>) -> Result<Built, TerminologyFault> {
     let Some(settings) = settings else {
-        return Ok((Terminology::none(), None));
+        return Ok((Terminology::none(), None, &[]));
     };
     let client = BridgeTerminology::from_endpoint(&settings.endpoint, ENDPOINT)
         .map_err(|error| TerminologyFault::Client(Box::new(error)))?;
-    Ok((Terminology::server(Arc::new(client.clone())), Some(client)))
+    Ok((
+        Terminology::server(Arc::new(client.clone())),
+        Some(client),
+        settings.transcode.bindings(),
+    ))
 }

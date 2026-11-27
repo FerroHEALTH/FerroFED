@@ -153,7 +153,7 @@ async fn locally_coded_summary(terminology: &Terminology) -> Result<Assembled, B
     document_asking(
         &answers(&[locally_coded_allergy()?], &Answer::Answered(Vec::new())),
         (header(), &[]),
-        (&Mappings::compile(&[allergies()?])?, terminology),
+        (&Mappings::compile(&[allergies()?])?, terminology, &[]),
     )
     .await
 }

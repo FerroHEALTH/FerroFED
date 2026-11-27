@@ -230,19 +230,29 @@ pub(super) async fn document(
         &request,
         &author,
         (&gathered.origins, &gathered.sections, &elsewhere),
-        (&fhir.mappings, &fhir.terminology),
+        (&fhir.mappings, &fhir.terminology, fhir.bindings),
     )
     .await;
     let (mut response, delivered, transformations) = match assembled {
-        Ok(assembled) => (
-            fhir_json(StatusCode::OK, &assembled.bundle),
-            assembled.mapped,
-            assembled
-                .transformations
-                .iter()
-                .map(crate::access::transformation::of)
-                .collect(),
-        ),
+        Ok(assembled) => {
+            if !assembled.unbound.is_empty() {
+                tracing::warn!(
+                    request_id = logged,
+                    unbound = assembled.unbound.len(),
+                    locations = ?assembled.unbound.iter().map(|unbound| unbound.location.as_str()).collect::<Vec<_>>(),
+                    "codes of the summary meet no binding [eehrxf.terminology] transcode names, and are transferred as recorded"
+                );
+            }
+            (
+                fhir_json(StatusCode::OK, &assembled.bundle),
+                assembled.mapped,
+                assembled
+                    .transformations
+                    .iter()
+                    .map(crate::access::transformation::of)
+                    .collect(),
+            )
+        }
         Err(failure) => {
             tracing::error!(
                 error = %crate::chain(&failure),

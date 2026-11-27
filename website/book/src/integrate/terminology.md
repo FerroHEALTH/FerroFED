@@ -103,6 +103,37 @@ evaluated. A server that refuses an operation, or does not answer within
 `timeout`, is an error that names the operation and the server's status,
 never a coding left out or a binding taken as held.
 
+### Transcoding for MyHealth@EU
+
+A deployment that is the national infrastructure behind a national contact
+point can have each patient summary carry the codes the MyHealth@EU Patient
+Summary guide binds. Implementing Regulation (EU) 2026/2083 Art 3(4) and
+(5) give the mapping and translation of codes to the Member State, and its
+national infrastructure is part of it. Set `transcode`:
+
+```toml
+[eehrxf.terminology]
+transcode = "myhealth-eu"   # default "none"
+
+[eehrxf.terminology.endpoint]
+url = "https://terminology.example.org/fhir/"
+```
+
+With `myhealth-eu`, each concept of a summary entry at an element a
+MyHealth@EU Core required binding names, and that carries no coding in the
+systems the binding's value set draws from, is also asked of
+`ConceptMap/$translate` for those systems: `Condition.code` for ICD-10
+(`eHDSIProblemWithExceptions`) and `AllergyIntolerance.code` for ATC
+(`eHDSIAllergenWithExceptions`), whatever system the concept was recorded
+in. The same rule applies as above: only an `equivalent` or `equal` match
+becomes a coding, after the recorded ones. The terminology server holds the
+value maps; FerroFED embeds none. A concept no translation reaches is kept
+as recorded, and the gateway logs how many there were and where, by element
+path alone. The document then does not meet that MyHealth@EU binding, which
+the contact point sees. The default, `none`, asks only for the eHealth
+Network's preferred systems. Transcoding does not apply to a received
+document or to the laboratory, discharge, imaging and vaccination reports.
+
 FerroTERM is the terminology server of the Ferro family. The gateway reaches
 it, or any other FHIR R4 terminology server, over HTTP, and links no part of
 it. The EDQM Standard Terms are not shipped with FerroFED: a deployment loads
