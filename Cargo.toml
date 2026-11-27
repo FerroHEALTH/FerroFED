@@ -101,8 +101,8 @@ openehr-federation = { path = "crates/openehr-federation", version = "0.0.66" }
 # builds a withdrawable record's refusal only when it is withdrawn
 # (FerroHEALTH/FerroAUDIT#270, #272; #1926). Verified against crates.io on
 # 2026-11-22 (0.25.0).
-ihe-atna = { version = "0.29.0", default-features = false }
-ehds-logging = { version = "0.29.0", default-features = false }
+ihe-atna = { version = "0.30.0", default-features = false }
+ehds-logging = { version = "0.30.0", default-features = false }
 # The European interoperability software component of Regulation (EU)
 # 2025/327 (Art 2(2)(n)), published from FerroHEALTH/FerroBRIDGE since the
 # owner decision of 2026-10-28 (#813). Like every FerroBRIDGE crate here it
@@ -415,7 +415,7 @@ ferrohealth-secret = "=0.2.2"
 # session store, the four sign-in routes and the middleware every page sits
 # behind, over ferrohealth-smart's relying party. Pinned exactly, as a product
 # pins every family crate, at the release on ferrohealth-smart 0.34 (#1946).
-ferrohealth-session = { version = "=0.30.1", default-features = false }
+ferrohealth-session = { version = "=0.32.0", default-features = false }
 # The configuration loader of FerroHEALTH/FerroSYS (#1397, #1408): the
 # defaults, the file, the `FERROFED__` overrides and the `--set` pairs read
 # into one typed tree, with where each key came from and the merged table the
