@@ -291,6 +291,12 @@ badge_color_check "$BADGES"/*.json conformance/myhealth-eu-badge.json conformanc
 badge_length_check "$BADGES"/*.json conformance/post-quantum-badge.json ||
   problem "a badge runs past the length limits; its breakdown belongs on the conformance page"
 badge_length_self_test > /dev/null || problem "the shared badge length check fails its self-test"
+badge_count_color_self_test > /dev/null || problem "the shared badge colour rule fails its self-test"
+badge_length_readme README.md || problem "a static README badge runs past the length limits"
+printf '[![x](https://img.shields.io/badge/CRA-information%%20for%%20all%%20users-blue?logo=x)](x)\n' > "$work/long.md"
+if badge_length_readme "$work/long.md" 2> /dev/null; then
+  problem "a static badge past 20 characters passes the length check"
+fi
 jq -c '.message = "364/383 tested, 7 deferred by decision"' "$BADGES/federation-obligations.json" > "$work/long.json"
 if badge_length_check "$work/long.json" 2> /dev/null; then
   problem "a badge message past 20 characters passes the length check"
