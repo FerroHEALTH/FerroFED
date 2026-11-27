@@ -81,10 +81,10 @@ page: our own design.
 - [ ] **Send the IHE audit over TLS.** The FHIR Feed URL is `https` and the
   ITI-55 syslog repository is TLS outside development
   ([The audit trail](audit.md)).
-- [ ] **Run the OpenTelemetry collector beside the gateway.** The metrics
-  push and the span export are gRPC without TLS; let the collector forward
-  over TLS ([Tracing](tracing.md),
-  [#644](https://github.com/FerroHEALTH/FerroFED/issues/644)).
+- [ ] **Export telemetry over TLS.** Give `[telemetry.otlp]` an `https://`
+  endpoint, with `[telemetry.otlp.tls]` for a private collector, or run the
+  collector beside the gateway on loopback
+  ([A remote collector over TLS](tracing.md#a-remote-collector-over-tls)).
 
 ## Callers and issuers
 

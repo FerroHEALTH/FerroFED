@@ -114,7 +114,7 @@ source and run on a terminal with the development configuration of
 | |_ / _ \ '__| '__/ _ \| |_  |  _| | | | |
 |  _|  __/ |  | | | (_) |  _| | |___| |_| |
 |_|  \___|_|  |_|  \___/|_|   |_____|____/
-ferrofed 0.0.9
+ferrofed 0.0.22
   Product          openEHR federation gateway
   Maintainer       Ruben Talstra · https://github.com/FerroHEALTH/FerroFED
   Manufacturer     Cadasto B.V. · info@cadasto.com
@@ -122,7 +122,7 @@ ferrofed 0.0.9
   Federation Tier  1.0.1
   ITS-REST         1.1.0
   AQL              1.1.0
-  openehr-*        0.0.87
+  openehr-*        0.5.0
   Support          none, this build is no release
   Base path        /
   Listen           0.0.0.0:8080
@@ -394,13 +394,13 @@ listen address, the profile, `[server]`, `[metrics]`, `[auth]` and
 `[config]` stay file-only, and a revision holds only `_file` references,
 never a secret. With `off`, the default, nothing changes.
 
-The console manages members and stored queries (#577), and onward
-credentials and binding sections with write-only secrets, a confirmation
-after a change applies and a second operator's approval (#578;
-[Credentials and binding sections](configuration-revisions.md#credentials-and-binding-sections)).
+The console manages members and stored queries, and onward credentials and
+binding sections with write-only secrets, a confirmation after a change
+applies and a second operator's approval
+([Credentials and binding sections](configuration-revisions.md#credentials-and-binding-sections)).
 Any revision exports as TOML, and TOML imports as a revision you check
-before you apply it (#579;
-[Export and import](configuration-revisions.md#export-and-import)).
+before you apply it
+([Export and import](configuration-revisions.md#export-and-import)).
 
 ## The base path
 

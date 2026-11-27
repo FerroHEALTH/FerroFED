@@ -53,8 +53,7 @@ code tables below:
 }
 ```
 
-Before FerroFED 0.0.15 the body was the openEHR ITS-REST `Error` with the
-same `code` and `request_id`, and `message` where `detail` is now. Under the
+Under the
 FHIR face (`[fhir]`) every error stays a FHIR `OperationOutcome`.
 
 No error body quotes your request: not the AQL text, not the value of a
@@ -198,7 +197,7 @@ and its set is closed, so the code says which.
 | <a id="probe-requires-uuid"></a>`probe-requires-uuid` | 400 | A read of an EHR resource, or a query scoped to one `ehr_id` (N29), that no targeting header, resolution binding or `ehr_id` index entry routes to one node has an `ehr_id` that is not a bare UUID: an ISO OID, an internet id, or a UUID with an extension. The gateway cannot tell such a value from a patient identifier, and the ask-all probe would send it to every member, so it asks no member anything (§5.4.1, N33, §12.5.1). Name the node in `openEHR-federation-endpoint`. The message never quotes the path. |
 | <a id="query-name-invalid"></a>`query-name-invalid` | 400 | A stored query's name is not `[{namespace}::]{query-name}` over `a-z`, `A-Z`, `0-9`, `_`, `.` and `-`, or its query name is `aql`, which ITS-REST reserves. The message never quotes the name. |
 | <a id="query-version-invalid"></a>`query-version-invalid` | 400 | A stored query's version is not `major.minor.patch` with no leading zeros, or, where a version is looked up, not a `{major}` or `{major}.{minor}` prefix either (ITS-REST, "Qualified query name"). |
-| <a id="query-version-required"></a>`query-version-required` | retired | Retired since #875: no longer raised. A definition `PUT` at `{base}/v1/definition/query/{name}` with no version is stored at a new version the registry assigns ([Stored queries](stored-queries.md)). Until then it was a `400`. |
+| <a id="query-version-required"></a>`query-version-required` | retired | Not raised. A definition `PUT` at `{base}/v1/definition/query/{name}` with no version is stored at a new version the registry assigns ([Stored queries](stored-queries.md)). Until then it was a `400`. |
 | <a id="query-type-unsupported"></a>`query-type-unsupported` | 400 | A definition's `query_type` is not `AQL`; the registry stores AQL only. |
 | <a id="subject-literal"></a>`subject-literal` | 400 | A definition names its patient by a literal identifier. The registry would hold that identifier at rest, so it refuses the definition; name the patient through a `$parameter` and bind it in `query_parameters` when you invoke the query (§5.4.1, N33). |
 | <a id="stored-query-held"></a>`stored-query-held` | 409 | The registry already holds a definition at this name and version. A stored version is immutable, so the second `PUT` is refused and the held text stands; store the change as a new version (§12.7, N44). A `PUT` with no version answers it too when other writers stored each version the registry assigned it first, eight times, or when the newest version's patch is the largest a version holds, so it has no next one; nothing is stored. |
@@ -303,7 +302,7 @@ anything to a node (§5.4.1, §7.1, §11.6). Every refusal is a `400`.
 | <a id="undefined-function"></a>`undefined-function` | 400 | The query calls a function AQL 1.1.0 does not define, such as a product-specific `MEDIAN`, and would reach more than one node. The gateway cannot tell whether the function aggregates; direct the query to one node, or select the rows and compute it in the application (N14, §11.6.3). The functions AQL defines (`LENGTH`, `ROUND`, `NOW`, `TERMINOLOGY` and the rest) are sent to every node as written. |
 | <a id="offset-unsupported"></a>`offset-unsupported` | 400 | Offset-based paging is not supported across a fan-out (§11.6.2, N39). |
 | <a id="offset-page"></a>`offset-page` | 400 | The gateway computes an `OFFSET` page from `k + n` rows per node, and this page cannot be computed that way: `k + n` is past the configured bound, or the query has no `LIMIT` or no `ORDER BY` (§11.6.2, N39). |
-| <a id="paging-conflict"></a>`paging-conflict` | retired | Retired since #868: no longer raised. The ITS-REST `offset` and `fetch` members compose with the query's `OFFSET` and `LIMIT` as a window over its result, so they can no longer disagree. Until then it was a `400` for a member that differed from its clause. |
+| <a id="paging-conflict"></a>`paging-conflict` | retired | Not raised. The ITS-REST `offset` and `fetch` members compose with the query's `OFFSET` and `LIMIT` as a window over its result, so they can no longer disagree. Until then it was a `400` for a member that differed from its clause. |
 | <a id="negative-paging"></a>`negative-paging` | 400 | An ITS-REST paging member, or a row count of the query, is negative. |
 | <a id="top-backward"></a>`top-backward` | 400 | `TOP … BACKWARD` is not supported across a fan-out; write `ORDER BY … DESC LIMIT n`. |
 | <a id="top-with-limit"></a>`top-with-limit` | 400 | The query uses the deprecated `TOP` together with a `LIMIT` clause, which AQL forbids; write `ORDER BY … LIMIT n`. |

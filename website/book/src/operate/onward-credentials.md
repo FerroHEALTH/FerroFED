@@ -108,8 +108,7 @@ The caller's own `Authorization` header never reaches a node.
 An `onward` table beside the node's `oauth` table gives each verified
 caller a token of its own at that node, where the node's authorization
 server supports RFC 8693. Set `actor_assertion = true` to name the gateway
-as the actor, as the `oauth2` token exchange of earlier releases always
-did:
+as the actor:
 
 ```toml
 [credentials."cdr-c".credentials.oauth]

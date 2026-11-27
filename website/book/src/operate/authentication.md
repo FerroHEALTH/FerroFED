@@ -70,7 +70,7 @@ the issuer's `audience` in `aud`, and has an `exp` that has not passed. A
 token that is no JWS goes to the one issuer the deployment introspects.
 
 The gateway never forwards the client's token to a node. Its audience is the
-gateway, and one token would unlock every member that trusts its issuer (RFC
+gateway, and one token would open every member that trusts its issuer (RFC
 9700 §2.3). Toward each node the gateway sends that endpoint's own onward
 credentials ([Onward credentials](onward-credentials.md)), and the caller's
 identity in a token of its own
@@ -164,12 +164,9 @@ demographic_clients = []
 | `trust.issuer[].demographic_clients` | `[]` | The `client_id`s admitted to the DEMOGRAPHIC API. |
 | `trust.issuer[].patient.endpoint` | none | The registry endpoint id of the one member whose platform issues this issuer's patient tokens; setting `[trust.issuer.patient]` is the opt-in that honours its `patient/` grants ([Patient grants](patient-grants.md)). |
 | `trust.issuer[].patient.ehr_id_system` | none | The identifier system under which the cross-reference service knows that member's `ehr_id`s. |
-| `trust.issuer[].requester` | none | Refused: who asks for the data is read from the `professional.hp_identifier`, `professional.hp_professional_role`, `provider.healthcare_provider_identifier` and `provider.facility_type` fields of the issuer's `[auth.issuer.<name>.federation]` table, which the [Mitz consent pre-filter](consent.md#dutch-consent-nl_gfmitz) asks about. |
-| `trust.issuer[].client_tokens_act_for_professional` | none | Refused: a token `ferrohealth-smart` classifies as a system's reaches no patient data ([Professionals and assurance](#professionals-and-assurance)). |
 | `auth.issuer[].attributes.mapping` | none | Setting the issuer's `[auth.issuer.<name>.attributes]` table has its tokens state their professional: the name, identifier and roles, the organisation and the purposes of use, read by `ferrohealth-smart` ([What a token states about its professional](#what-a-token-states-about-its-professional)); a patient's, a related person's or a system's token states its purposes of use alone. Without the table, a token of the issuer states none of them. `iua`: read the IHE IUA extension, `extensions.ihe_iua` (ITI TF-2 3.71.4.2.2.1.1). |
 | `auth.issuer[].attributes.authorization_details_purposes` | `false` | Whether the `system\|code` `purpose_of_use` of each RFC 9396 `authorization_details` entry is read as a purpose of use too (Annex B §B.4a.3). |
 | `auth.issuer[].attributes.fields` | `{}` | Sources over the mapping's, one list per field, each `{ claim = "<dotted path>" }` or `{ constant = "<value>" }`. `"professional.issuing_authority_name"` names the agency that issued the professional's identifier (Implementing Regulation (EU) 2026/2099 Annex Table 1 `issuing_authority_name`), which IHE IUA defines no claim for. |
-| `trust.issuer[].assurance` | none | Refused: set the issuer's `[auth.issuer.<name>.assurance]` table instead. |
 | `federation.contact_point[].issuer` | none | A national contact point: an `[auth.issuer.<name>]` of `kind = "federation"` whose `[auth.issuer.<name>.federation]` table sets `contact_point = true` ([National contact points](contact-point-issuers.md#national-contact-points)). Every such issuer needs one `[[federation.contact_point]]`, and one naming any other issuer is refused. |
 | `federation.contact_point[].correlation_header` | none | The request header the contact point's connector sends its correlation identifier in, recorded in the access record. A header that carries a credential (`Authorization`, `Proxy-Authorization`, `Cookie`, `DPoP`) is refused. |
 | `federation.contact_point[].additional_countries` | `[]` | The ISO 3166-1 alpha-2 codes the contact point's `[auth.issuer.<name>.federation] countries` may name, in addition to the 27 EU Member States. Use it for a third country whose contact point the Commission connected to MyHealth@EU (Regulation (EU) 2025/327 Art 24(3)). Neither act names the EEA States, so add one here when your deployment serves it. A code that is not two upper-case letters, or that is already a Member State, is refused. |
