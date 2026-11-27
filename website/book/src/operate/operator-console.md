@@ -114,11 +114,11 @@ service worker or a URL.
   well, and every action is a `POST` to the page it sits on: a `GET` runs
   nothing.
 - **Two separate pools of server-side state.** Pending sign-ins live for
-  `sign_in_timeout_s` and are bounded by `max_sign_ins`; a full pool drops
+  `sign_in_timeout` and are bounded by `max_sign_ins`; a full pool drops
   its oldest pending sign-in, so a flood of `GET /login` holds at most that
   many and stops costing anything once it ends. A signed-in session is
-  created only once a sign-in completes, lives for `idle_timeout_s` without
-  a request and `absolute_timeout_s` at most, and is bounded by
+  created only once a sign-in completes, lives for `idle_timeout` without
+  a request and `absolute_timeout` at most, and is bounded by
   `max_sessions`, which refuses a new session rather than evicting one. The
   idle and the absolute timeouts end a session whatever its tokens say,
   however long a refresh token would last. No
@@ -579,9 +579,10 @@ revocation endpoints, from the issuer's discovery document when it starts
 reached refuses the start. Each endpoint the table names takes the place of
 the discovered one, and with all three named the console asks the provider
 nothing at start. `config check` never asks the provider. `revocation_endpoint`
-has a sign-out revoke the session's refresh token (RFC 7009), `ca_file`
-adds PEM trust roots for a provider behind a private certificate authority,
-and `timeout_s` (10 by default) bounds each call to the provider. The
+has a sign-out revoke the session's refresh token (RFC 7009), the
+`[oidc.tls]` table's `trust_roots_file` adds PEM trust roots for a provider
+behind a private certificate authority, and `timeout` (`10s` by default)
+bounds each call to the provider. The
 provider's URLs must be `https` unless their host is loopback, and `scopes`
 must include `openid`. `offline_access`, off by
 default, adds the `offline_access` scope and `prompt=consent` to the

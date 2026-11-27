@@ -355,7 +355,7 @@ v0.0.18 ships.
   in `config check`, naming each, and a `[store]` without
   `sslmode=require` under every profile. The gateway takes over the
   existing table with every definition it holds
-  ([FerroFED's own store](../operate/store.md#moving-from-stored_queries-url),
+  ([FerroFED's own store](../operate/store.md),
   #1636).
 - A gateway with a national contact point (`[[federation.contact_point]]`)
   needs `[store]` too: give it a PostgreSQL database and role of its own,

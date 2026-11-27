@@ -244,9 +244,8 @@ url_file = "/run/secrets/ferrofed/store-url"
   refuses the configuration, naming `stored_queries.backend` and `[store]`.
   The connection string, its TLS, the migrations and the readiness
   indicator are the store's ([FerroFED's own store](store.md)).
-- `[stored_queries]` takes no connection string. `url` and `url_file` there
-  refuse the configuration, naming the key and `[store]`
-  ([Moving from `[stored_queries] url`](store.md#moving-from-stored_queries-url)).
+- `[stored_queries]` takes no connection string: `[store]` holds it, and
+  any other key there is refused as unknown.
 - The table is `ferrofed.stored_query_definition`, the store's first
   migration, so a database an earlier release's `postgres` backend wrote is
   taken over with every definition it holds.

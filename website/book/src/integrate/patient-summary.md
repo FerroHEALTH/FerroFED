@@ -10,7 +10,9 @@ interface as a FHIR R4 face on a base of its own, `{fhir-base}`, beside the
 ITS-REST face at `{base}`. No ITS-REST path changes: `{base}` stays a
 conformant ITS-REST surface (Federation Tier §4.1, N1, N28).
 
-The face answers six requests today:
+The face answers these requests for the summary and the documents, and the
+prescription and dispensation requests of
+[Prescriptions and dispensations over FHIR](prescriptions.md):
 
 | Request | Answer |
 |---|---|

@@ -118,7 +118,7 @@ What a deployment must provide:
 
 The discovery fails closed as a whole. One responding gateway that faults,
 answers an error (Case 5 of §3.55.4.2.3), asks for demographics (Case 3),
-answers outside ITI-55, or stays silent past `timeout_ms` leaves every member
+answers outside ITI-55, or stays silent past `timeout` leaves every member
 `not-localized` with the error, and the query asks no node; a community
 behind that gateway might hold the patient. `on_failure = "ask-all"` asks
 every member instead ([Node selection](registry.md#node-selection)).
@@ -353,7 +353,7 @@ The NVI checks the requester's access at each data holder before it
 returns a record, so its answer is consent-aware. It is still only a list of
 candidates: each node checks consent before it releases data (§14.3, N27).
 The localization fails closed as a whole. A service that answers a failure,
-answers outside the IG, or stays silent past `timeout_ms` leaves every
+answers outside the IG, or stays silent past `timeout` leaves every
 member `not-localized` with the error, and the query asks no node.
 `on_failure = "ask-all"` asks every member instead. `OPTIONS {base}/`
 declares `localization.mode` as `"nl-gf-nvi"`.

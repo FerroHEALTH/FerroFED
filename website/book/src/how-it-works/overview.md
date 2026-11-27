@@ -55,10 +55,9 @@ flowchart TB
 Step 2 is optional. Under `federation.node_selection = "ask-all"` every
 registry member is a candidate, and the gateway asks the PIX Manager about
 all of them (§4.3, N4). Under `"localized"` a localizer names the candidates
-first (§14.1). Four localizers are built: IHE XCPD ITI-55 (Annex A.3), the
-NVI of the Dutch binding (Annex B §B.1), the PIX Manager itself, whose one
-ITI-83 answer both localizes and resolves (§14.2), and the development
-cross-reference.
+first (§14.1). Three localizers are built: IHE XCPD ITI-55 (Annex A.3), the
+NVI of the Dutch binding (Annex B §B.1), and the PIX Manager itself, whose
+one ITI-83 answer both localizes and resolves (§14.2).
 
 ## The parts of the gateway
 
@@ -114,8 +113,7 @@ flowchart TB
   resolver (the PIX Manager over ITI-83), the localizer (XCPD over ITI-55,
   the Dutch NVI or the PIX Manager), the consent pre-filter, and the optional
   demographics step ahead of them (a PDQm Supplier over ITI-78 or ITI-119,
-  Annex A §A.2). The pre-filter has a
-  development binding and a production binding, the Dutch Mitz
+  Annex A §A.2). The pre-filter is the Dutch Mitz
   ([Dutch consent](../operate/consent.md#dutch-consent-nl_gfmitz)).
 - **Engine:** sends one request per node under one deadline (§11.5, N38),
   routes a follow-up to the node that owns it (§12), and passes every

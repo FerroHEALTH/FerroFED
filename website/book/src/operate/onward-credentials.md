@@ -21,14 +21,8 @@ server before the request:
   ([The onward lane of a node](#the-onward-lane-of-a-node));
 - `nuts`: the Nuts track of the Dutch Generic Functions (Annex B §B.4).
 
-Until 0.0.19, `user`, `password`, `password_file`, `oauth` and `onward` sat
-in the section itself; this release refuses each there, naming its key in
-the nested table (see the upgrade notes).
-
 A section names one of them; two in one section refuse the configuration.
-The `oauth2` and `fapi2` tables of earlier releases, and the section's
-`mtls_alias_hosts` key, are refused at load, naming the key of the `oauth`
-table that replaces each (see the upgrade notes). A node's section may also
+A node's section may also
 name the TLS client certificate the gateway presents to that node and to
 its authorization server
 ([Mutual TLS to a node](#mutual-tls-to-a-node-rfc-8705)). No log line,
@@ -89,11 +83,11 @@ scope = "system/aql-*.s system/composition-*.cru"
   `client-authentication+jwt` (FAPI 2.0 Security Profile §5.3.3.1; RFC
   10070 §4). `assertion_audience` is an unknown key. `issuer` and
   `token_endpoint` exclude each other.
-- `refresh_margin_ms`, 30 seconds by default, is how long before the token
-  expires a new one is fetched; `timeout_ms` bounds each call to the
+- `refresh_margin`, 30 seconds by default, is how long before the token
+  expires a new one is fetched; `timeout` bounds each call to the
   authorization server.
 
-`ferrohealth-smart` caches the token until `refresh_margin_ms` before the
+`ferrohealth-smart` caches the token until `refresh_margin` before the
 end of the lifetime its `expires_in` states, or for half that lifetime when
 it is shorter than twice the margin, with one token request per endpoint at
 a time. A token with no stated lifetime is reused until a node refuses it.
@@ -342,7 +336,7 @@ endpoint that answers `400 use_dpop_nonce`, or a node that answers `401`
 with a `DPoP` challenge naming `use_dpop_nonce`, is sent the request once
 more with the nonce it gave, and every later proof to that server carries
 the latest nonce it sent (RFC 9449 §8, §9). Each send to the token endpoint
-has `timeout_ms` of its own.
+has `timeout` of its own.
 The token endpoint's nonce and the node's are kept apart even when both
 live on one host. A token request sent once more carries a newly signed
 client assertion, and under token exchange a new actor token, so the
@@ -528,7 +522,7 @@ file = "/run/secrets/organization.jwt"
 ```
 
 The token is obtained and cached as a node's is, each token request bounded
-by the localization's `timeout_ms`. Every search carries it under the `DPoP`
+by the localization's `timeout`. Every search carries it under the `DPoP`
 scheme with a proof of `dpop_key_file`'s key over the search URL without its
 query, so the pseudonym never reaches a proof or the authorization server
 (RFC 9449 §4.2, §7.1). The grant rides on the outbound client of
@@ -673,7 +667,7 @@ new key, so it refuses the new assertions until it fetches the set again;
 the set it fetches then still holds the old key, so an assertion the old
 key signed before the rotation verifies too. Once every authorization
 server that verifies the grant has fetched the new set, remove
-`previous_private_key_file`, or set `previous_key_overlap_ms` to have the
+`previous_private_key_file`, or set `previous_key_overlap` to have the
 old key withdrawn on its own. `next_private_key_file` publishes a key
 ahead of the rotation that never signs. A previous key the profile does
 not admit, or that is the current key, refuses the configuration.
@@ -760,9 +754,7 @@ a token its `[signing]` keys sign at most 300 seconds; the
 The procedure assumes that no node caches the JWK Set longer than
 `node_jwks_cache` (3600 s by default). Set it to the longest cache time of
 your nodes and their authorization servers; `config check` refuses a
-`rotation_overlap` shorter than 300 seconds plus `node_jwks_cache`.
-`assertion_lifetime_s`, which earlier releases took here, is refused at
-load: no `[signing]` key signs a client assertion any more. The three steps hold for one gateway and for any
+`rotation_overlap` shorter than 300 seconds plus `node_jwks_cache`. The three steps hold for one gateway and for any
 number of replicas behind one address:
 
 1. **Publish the new key.** Make the new key, copy it to every replica, set
