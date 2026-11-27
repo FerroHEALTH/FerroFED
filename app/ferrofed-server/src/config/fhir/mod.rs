@@ -233,8 +233,7 @@ pub struct FhirSettings {
     /// asks the bindings of a received document it cannot decide, or none.
     pub validating: Option<BridgeTerminology>,
     /// The required bindings the codes of each summary and report are
-    /// translated to meet,
-    /// as `[eehrxf.terminology] transcode` names them.
+    /// translated to meet, as `[eehrxf.terminology] transcode` names them.
     pub bindings: &'static [eehrxf::terminology::translation::Binding],
     /// The `[eehrxf.terminology]` table as written, which a reload
     /// compares.
