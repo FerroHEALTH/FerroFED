@@ -38,6 +38,9 @@ pub enum Lane {
     /// A prescription, held to MyHealth@EU ePrescription and eDispensation
     /// (#2041).
     Prescription,
+    /// A patient summary transcoded for MyHealth@EU, held to MyHealth@EU
+    /// Patient Summary (#2039).
+    MyHealthEuSummary,
 }
 
 impl Lane {
@@ -52,6 +55,7 @@ impl Lane {
             Self::Vaccination => Some("myhealth-eu/vaccination"),
             Self::Imaging => Some("myhealth-eu/imaging"),
             Self::Prescription => Some("myhealth-eu/prescription"),
+            Self::MyHealthEuSummary => Some("myhealth-eu/summary"),
         }
     }
 }

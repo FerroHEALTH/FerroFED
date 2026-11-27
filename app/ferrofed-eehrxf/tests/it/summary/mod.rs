@@ -10,6 +10,7 @@ use std::error::Error;
 use std::path::PathBuf;
 
 use eehrxf::terminology::Terminology;
+use eehrxf::terminology::translation::Binding;
 use ferrofed_eehrxf::patient_summary::Section;
 use ferrofed_eehrxf::summary::mappings::{Mappings, MappingsError, Source};
 use ferrofed_eehrxf::summary::{
@@ -21,6 +22,7 @@ use ferrofed_testkit::eps;
 
 mod header;
 mod medication;
+mod myhealth_eu;
 mod placement;
 mod terminology;
 
@@ -159,17 +161,18 @@ fn document_mapped(
     runtime.block_on(document_asking(
         sections,
         (header, elsewhere),
-        (mappings, &Terminology::none()),
+        (mappings, &Terminology::none(), &[]),
     ))
 }
 
 /// The document the two members' `sections` make, mapped with `mappings`
-/// and translated through `terminology`, about the patient `header`
-/// describes, beside the members `elsewhere` that serve their own.
+/// and translated through `terminology` to meet `bindings`, about the
+/// patient `header` describes, beside the members `elsewhere` that serve
+/// their own.
 async fn document_asking(
     sections: &[SectionAnswers],
     (header, elsewhere): (PatientHeader, &[Elsewhere]),
-    (mappings, terminology): (&Mappings, &Terminology),
+    (mappings, terminology, bindings): (&Mappings, &Terminology, &[Binding]),
 ) -> Result<Assembled, Box<dyn Error>> {
     let request = Request {
         base: BASE.to_owned(),
@@ -189,7 +192,7 @@ async fn document_asking(
         &request,
         &author,
         (&origins(), sections, elsewhere),
-        (mappings, terminology),
+        (mappings, terminology, bindings),
     )
     .await?)
 }

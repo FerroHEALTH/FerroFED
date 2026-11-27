@@ -21,6 +21,7 @@
 )]
 
 pub mod profile;
+pub mod transcoding;
 
 use std::path::PathBuf;
 

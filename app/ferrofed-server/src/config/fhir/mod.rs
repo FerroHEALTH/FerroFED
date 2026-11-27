@@ -229,6 +229,9 @@ pub struct FhirSettings {
     /// The same terminology server, as the client FerroBRIDGE's validator
     /// asks the bindings of a received document it cannot decide, or none.
     pub validating: Option<BridgeTerminology>,
+    /// The required bindings each summary's codes are translated to meet,
+    /// as `[eehrxf.terminology] transcode` names them.
+    pub bindings: &'static [eehrxf::terminology::translation::Binding],
     /// The `[eehrxf.terminology]` table as written, which a reload
     /// compares.
     pub terminology_written: Option<crate::config::eehrxf::TerminologyServer>,
@@ -652,6 +655,7 @@ impl Fhir {
             id_lifetime: std::time::Duration::from_secs(self.id_lifetime.as_secs()),
             terminology: Terminology::none(),
             validating: None,
+            bindings: &[],
             terminology_written: None,
             written: self.clone(),
         })

@@ -84,7 +84,7 @@ use eehrxf::document::{Document, LOINC};
 use eehrxf::mapping::{Mapping, MappingError};
 use eehrxf::terminology::Terminology;
 use eehrxf::terminology::ehn;
-use eehrxf::terminology::translation::Translator;
+use eehrxf::terminology::translation::{Binding, Translator, Unbound};
 use eehrxf::terminology::withheld::Withheld;
 use eehrxf::transformation::{Direction, Pin, Report, Tally};
 use ferrofed_identity::role::header::PatientHeader;
@@ -251,6 +251,9 @@ pub struct Assembled {
     /// What each transformation did: one report per context mapping that
     /// ran, and one per template no mapping covers, in template order.
     pub transformations: Vec<Report>,
+    /// Each concept at an element a requested binding names that no
+    /// translation brought into the binding's systems, left as recorded.
+    pub unbound: Vec<Unbound>,
 }
 
 /// Assembles the patient summary `request` asks for from the `sections`
@@ -258,7 +261,10 @@ pub struct Assembled {
 /// `author` writes it.
 ///
 /// Each code in no preferred system is translated through `terminology`
-/// when it names a server.
+/// when it names a server, and each concept at an element one of
+/// `bindings` names with no coding in its systems is translated into them
+/// too ([`Translator::with_bindings`]); a concept no translation reaches is
+/// left as recorded and listed in [`Assembled::unbound`].
 ///
 /// Every section names each member `elsewhere` lists as serving its own
 /// summary, whose data it leaves out.
@@ -275,7 +281,7 @@ pub async fn assemble(
     request: &Request,
     author: &Author,
     (origins, sections, elsewhere): (&[Origin], &[SectionAnswers], &[Elsewhere]),
-    (mappings, terminology): (&Mappings, &Terminology),
+    (mappings, terminology, bindings): (&Mappings, &Terminology, &[Binding]),
 ) -> Result<Assembled, AssemblyError> {
     if !request.header.named() {
         return Err(AssemblyError::Unnamed);
@@ -305,7 +311,8 @@ pub async fn assemble(
         reports: BTreeMap::new(),
         composed: BTreeMap::new(),
     };
-    let mut translator = Translator::new(terminology, &ehn::PATIENT_SUMMARY);
+    let mut translator =
+        Translator::new(terminology, &ehn::PATIENT_SUMMARY).with_bindings(bindings);
     for answers in sections {
         let section = assembly
             .section(answers, (origins, elsewhere), (mappings, &mut translator))
@@ -323,6 +330,7 @@ pub async fn assemble(
         mapped: assembly.mapped,
         unmapped: assembly.unmapped,
         transformations: assembly.reports.into_values().collect(),
+        unbound: translator.unbound().to_vec(),
     })
 }
 

@@ -14,8 +14,8 @@ use http::{Request, StatusCode, header};
 use serde_json::Value;
 
 use super::{
-    FHIR, PUBLIC, TestResult, UID_A, UID_B, gateway, gateway_over, node_holding, resources,
-    section, summary, supplier,
+    FHIR, PUBLIC, TestResult, UID_A, UID_B, gateway, gateway_over, node_answering, node_holding,
+    resources, section, summary, supplier,
 };
 use crate::facade::{EHR_A, EHR_B, NAMESPACE, PATIENT, PATIENT_TAIL, node_failing, received, wire};
 use crate::support::{call, exchange, field};
@@ -415,5 +415,56 @@ async fn an_its_rest_path_under_the_base_still_answers_as_it_did() -> TestResult
     );
     assert!(text.contains("not-implemented"), "{text}");
     assert!(received(&a).await?.is_empty() && received(&b).await?.is_empty());
+    Ok(())
+}
+
+#[tokio::test]
+async fn under_myhealth_eu_transcoding_each_allergy_gains_its_atc_ingredient() -> TestResult {
+    use ferrofed_testkit::eps::transcoding::{self, ATC, INGREDIENT};
+    let (a, b) = (
+        node_answering(
+            UID_A,
+            &transcoding::coded_allergy_composition(UID_A, eps::TEMPLATE),
+        )
+        .await,
+        node_answering(
+            UID_B,
+            &transcoding::coded_allergy_composition(UID_B, eps::TEMPLATE),
+        )
+        .await,
+    );
+    let terminology = transcoding::start().await;
+    let dir = tempfile::tempdir()?;
+    let pdq = supplier().await;
+    let app = gateway_over(
+        dir.path(),
+        (&a.uri(), &b.uri(), &pdqm_stub::base_url(&pdq)),
+        &[("node-a", EHR_A), ("node-b", EHR_B)],
+        ("", &transcoding::table(&terminology)),
+    )?
+    .0;
+    let (status, _, body) = exchange(app, summary("")?).await?;
+    let text = String::from_utf8(body)?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let findings = eps::profile::check(&text)?;
+    assert!(findings.is_empty(), "the EPS profiles: {findings:#?}");
+    let document: Value = serde_json::from_str(&text)?;
+    let allergies = resources(&document, "AllergyIntolerance");
+    assert_eq!(2, allergies.len(), "one allergy per member");
+    for allergy in allergies {
+        let codings = allergy["code"]["coding"].as_array().ok_or("codings")?;
+        assert_eq!(
+            codings
+                .last()
+                .map(|coding| (&coding["system"], &coding["code"])),
+            Some((&Value::from(ATC), &Value::from(INGREDIENT))),
+            "2026/2083 Art 3(4): the MyHealth@EU coding after the recorded one: {allergy}"
+        );
+    }
+    ferrofed_testkit::emit::document(
+        ferrofed_testkit::emit::Lane::MyHealthEuSummary,
+        "ferrofed-server-summary-myhealth-eu",
+        &text,
+    )?;
     Ok(())
 }
