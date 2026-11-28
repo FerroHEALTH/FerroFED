@@ -36,7 +36,7 @@ use crate::sender::{displayed, named, sent};
 const ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
 
 /// The template the shipped HDR project maps.
-pub const TEMPLATE: &str = "openEHR-EHR-COMPOSITION.ferrobridge_discharge_report.v1.0.0";
+pub const TEMPLATE: &str = "openEHR-EHR-COMPOSITION.ferrobridge_discharge_report.v1.1.0";
 
 /// The archetypes the template adds to the medication ones.
 const BESIDE: [&str; 3] = [

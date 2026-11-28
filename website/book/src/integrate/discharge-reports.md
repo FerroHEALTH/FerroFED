@@ -47,9 +47,14 @@ archetypes = [
 - `template` is an OPT 1.4 `.opt`, or an ADL 2 template beside the
   `archetypes` it specialises or fills a slot with. The shipped HDR mapping
   of `eehrxf` maps FerroBRIDGE's discharge report template,
-  `openEHR-EHR-COMPOSITION.ferrobridge_discharge_report.v1.0.0`, a transfer
+  `openEHR-EHR-COMPOSITION.ferrobridge_discharge_report.v1.1.0`, a transfer
   of care summary whose context is the hospital stay, with a diagnostic
-  summary, significant procedures and discharge medications section.
+  summary, significant procedures and discharge medications section, and a
+  Comment in its context where a received report's losses are named.
+- A member that receives discharge reports needs the v1.1.0 operational
+  template uploaded beside v1.0.0: the gateway writes each received report
+  under v1.1.0, and the compositions written under v1.0.0 stay as they are
+  and are still listed and read.
 - The configuration refuses an entry of a category the gateway writes no
   report of, a category named twice, a file it cannot read, and a template
   the mapping does not compile against. A `Laboratory-Reports` entry takes

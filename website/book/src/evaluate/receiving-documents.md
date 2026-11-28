@@ -209,20 +209,24 @@ controls include the full validation above
 review of 2026-10-25 closed both at S4, P1
 ([#1327](https://github.com/FerroHEALTH/FerroFED/issues/1327)). A received laboratory report adds I-16 (a result the
 record does not hold whole), open at S4, P3. A received discharge report
-adds I-21, open at S4, P3: its diagnoses, procedures and discharge
+adds I-21, closed at S4, P1: its diagnoses, procedures and discharge
 medicines reach the member's composition with every element the mapping
 reads, and a diagnosis's severity and certainty are relayed as not
 carried, but its hospital course and every section the template holds no
 place for reach the member's record only in the original document; the
-answer declares them to the sender as not carried, and a reader of the
-member's record is told of none
-([FerroHEALTH/FerroBRIDGE#1820](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1820)).
-A received imaging report adds I-22, open at S4, P3: its study, its
-impression and, since `eehrxf` 0.6.6, its performing organization reach the
-member's composition, but its report identifier, a performer that is no
+answer declares them to the sender as not carried, and the composition's
+Comment names each to a reader of the member's record by its FHIRPath,
+pointing to the original
+([#2065](https://github.com/FerroHEALTH/FerroFED/issues/2065),
+[FerroHEALTH/FerroBRIDGE#1820](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1820)).
+A received imaging report adds I-22, closed at S4, P1: its study, its
+impression, its report identifier and, since `eehrxf` 0.6.6, its performing
+organization reach the member's composition, but a performer that is no
 organization and each section's narrative reach the member's record only in
 the original document; the answer declares each to the sender as not
-carried, and a reader of the member's record is told of none
-([FerroHEALTH/FerroBRIDGE#1827](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1827),
+carried, and the composition's Comment names each to a reader of the
+member's record
+([#2065](https://github.com/FerroHEALTH/FerroFED/issues/2065),
+[FerroHEALTH/FerroBRIDGE#1827](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1827),
 [#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716),
 [#1860](https://github.com/FerroHEALTH/FerroFED/issues/1860)).

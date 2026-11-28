@@ -111,14 +111,7 @@ impl Config {
                 .resolve(&self.trust, &self.federation, public_url.as_ref())?,
         )?;
         stored_query_fan_out(&federation, stored_queries.as_ref())?;
-        let terminology = self.resolve_terminology()?;
-        let mut fhir = self.resolve_fhir(&base_path, public_url.as_ref())?;
-        if let Some(fhir) = &mut fhir {
-            (fhir.terminology, fhir.validating, fhir.bindings) =
-                crate::config::eehrxf::terminology(terminology.as_ref())?;
-            fhir.terminology_written
-                .clone_from(&self.eehrxf.terminology);
-        }
+        let fhir = self.resolve_fhir_terminology(&base_path, public_url.as_ref())?;
         let mut settings = Settings {
             profile: self.profile,
             fhir,
@@ -354,6 +347,32 @@ impl Config {
 }
 
 impl Config {
+    /// Resolves `[fhir]` with the terminology `[eehrxf.terminology]` gives
+    /// it.
+    ///
+    /// # Errors
+    ///
+    /// The refusals of `[fhir]` and of `[eehrxf.terminology]`.
+    fn resolve_fhir_terminology(
+        &self,
+        base_path: &crate::config::base_path::BasePath,
+        public_url: Option<&PublicUrl>,
+    ) -> Result<Option<crate::config::fhir::FhirSettings>, Error> {
+        let terminology = self.resolve_terminology()?;
+        let mut fhir = self.resolve_fhir(base_path, public_url)?;
+        if let Some(fhir) = &mut fhir {
+            (
+                fhir.terminology,
+                fhir.validating,
+                fhir.bindings,
+                fhir.designations,
+            ) = crate::config::eehrxf::terminology(terminology.as_ref())?;
+            fhir.terminology_written
+                .clone_from(&self.eehrxf.terminology);
+        }
+        Ok(fhir)
+    }
+
     /// Resolves `[signing]`, with the nodes whose credentials section sets
     /// `conveyance_ml_dsa`.
     ///

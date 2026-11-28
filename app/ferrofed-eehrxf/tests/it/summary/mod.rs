@@ -174,6 +174,23 @@ async fn document_asking(
     (header, elsewhere): (PatientHeader, &[Elsewhere]),
     (mappings, terminology, bindings): (&Mappings, &Terminology, &[Binding]),
 ) -> Result<Assembled, Box<dyn Error>> {
+    document_designating(
+        sections,
+        (header, elsewhere),
+        (mappings, terminology, bindings),
+        None,
+    )
+    .await
+}
+
+/// The document of [`document_asking`], each coding a translation adds
+/// given the server's designation in `designations` when it is set.
+async fn document_designating(
+    sections: &[SectionAnswers],
+    (header, elsewhere): (PatientHeader, &[Elsewhere]),
+    (mappings, terminology, bindings): (&Mappings, &Terminology, &[Binding]),
+    designations: Option<&str>,
+) -> Result<Assembled, Box<dyn Error>> {
     let request = Request {
         base: BASE.to_owned(),
         identifier: String::from("urn:uuid:5a6b7c8d-0000-4000-8000-000000000001"),
@@ -192,7 +209,7 @@ async fn document_asking(
         &request,
         &author,
         (&origins(), sections, elsewhere),
-        (mappings, terminology, bindings),
+        (mappings, terminology, bindings, designations),
     )
     .await?)
 }

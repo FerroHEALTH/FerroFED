@@ -76,8 +76,7 @@ These are the ones to know before you deploy FerroFED; the
   ([Discharge reports over FHIR](../integrate/discharge-reports.md),
   [Imaging reports over FHIR](../integrate/imaging-reports.md)), with
   hazards I-19 and I-20 closed at S4, P1 ([#1826](https://github.com/FerroHEALTH/FerroFED/issues/1826)) and I-21 and
-  I-22 open at S4, P3 ([#1794](https://github.com/FerroHEALTH/FerroFED/issues/1794),
-  [#1716](https://github.com/FerroHEALTH/FerroFED/issues/1716)). No EU
+  I-22 closed at S4, P1 ([#2065](https://github.com/FerroHEALTH/FerroFED/issues/2065)). No EU
   declaration of conformity has been drawn up, and no release carries the
   CE marking
   ([Regulatory status](regulatory-status.md#what-is-built-and-what-is-planned)).

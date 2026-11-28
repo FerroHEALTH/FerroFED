@@ -120,9 +120,12 @@ url = "https://terminology.example.org/fhir/"
 ```
 
 With `myhealth-eu`, each concept of a summary or report entry at an element a
-MyHealth@EU Core required binding names, and that carries no coding in the
-systems the binding's value set draws from, is also asked of
-`ConceptMap/$translate` for those systems: `Condition.code` for ICD-10
+MyHealth@EU Core required binding names is asked of
+`ValueSet/$validate-code` against the binding's value set, since a code's
+system does not decide membership (the allergen value set takes SNOMED CT
+only through its enumerated non-drug allergens). A concept that is no
+member is also asked of `ConceptMap/$translate` for the systems the value
+set draws from: `Condition.code` for ICD-10
 (`eHDSIProblemWithExceptions`) and `AllergyIntolerance.code` for ATC
 (`eHDSIAllergenWithExceptions`), whatever system the concept was recorded
 in. The same rule applies as above: only an `equivalent` or `equal` match
@@ -139,6 +142,22 @@ written as recorded. A received dispensation is translated the other way,
 into the code systems its owner records, when its `[[fhir.serve]]` entry
 names them
 ([Translating a dispensation](prescriptions.md#translating-a-dispensation-into-the-members-code-systems)).
+
+Set `designations` to a BCP 47 language tag, such as `nl`, and each coding a
+summary gains this way also carries the server's designation in that
+language, asked of `CodeSystem/$lookup` with `displayLanguage`, where the
+server holds one:
+
+```toml
+[eehrxf.terminology]
+transcode = "myhealth-eu"
+designations = "nl"
+```
+
+A server that refuses or does not answer the `$lookup` fails the summary as
+a failed translation does; a designation is never left out silently. The
+configuration refuses `designations` without `transcode = "myhealth-eu"`
+and a value that is no language tag.
 
 FerroTERM is the terminology server of the Ferro family. The gateway reaches
 it, or any other FHIR R4 terminology server, over HTTP, and links no part of

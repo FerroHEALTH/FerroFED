@@ -8,19 +8,19 @@ URL and the sha256 of its bytes. Never edit a file here: change the pins in
 the script and the pin-set digest in docs/VERSIONS.md, and re-run the script.
 
 - Pin-set digest (sha256 over the sorted `mode  file  url  sha256` lines of
-  the pins): `e3182f182e42078265a2fe785b88a1ecbfeca45bb844d578bf2a3db7725d606e`
-- Fetched: 2026-11-07, with the User-Agent `ferrofed-vendor (scripts/vendor)`
+  the pins): `17811510292ad89df2a37c5ab38b32f6c2439f2c65d7ca5106052ac0dc12a318`
+- Fetched: 2026-11-28, with the User-Agent `ferrofed-vendor (scripts/vendor)`
 - Artefacts: 5 committed, 0 cache only, 0 needing
   manual retrieval
 - Files in this directory: 5 besides this one, each verbatim as the
   publisher serves it
 - Tree digest (sha256 over the sorted per-file `sha256  path` listing,
-  `PROVENANCE.md` excluded): `1a0ed5e74f2ab48c908b1a54dcb408c1398ee4fed08228b87f3bcc94f31060b5`
+  `PROVENANCE.md` excluded): `5fc91a64e5bad2a7942c4571c91e2e97f397874b9f40c9eb51fbd6ffa625311b`
 - Read by: #1405 (the discharge reports the FHIR face writes from a member's
   record), app/ferrofed-eehrxf and app/ferrofed-server
 
 FerroBRIDGE's ADL 2 discharge report template,
-`openEHR-EHR-COMPOSITION.ferrobridge_discharge_report.v1.0.0`: a transfer
+`openEHR-EHR-COMPOSITION.ferrobridge_discharge_report.v1.1.0`: a transfer
 of care summary `COMPOSITION` whose context is the hospital stay, holding
 three ad hoc `SECTION`s, a diagnostic summary with
 `openEHR-EHR-EVALUATION.problem_diagnosis.v1`, significant procedures with
@@ -41,9 +41,9 @@ with attribution, as CC BY-SA permits.
 
 ### `ferrobridge_discharge_report.adlt` (committed)
 
-- Source: <https://raw.githubusercontent.com/FerroHEALTH/FerroBRIDGE/7498b0a22f11d9c67040ecf95f35001342c774fb/tools/ferrobridge-testkit/fixtures/adl2/ferrobridge_discharge_report.adlt>
-- Version: FerroHEALTH/FerroBRIDGE tag v0.0.22, template openEHR-EHR-COMPOSITION.ferrobridge_discharge_report.v1.0.0
-- sha256: `aaf58074d380e1c869425aefb31257cc432f8f80c2a010932b2ce9a344064622`
+- Source: <https://raw.githubusercontent.com/FerroHEALTH/FerroBRIDGE/3f1953aa208c0a9d81c1847f3891b42876c1a806/tools/ferrobridge-testkit/fixtures/adl2/ferrobridge_discharge_report.adlt>
+- Version: FerroHEALTH/FerroBRIDGE commit 3f1953a, template openEHR-EHR-COMPOSITION.ferrobridge_discharge_report.v1.1.0
+- sha256: `1e4392eb1ac75878b4825bea614069801234310f359b78d95a7263726949202c`
 - Licence: BUSL-1.1, the licence of the Licensor, Cadasto B.V., which publishes FerroBRIDGE (the file's own SPDX header)
 - Note: The ADL 2 template with its template overlays.
 

@@ -348,12 +348,13 @@ deployment in the EU must plan for are:
   report's diagnoses, procedures and discharge medicines, but its hospital
   course and every section the template holds no place for only in the
   original document. The answer declares each of them to the sender as not
-  carried, and a reader of the member's record is told of none (hazard
-  I-21). It receives an imaging report the same way, keeping its study, its
-  impression and its performing organization in the member's composition
-  but its report identifier, a performer that is no organization and each
+  carried, and the composition's Comment names each to a reader of the
+  member's record, pointing to the original (hazard I-21). It receives an imaging report the same way, keeping its study, its
+  impression, its report identifier and its performing organization in the
+  member's composition but a performer that is no organization and each
   section's narrative only in the original document, declared to the
-  sender and told to no reader of the member's record (hazard I-22;
+  sender and named to a reader of the member's record in the composition's
+  Comment (hazard I-22;
   [The categories received](../evaluate/information-sheet.md#the-categories-received)).
   The open hazards of the interoperability component are in the
   [clinical safety risk file](../evaluate/clinical-safety.md#the-interoperability-component).

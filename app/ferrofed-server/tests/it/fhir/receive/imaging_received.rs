@@ -85,6 +85,7 @@ async fn an_imaging_report_is_written_to_its_member_by_its_ehr_id_alone() -> Tes
         imaging::CONCLUSION,
         imaging::STUDY_UID,
         imaging::EXAMINATION,
+        imaging::REPORT_IDENTIFIER,
     ] {
         assert!(mapped.contains(value), "{value} is mapped: {mapped}");
     }
@@ -94,6 +95,14 @@ async fn an_imaging_report_is_written_to_its_member_by_its_ehr_id_alone() -> Tes
             .and_then(Value::as_str),
         Some(sent.as_str()),
         "the received report is kept byte for byte"
+    );
+    // NOTE: hazards I-21 and I-22 of the clinical safety risk file: what the report holds that the
+    // composition does not carry is named to the record's reader, by FHIRPath and never by value.
+    let lost = super::declared_losses(&composition)?;
+    assert!(
+        lost.iter()
+            .any(|path| path == "ImagingStudy.interpreter[0]"),
+        "{lost:?}"
     );
     assert!(
         received(&b).await?.is_empty(),

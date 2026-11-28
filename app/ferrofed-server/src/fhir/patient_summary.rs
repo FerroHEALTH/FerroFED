@@ -230,7 +230,12 @@ pub(super) async fn document(
         &request,
         &author,
         (&gathered.origins, &gathered.sections, &elsewhere),
-        (&fhir.mappings, &fhir.terminology, fhir.bindings),
+        (
+            &fhir.mappings,
+            &fhir.terminology,
+            fhir.bindings,
+            fhir.designations.as_deref(),
+        ),
     )
     .await;
     let (mut response, delivered, transformations) = match assembled {

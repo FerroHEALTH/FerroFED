@@ -11,7 +11,7 @@
 # LICENSE. The FHIR face compiles that project against the operational
 # template built from them, and its tests read them.
 #
-# The template comes from FerroHEALTH/FerroBRIDGE at the release tag v0.0.22
+# The template, v1.1.0, comes from FerroHEALTH/FerroBRIDGE at commit 3f1953a
 # and the archetypes from the openEHR CKM mirror, each at a commit, pinned by
 # URL and sha256 (scripts/vendor/lib/pinned.sh) and committed verbatim. The
 # template is the Licensor's own (BUSL-1.1); each archetype states the
@@ -40,15 +40,15 @@ cd "$root"
 corpus_require curl shasum awk
 pinned_begin
 
-bridge=https://raw.githubusercontent.com/FerroHEALTH/FerroBRIDGE/7498b0a22f11d9c67040ecf95f35001342c774fb
+bridge=https://raw.githubusercontent.com/FerroHEALTH/FerroBRIDGE/3f1953aa208c0a9d81c1847f3891b42876c1a806
 mirror=https://raw.githubusercontent.com/openEHR/CKM-mirror/c3fdc43dcf0eb7ef0cfe60f548fcdebc24c70094
 own='BUSL-1.1, the licence of the Licensor, Cadasto B.V., which publishes FerroBRIDGE (the file'"'"'s own SPDX header)'
 licence='Creative Commons Attribution-ShareAlike 4.0 (the archetype'"'"'s licence field)'
 read_by=$'#1405 (the discharge reports the FHIR face writes from a member\'s\n  record), app/ferrofed-eehrxf and app/ferrofed-server'
 
-pin commit ferrobridge_discharge_report.adlt 'FerroHEALTH/FerroBRIDGE tag v0.0.22, template openEHR-EHR-COMPOSITION.ferrobridge_discharge_report.v1.0.0' \
+pin commit ferrobridge_discharge_report.adlt 'FerroHEALTH/FerroBRIDGE commit 3f1953a, template openEHR-EHR-COMPOSITION.ferrobridge_discharge_report.v1.1.0' \
   "$bridge/tools/ferrobridge-testkit/fixtures/adl2/ferrobridge_discharge_report.adlt" \
-  aaf58074d380e1c869425aefb31257cc432f8f80c2a010932b2ce9a344064622 "$own" \
+  1e4392eb1ac75878b4825bea614069801234310f359b78d95a7263726949202c "$own" \
   'The ADL 2 template with its template overlays.'
 pin commit openEHR-EHR-COMPOSITION.transfer_summary.v1.adl 'CKM mirror commit c3fdc43, revision 1.0.2, PUBLISHED' \
   "$mirror/local/archetypes/composition/openEHR-EHR-COMPOSITION.transfer_summary.v1.adl" \
@@ -69,7 +69,7 @@ pin commit LICENSE 'CKM mirror commit c3fdc43' \
 pinned_corpus ferrobridge-discharge "FerroBRIDGE discharge report template" \
   "FerroBRIDGE's discharge report template" \
   "FerroBRIDGE's ADL 2 discharge report template,
-\`openEHR-EHR-COMPOSITION.ferrobridge_discharge_report.v1.0.0\`: a transfer
+\`openEHR-EHR-COMPOSITION.ferrobridge_discharge_report.v1.1.0\`: a transfer
 of care summary \`COMPOSITION\` whose context is the hospital stay, holding
 three ad hoc \`SECTION\`s, a diagnostic summary with
 \`openEHR-EHR-EVALUATION.problem_diagnosis.v1\`, significant procedures with
