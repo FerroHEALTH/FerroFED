@@ -14,6 +14,7 @@ mod ask_all;
 mod audit_repository;
 mod auth;
 mod banner;
+#[cfg(feature = "binding-ihe")]
 mod banner_book;
 mod base_url;
 mod book_tutorial;

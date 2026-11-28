@@ -8,8 +8,9 @@
 //! differs from what [`render`] prints, so a release that moves the version
 //! or a pin moves the page with it; `write_the_banner_sample` (ignored, run
 //! with `cargo nextest run -p ferrofed-server --test it --run-ignored only
-//! banner_book`) writes the sample again. No specification governs the page:
-//! our own design.
+//! banner_book`) writes the sample again. The quickstart resolves patients
+//! through a PIX Manager, so the module builds with the IHE binding alone.
+//! No specification governs the page: our own design.
 
 use std::collections::BTreeMap;
 use std::error::Error;
