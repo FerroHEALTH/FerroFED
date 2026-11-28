@@ -112,6 +112,9 @@ pub struct Deployment {
     /// memory, which only the development profile allows, and which a
     /// restart loses.
     pub audit_spool_in_memory: bool,
+    /// Each table that trusts roots with no revocation check, naming them
+    /// (`trust_roots_without_revocation_file`).
+    pub unchecked_roots: Vec<String>,
     /// The release's support period, judged on the day the banner prints
     /// (Regulation (EU) 2024/2847 Art 13(19)).
     pub support: Support,
@@ -154,6 +157,7 @@ impl Deployment {
             development,
             cleartext: Vec::new(),
             audit_spool_in_memory: false,
+            unchecked_roots: Vec::new(),
             support: Support::current(),
         }
     }
@@ -194,6 +198,14 @@ impl Deployment {
     #[must_use]
     pub fn with_audit_spool_in_memory(mut self, in_memory: bool) -> Self {
         self.audit_spool_in_memory = in_memory;
+        self
+    }
+
+    /// Returns this deployment naming the `roots` its outbound tables trust
+    /// with no revocation check, one line per table.
+    #[must_use]
+    pub fn with_unchecked_roots(mut self, roots: Vec<String>) -> Self {
+        self.unchecked_roots = roots;
         self
     }
 
@@ -321,6 +333,10 @@ fn facts(deployment: &Deployment) -> Vec<(&'static str, String)> {
     for (index, site) in deployment.cleartext.iter().enumerate() {
         let label = if index == 0 { "Unencrypted" } else { "" };
         facts.push((label, site.payload.clone()));
+    }
+    for (index, roots) in deployment.unchecked_roots.iter().enumerate() {
+        let label = if index == 0 { "No revocation" } else { "" };
+        facts.push((label, roots.clone()));
     }
     if deployment.audit_spool_in_memory {
         facts.push((

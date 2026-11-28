@@ -44,7 +44,8 @@ fn built(text: &str) -> Result<Result<Telemetry, TelemetryBuildError>, Box<dyn s
     Ok(ferrohealth_server::telemetry::build(
         &resolved(text)?.telemetry,
         Service::new(SCOPE, VERSION),
-    ))
+    )
+    .map(|(telemetry, _clearing)| telemetry))
 }
 
 /// `error` and every source under it, one per line.
@@ -67,7 +68,7 @@ fn tls_table(dir: &Path, certificates: &ListenerCertificates) -> Result<String, 
     std::fs::write(&identity, certificates.client_identity())?;
     std::fs::write(&roots, certificates.ca())?;
     Ok(format!(
-        "[telemetry.otlp.tls]\nclient_identity_file = {}\ntrust_roots_file = {}\n",
+        "[telemetry.otlp.tls]\nclient_identity_file = {}\ntrust_roots_without_revocation_file = {}\n",
         toml::Value::String(identity.display().to_string()),
         toml::Value::String(roots.display().to_string()),
     ))

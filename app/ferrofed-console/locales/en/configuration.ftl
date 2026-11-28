@@ -253,6 +253,7 @@ token-endpoint = Token endpoint
 toml = TOML
 toml-larger-than-bytes = The TOML is larger than { $value0 } bytes.
 trust-roots-file = Trust roots file
+trust-roots-without-revocation-file = Trust roots file, no revocation check
 type-value-choose-keep = Type the value of { $key }, or choose Keep.
 unless-operator-confirms = {"."} Unless an operator confirms it by{" "}
 user-name = User name

@@ -58,6 +58,7 @@ use crate::metrics::latency::{Latencies, Percentiles};
 use crate::metrics::nodes::{Instruments, NodeRequests};
 use crate::metrics::resolver::Metered;
 use crate::onward::NodeTransport;
+use ferrohealth_server::revocation::Clearing;
 
 /// The federation a server serves the federated query over.
 pub struct Federation {
@@ -88,6 +89,9 @@ pub struct Federation {
     emergency: EmergencyPurposes,
     emergency_limit: EmergencyLimit,
     anomaly: AnomalyRules,
+    /// Kept for its node transports: what keeps their `trust_roots_file`
+    /// nodes cleared for revocation, stopped when a reload replaces them.
+    _clearings: Vec<Clearing>,
 }
 
 /// What the process learns while it serves, which a registry reload carries

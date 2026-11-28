@@ -26,13 +26,14 @@ use ferrofed_engine::dispatch::SharedCredentials;
 use ferrofed_engine::onward::grant::lane::Lane;
 use ferrofed_engine::onward::grant::on_behalf::SharedOnBehalf;
 use ferrofed_registry::id::EndpointId;
-use ferrofed_registry::snapshot::RegistrySnapshot;
+use ferrofed_registry::snapshot::{Endpoint, RegistrySnapshot};
 use ferrohealth_smart::client::dpop::DpopKey;
 use openehr_its::rest::client::Credentials;
 
 use crate::binding::seam::ProvideError;
 use crate::config::settings::{Scheme, Settings};
 use ferrofed_engine::onward::upstream::UpstreamToken;
+use ferrohealth_server::revocation::{Clearing, RevocationCheck};
 use ferrohealth_server::tls_client::TlsClient;
 use openehr_its::rest::client::ReqwestTransport;
 
@@ -132,6 +133,9 @@ pub(crate) struct Onward {
     /// The key each endpoint whose grant binds its tokens with `DPoP`
     /// proves its node requests with (RFC 9449).
     pub(crate) dpop: BTreeMap<EndpointId, Arc<DpopKey>>,
+    /// What keeps each node whose section names `trust_roots_file` cleared
+    /// for revocation, for as long as its transport lives.
+    pub(crate) clearings: Vec<Clearing>,
 }
 
 /// The onward credentials of each endpoint that has a `[credentials]`
@@ -162,7 +166,7 @@ pub(crate) fn onward(
     let mut credentials = BTreeMap::new();
     let mut on_behalf = BTreeMap::new();
     let mut dpop = BTreeMap::new();
-    let transports = transports(settings, registry)?;
+    let (transports, clearings) = transports(settings, registry)?;
     for (endpoint, scheme) in &settings.credentials {
         match scheme {
             Scheme::Oauth { grant, onward, .. } => {
@@ -211,50 +215,64 @@ pub(crate) fn onward(
         credentials,
         on_behalf,
         dpop,
+        clearings,
     })
 }
 
 /// The engine of each endpoint whose section names TLS material, built with
 /// it, refusing one that would present a client certificate to a node
-/// `registry` declares at a URL other than `https`.
+/// `registry` declares at a URL other than `https`, with the clearing of
+/// each node whose section names `trust_roots_file`.
 fn transports(
     settings: &Settings,
     registry: &RegistrySnapshot,
-) -> Result<BTreeMap<EndpointId, NodeTransport>, OnwardError> {
+) -> Result<(BTreeMap<EndpointId, NodeTransport>, Vec<Clearing>), OnwardError> {
     let mut transports = BTreeMap::new();
+    let mut clearings = Vec::new();
     for (endpoint, tls) in &settings.onward_tls {
         // NOTE: no specification governs this: our own design; an endpoint the
         // registry lacks is legitimately absent here, and the client build refuses it.
+        let declared = registry.endpoint(endpoint).map(Endpoint::url);
         if tls.has_identity()
-            && let Some(declared) = registry.endpoint(endpoint)
-            && !crate::config::transport::client_certificate(declared.url().as_str())
+            && let Some(url) = declared
+            && !crate::config::transport::client_certificate(url.as_str())
         {
             return Err(OnwardError::ClientCertificateOverHttp {
                 endpoint: endpoint.clone(),
             });
         }
-        transports.insert(endpoint.clone(), transport(settings, endpoint, tls)?);
+        let (transport, check) = transport(settings, endpoint, tls)?;
+        if let (Some(check), Some(url)) = (check, declared)
+            && let Some(clearing) = crate::revocation::keep(&check, vec![url.clone()])
+        {
+            clearings.push(clearing);
+        }
+        transports.insert(endpoint.clone(), transport);
     }
-    Ok(transports)
+    Ok((transports, clearings))
 }
 
 /// The engine of `endpoint`, presenting and trusting `tls`, with the
-/// overall budget as its timeout, as the shared engine has.
+/// overall budget as its timeout, as the shared engine has, and the
+/// revocation check of the roots of its `trust_roots_file`.
 fn transport(
     settings: &Settings,
     endpoint: &EndpointId,
     tls: &TlsClient,
-) -> Result<NodeTransport, OnwardError> {
+) -> Result<(NodeTransport, Option<RevocationCheck>), OnwardError> {
     let failed = |source: Box<dyn std::error::Error + Send + Sync>| OnwardError::NodeTransport {
         endpoint: endpoint.clone(),
         source,
     };
+    let platform = tls
+        .platform_config()
+        .map_err(|source| failed(Box::new(source)))?;
     // NOTE: no specification governs this: our own design; a node request carries the
     // patient's ehr_id and the credential, so it follows no redirect anywhere the registry does not name.
-    let builder = tls
-        .apply(reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()))
-        .map_err(|source| failed(Box::new(source)))?;
-    node_transport(builder, settings).map_err(|source| failed(Box::new(source)))
+    let builder =
+        platform.apply(reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()));
+    let transport = node_transport(builder, settings).map_err(|source| failed(Box::new(source)))?;
+    Ok((transport, platform.check().cloned()))
 }
 
 #[cfg(test)]
@@ -362,7 +380,7 @@ mod tests {
     }
 
     /// The engine of an endpoint whose TLS table trusts the peer's
-    /// certificate.
+    /// certificate, which publishes no revocation service.
     async fn agreed_by_an_endpoint_engine(
         peer: &KxPeer,
     ) -> Result<(Option<StatusCode>, Option<NamedGroup>), Box<dyn std::error::Error>> {
@@ -370,11 +388,11 @@ mod tests {
         let roots = dir.path().join("roots.pem");
         std::fs::write(&roots, peer.certificate())?;
         let section = TlsClientSection {
-            trust_roots_file: Some(roots),
+            trust_roots_without_revocation_file: Some(roots),
             ..TlsClientSection::default()
         };
         let tls = TlsClient::read("registry.endpoint.node-a.tls", &section)?;
-        let engine = transport(&settings()?, &EndpointId::new("node-a")?, &tls)?;
+        let (engine, _check) = transport(&settings()?, &EndpointId::new("node-a")?, &tls)?;
         agreed_by(&engine, peer).await
     }
 

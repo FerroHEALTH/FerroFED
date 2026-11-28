@@ -326,7 +326,8 @@ deployment in the EU must plan for are:
   The record that member keeps holds a received result's normal and typed
   reference ranges and the order filler's identifier, but a range text,
   `Observation.basedOn` and an order named by reference alone only in the
-  original document (hazard I-16); the report the gateway writes carries
+  original document, which the composition's Comment names to its reader
+  (hazard I-16, closed); the report the gateway writes carries
   each range the member records and the order (hazard I-18). It serves
   prescriptions, and receives dispensations, through members that serve
   both in the HL7 Europe MPD profiles themselves or, in the map mode, from

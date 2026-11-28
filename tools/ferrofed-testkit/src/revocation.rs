@@ -223,6 +223,7 @@ impl RevocationFront {
             key,
             self.client_identity(),
             self.trust_roots(),
+            crate::tls::Revocation::Checked,
         )?)
     }
 

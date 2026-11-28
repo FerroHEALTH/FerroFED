@@ -11,9 +11,10 @@
 //! forwarder drains each spool whatever the reloads. No specification
 //! governs the process model: our own design.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 
 use ferrofed_identity::ihe::audit::atna::RepositoryAudit;
+use ferrohealth_server::revocation::{Clearing, RevocationCheck};
 use ihe_atna::atna::forwarder::{Forwarder, Status};
 use ihe_atna::atna::repository::Repository;
 use ihe_atna::atna::spool::Content;
@@ -23,24 +24,56 @@ use crate::config::ihe::audit_repository::AuditRepositorySettings;
 use crate::health::dependencies::Indicator;
 use ferrofed_operator_api::health::Indication;
 
-impl Forwarding for RepositoryAudit {
+/// The ITI-20 syslog trail of the XCPD localizer: its recorder, and under
+/// `trust_roots_file` what keeps the repository cleared for revocation while
+/// the trail delivers.
+#[derive(Debug)]
+pub struct SyslogTrail {
+    audit: Arc<RepositoryAudit>,
+    check: Option<(RevocationCheck, url::Url)>,
+    clearing: Mutex<Option<Clearing>>,
+}
+
+impl SyslogTrail {
+    /// The recorder the localizer writes its audit messages to.
+    #[must_use]
+    pub fn audit(&self) -> &Arc<RepositoryAudit> {
+        &self.audit
+    }
+}
+
+impl Forwarding for SyslogTrail {
     fn start(&self) {
-        self.delivery().start();
+        if let Some((check, endpoint)) = &self.check {
+            let mut clearing = self.clearing.lock().unwrap_or_else(PoisonError::into_inner);
+            if clearing.is_none() {
+                *clearing = crate::revocation::keep(check, vec![endpoint.clone()]);
+            }
+        }
+        self.audit.delivery().start();
     }
 
     fn status(&self) -> Status {
-        self.delivery().status()
+        self.audit.delivery().status()
     }
 
     fn stop(&self) -> Stopping<'_> {
-        Box::pin(self.delivery().stop())
+        Box::pin(async move {
+            self.audit.delivery().stop().await;
+            let clearing = self
+                .clearing
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .take();
+            drop(clearing);
+        })
     }
 }
 
 /// The ITI-20 syslog trail of the XCPD localizer, indicated as
 /// `audit_repository`.
 #[derive(Debug)]
-pub struct RepositoryTrail(pub Arc<RepositoryAudit>);
+pub struct RepositoryTrail(pub Arc<SyslogTrail>);
 
 impl Indicator for RepositoryTrail {
     fn indicate(&self) -> Vec<(&'static str, Indication)> {
@@ -58,32 +91,52 @@ impl Indicator for RepositoryTrail {
 ///
 /// An [`AuditTrailError`] for a repository or spool that cannot be used,
 /// and for a spool another configuration already sends through.
-pub fn trail(settings: &AuditRepositorySettings) -> Result<Arc<RepositoryAudit>, AuditTrailError> {
+pub fn trail(settings: &AuditRepositorySettings) -> Result<Arc<SyslogTrail>, AuditTrailError> {
     let key = settings.spool_dir.as_ref().map_or_else(
         || format!("memory:{}", settings.url),
         |directory| directory.display().to_string(),
     );
     started(key, settings, || {
-        let repository = if settings.unencrypted {
-            Repository::unencrypted_for_development(&settings.url, settings.timeouts)
+        let (repository, check) = if settings.unencrypted {
+            (
+                Repository::unencrypted_for_development(&settings.url, settings.timeouts),
+                None,
+            )
         } else {
             let tls = settings
                 .tls
                 .platform_config()
                 .map_err(AuditTrailError::Tls)?;
-            Repository::tls(&settings.url, Arc::new(tls), settings.timeouts)
-        }
-        .map_err(AuditTrailError::Repository)?;
+            // NOTE: no specification governs this: our own design; the check reaches the
+            // repository's TLS endpoint by an https URL at its host and port.
+            let check = tls
+                .check()
+                .cloned()
+                .zip(crate::revocation::handshake(&settings.url));
+            (
+                Repository::tls(
+                    &settings.url,
+                    Arc::new(tls.into_config()),
+                    settings.timeouts,
+                ),
+                check,
+            )
+        };
+        let repository = repository.map_err(AuditTrailError::Repository)?;
         let spool = spool(
             "xcpd.audit_repository.spool_dir",
             settings.spool_dir.as_deref(),
             settings.bounds,
             Content::SyslogFrames,
         )?;
-        Ok(RepositoryAudit::new(
-            Forwarder::new(spool, repository, settings.retry_max),
-            settings.sender.clone(),
-            settings.source.clone(),
-        ))
+        Ok(SyslogTrail {
+            audit: Arc::new(RepositoryAudit::new(
+                Forwarder::new(spool, repository, settings.retry_max),
+                settings.sender.clone(),
+                settings.source.clone(),
+            )),
+            check,
+            clearing: Mutex::new(None),
+        })
     })
 }

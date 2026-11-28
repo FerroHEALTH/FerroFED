@@ -64,9 +64,22 @@ pub enum TlsHarnessError {
     Material(#[from] TlsClientError),
 }
 
-/// The TLS material of the table at `key` that presents `identity`, PEM,
-/// inline and trusts `roots`, PEM, as its trust roots file, written to a
-/// directory removed once read.
+/// Whether a harness's trust roots are checked for revocation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Revocation {
+    /// Named in `trust_roots_file`: the CA publishes a CRL and an OCSP
+    /// responder.
+    Checked,
+    /// Named in `trust_roots_without_revocation_file`.
+    Unchecked,
+}
+
+/// The TLS material of the table at `key` that presents `identity` and
+/// trusts `roots`, both PEM, under the key `revocation` names, the roots
+/// written to a directory removed once read.
+///
+/// A harness CA that publishes no revocation service is
+/// [`Revocation::Unchecked`].
 ///
 /// # Errors
 ///
@@ -76,15 +89,19 @@ pub fn read_material(
     key: &str,
     identity: &str,
     roots: &str,
+    revocation: Revocation,
 ) -> Result<Arc<TlsClient>, TlsHarnessError> {
     let dir = tempfile::tempdir()?;
     let roots_file = dir.path().join("roots.pem");
     std::fs::write(&roots_file, roots)?;
-    let section = TlsClientSection {
+    let mut section = TlsClientSection {
         client_identity: Some(Secret::new(identity.to_owned())),
-        trust_roots_file: Some(roots_file),
         ..TlsClientSection::default()
     };
+    match revocation {
+        Revocation::Checked => section.trust_roots_file = Some(roots_file),
+        Revocation::Unchecked => section.trust_roots_without_revocation_file = Some(roots_file),
+    }
     Ok(Arc::new(TlsClient::read(key, &section)?))
 }
 
@@ -273,7 +290,12 @@ impl MutualTls {
     ///
     /// The [`TlsHarnessError`] [`read_material`] returns.
     pub fn tls_client(&self, key: &str) -> Result<Arc<TlsClient>, TlsHarnessError> {
-        read_material(key, &self.client_identity, &self.trust_roots)
+        read_material(
+            key,
+            &self.client_identity,
+            &self.trust_roots,
+            Revocation::Unchecked,
+        )
     }
 
     /// Returns how many connections completed the handshake with a client

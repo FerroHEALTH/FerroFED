@@ -11,12 +11,14 @@ use std::time::Duration;
 
 use ferrofed_engine::onward::Scope;
 use ferrofed_engine::onward::grant::lane::Organisations;
+use ferrohealth_config::tls::TlsClientSection;
 use ferrohealth_secret::file::read_secret;
 use ferrohealth_secret::secret::Secret;
 use ferrohealth_smart::client::assertion::AssertionKey;
 use ferrohealth_smart::client::keys::KeyRing;
 use ferrohealth_smart::client::{ClientAuth, PresentedTls};
 use ferrohealth_smart::config::credentials::{CredentialsSection, OauthSection};
+use ferrohealth_smart::config::{ServerTls, TlsBuilder as _};
 use ferrohealth_smart::jws::algorithm::Algorithm;
 use ferrohealth_smart::kind::IssuerKind;
 use openehr_federation::object::Uri;
@@ -73,9 +75,9 @@ struct Beside<'a> {
 /// A section may name TLS material alone, when the transport authenticates
 /// the gateway, or `conveyance_ml_dsa` alone, for a node that takes no
 /// credentials. An `oauth` grant reaches its token endpoint with the same
-/// material, read once, so one that authenticates by, or binds its tokens
-/// to, a TLS client certificate presents the one the node is reached with
-/// (RFC 8705 §2, §3).
+/// `tls` table, so one that authenticates by, or binds its tokens to, a TLS
+/// client certificate presents the one the node is reached with (RFC 8705
+/// §2, §3).
 pub(crate) fn resolve_node_credentials(
     section: &str,
     credentials: &NodeCredentials,
@@ -87,14 +89,10 @@ pub(crate) fn resolve_node_credentials(
         .transpose()?;
     let table = format!("{section}.credentials");
     presents_certificate(&table, &credentials.credentials, material.as_deref())?;
-    let presented = material
-        .as_deref()
-        .map(|tls| -> Result<PresentedTls, Error> {
-            Ok(PresentedTls::new(
-                Arc::new(tls.platform_config()?),
-                tls.certificate().cloned(),
-            ))
-        })
+    let presented = credentials
+        .tls
+        .as_ref()
+        .map(|tls| presented_tls(section, tls))
         .transpose()?;
     let beside = Beside {
         onward_organisations: credentials.onward_organisations,
@@ -115,6 +113,20 @@ pub(crate) fn resolve_node_credentials(
         Err(refused) => return Err(refused),
     };
     Ok((Some(scheme), material))
+}
+
+/// The TLS the grant of the node at `section` reaches its authorization
+/// server with, built from the node's `tls` table by `ferrohealth-smart`, so
+/// under `trust_roots_file` each endpoint it calls is cleared for revocation
+/// before it connects.
+fn presented_tls(section: &str, tls: &TlsClientSection) -> Result<PresentedTls, Error> {
+    let key = format!("{section}.tls");
+    ServerTls
+        .build(&key, tls, &[])
+        .map_err(|source| Error::Smart {
+            section: format!("{section}.credentials"),
+            source: Box::new(ferrohealth_smart::config::ConfigError::TlsBuild { key, source }),
+        })
 }
 
 /// Refuses the `oauth` table of the node at `section` when it

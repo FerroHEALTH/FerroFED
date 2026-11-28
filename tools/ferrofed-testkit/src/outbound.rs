@@ -75,8 +75,9 @@ pub fn with_tls(url: &str, tls: TlsClientSection) -> Result<OutboundClient, Outb
 /// The outbound client of `url` presenting `identity` and trusting `roots`.
 ///
 /// `identity` is a client certificate chain and key in PEM, and `roots` PEM
-/// trust roots beside the platform's, read as a table naming
-/// `client_identity` and `trust_roots_file` reads them.
+/// trust roots beside the platform's, of a harness CA that publishes no
+/// revocation service, read as a table naming `client_identity` and
+/// `trust_roots_without_revocation_file` reads them.
 ///
 /// # Errors
 ///
@@ -93,7 +94,7 @@ pub fn with_material(
     std::fs::write(&roots_file, roots)?;
     let tls = TlsClientSection {
         client_identity: Some(Secret::new(identity.to_owned())),
-        trust_roots_file: Some(roots_file),
+        trust_roots_without_revocation_file: Some(roots_file),
         ..TlsClientSection::default()
     };
     Ok(with_tls(url, tls)?)

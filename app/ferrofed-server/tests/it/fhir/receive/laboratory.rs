@@ -4,7 +4,7 @@
 //! A laboratory report received on the FHIR face (Regulation (EU) 2025/327
 //! Art 14(1)(e), Annex II 2.2 and 2.3), end to end: held to the HL7 Europe
 //! Laboratory Report 2.0.0 document profiles, mapped by the laboratory
-//! mapping `eehrxf` ships over `KDS_Laborbericht`, and written as one
+//! mapping `eehrxf` ships over `ferrobridge_laborbericht.v1.0.0`, and written as one
 //! composition to the member declared for the category, by its own
 //! `ehr_id` alone (§12.4, N23, §5.4.1, N33).
 
@@ -640,7 +640,7 @@ async fn a_member_serving_its_own_reports_is_left_out_of_the_laboratory_query() 
 }
 
 // NOTE: hazard I-16 of the clinical safety risk file: what a received laboratory report holds that
-// the composition does not carry is declared beside the original, by FHIRPath and never by value.
+// the composition does not carry is declared beside the original and in its Comment, by FHIRPath.
 #[tokio::test]
 async fn a_range_text_the_composition_lacks_is_declared_beside_the_original() -> TestResult {
     let (a, b) = (creating().await, Server::start().await);
@@ -664,6 +664,11 @@ async fn a_range_text_the_composition_lacks_is_declared_beside_the_original() ->
     assert_eq!(
         vec![String::from("Observation.referenceRange[0].text")],
         super::declared_beside_original(&composition)?
+    );
+    assert_eq!(
+        vec![String::from("Observation.referenceRange[0].text")],
+        super::declared_losses(&composition)?,
+        "the composition's Comment names the loss to the record's reader"
     );
     assert_eq!(
         1,

@@ -4,8 +4,8 @@
 //! The laboratory report fixtures (#1555).
 //!
 //! They are the vendored HL7 Europe Laboratory Report 2.0.0 package, the
-//! `KDS_Laborbericht` operational template the mapping `eehrxf` ships
-//! compiles against, that mapping written where a deployment keeps its
+//! `ferrobridge_laborbericht.v1.0.0` operational template the mapping
+//! `eehrxf` ships compiles against, that mapping written where a deployment keeps its
 //! files, and a synthetic laboratory report document as a sender writes it.
 //!
 //! The document is assembled with `eehrxf`'s own document builder in the
@@ -32,7 +32,7 @@ use crate::sender::{authored, displayed, resource, sent};
 const ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
 
 /// The template the shipped laboratory mapping maps.
-pub const TEMPLATE: &str = "KDS_Laborbericht";
+pub const TEMPLATE: &str = "ferrobridge_laborbericht.v1.0.0";
 
 /// The LOINC code of the analyte the synthetic result records.
 pub const ANALYTE: &str = "2093-3";
@@ -87,11 +87,11 @@ pub fn package() -> PathBuf {
     PathBuf::from(ROOT).join("docs/specs/eu-hl7-laboratory/hl7.fhir.eu.laboratory-2.0.0.tgz")
 }
 
-/// Returns the path of the vendored `KDS_Laborbericht` operational
-/// template.
+/// Returns the path of the vendored `ferrobridge_laborbericht.v1.0.0`
+/// operational template.
 #[must_use]
 pub fn opt() -> PathBuf {
-    PathBuf::from(ROOT).join("docs/specs/kds-laborbericht/KDS_Laborbericht.opt")
+    PathBuf::from(ROOT).join("docs/specs/ferrobridge-laboratory/ferrobridge_laborbericht.opt")
 }
 
 /// Writes the laboratory mapping `eehrxf` ships into `directory`, which
@@ -301,7 +301,7 @@ fn report() -> Value {
 /// Returns the synthetic report of the patient `identifiers`, with the
 /// further ranges `typed`, as a member serves it.
 ///
-/// The report is written into one `KDS_Laborbericht` composition by the
+/// The report is written into one `ferrobridge_laborbericht.v1.0.0` composition by the
 /// shipped mapping, its files written under `directory`, which must exist,
 /// and committed under the version id `uid`.
 ///

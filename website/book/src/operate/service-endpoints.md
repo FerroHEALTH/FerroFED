@@ -109,6 +109,7 @@ url = "https://pix.example.org/fhir/"
 [pixm.manager.endpoint.tls]
 client_identity_file = "/run/secrets/pix-client.pem"  # mutual TLS
 trust_roots_file = "/etc/ferrofed/pix-roots.pem"      # optional
+# trust_roots_without_revocation_file = "/etc/ferrofed/lab-roots.pem"  # a PKI with no CRL or OCSP
 # min_version = "1.2"                                 # "1.3" unless lowered
 ```
 
@@ -118,7 +119,19 @@ trust_roots_file = "/etc/ferrofed/pix-roots.pem"      # optional
   configuration is rendered, and setting both forms is refused naming
   `<table>.endpoint.tls.client_identity`.
 - `trust_roots_file` names a PEM bundle of trust roots the service's
-  certificate chains to, added to the platform's roots.
+  certificate chains to, added to the platform's roots. A chain to one of
+  them is verified on every operating system, ML-DSA certificates included
+  (RFC 9881), and opens a connection only once a revocation check cleared
+  the endpoint: the gateway checks it by CRL or OCSP when it builds the
+  client and every four minutes after, and the connection fails closed while
+  no revocation source answers.
+- `trust_roots_without_revocation_file` names a PEM bundle of trust roots
+  whose PKI publishes no CRL and no OCSP responder, such as a private test
+  CA. A chain to one of them is verified with no revocation check: the
+  startup banner names each such table and its roots on a `No revocation`
+  line, and every connection over one is logged.
+- A chain to any other root goes to the platform's verifier, under the
+  operating system's trust store and revocation policy.
 - `min_version` is the oldest TLS version the gateway speaks to the
   service: `"1.3"` unless lowered to `"1.2"`. Lower it only for a service
   that speaks no TLS 1.3, such as a MyHealth@EU responding gateway

@@ -8,6 +8,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use ferrofed_identity::ihe::audit::atna::RepositoryAudit;
 use ferrofed_identity::ihe::xcpd::{
     AssertionSource, FixedAssertion, GatedTls, GatewayConfig, LogAudit, Transport, XcpdConfig,
     XcpdLocalizer,
@@ -86,7 +87,8 @@ pub(super) fn localizer(
         (AuditDestination::Repository, Some(repository)) => {
             let recorder = trail(repository).map_err(LocalizationError::AuditTrail)?;
             let indicator: Arc<dyn Indicator> = Arc::new(RepositoryTrail(Arc::clone(&recorder)));
-            (localizer.audited(recorder), vec![indicator])
+            let audit: Arc<RepositoryAudit> = Arc::clone(recorder.audit());
+            (localizer.audited(audit), vec![indicator])
         }
         (AuditDestination::Repository, None) => return Err(LocalizationError::NoAuditRepository),
         (AuditDestination::Log, _) => (localizer.audited(Arc::new(LogAudit)), Vec::new()),

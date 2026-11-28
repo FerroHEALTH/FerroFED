@@ -22,6 +22,7 @@ use ferrofed_server::config::stored_queries::{Backend, Store};
 use ferrofed_server::federation::{error::FederationError, registry::read_registry};
 use ferrofed_server::state::{AppState, StateError};
 use ferrofed_server::support::Support;
+use ferrofed_testkit::tls::MutualTls;
 use ferrohealth_telemetry::section::{Format, Rendering};
 use ferrohealth_telemetry::telemetry::Console;
 
@@ -47,6 +48,7 @@ fn deployment() -> Result<Deployment, Box<dyn Error>> {
         development: false,
         cleartext: Vec::new(),
         audit_spool_in_memory: false,
+        unchecked_roots: Vec::new(),
         support: Support::NoPeriod,
     })
 }
@@ -101,6 +103,33 @@ fn an_audit_spool_in_memory_is_declared() -> TestResult {
         value_of(&declared, "Audit spool"),
         "{declared}"
     );
+    Ok(())
+}
+
+#[test]
+fn roots_trusted_with_no_revocation_check_are_named() -> TestResult {
+    let front = MutualTls::open("http://127.0.0.1:9", &[])?;
+    let dir = tempfile::tempdir()?;
+    let roots = dir.path().join("roots.pem");
+    std::fs::write(&roots, front.trust_roots())?;
+    let file = toml::Value::String(roots.display().to_string());
+    let tree: toml::Table = toml::from_str(&format!(
+        "[pdqm.endpoint.tls]\ntrust_roots_without_revocation_file = {file}\n\n[mcsd.endpoint.tls]\ntrust_roots_file = {file}\n"
+    ))?;
+    let named = "pdqm.endpoint.tls: no revocation check for CN=FerroFED harness TLS CA";
+    let lines = ferrofed_server::revocation::unchecked_in(&tree);
+    assert_eq!(vec![named.to_owned()], lines);
+    let quiet = render("9.9.9", &deployment()?, false, Rendering::Pretty)
+        .ok_or("pretty renders the banner")?;
+    assert_eq!(None, value_of(&quiet, "No revocation"), "{quiet}");
+    let banner = render(
+        "9.9.9",
+        &deployment()?.with_unchecked_roots(lines),
+        false,
+        Rendering::Pretty,
+    )
+    .ok_or("pretty renders the banner")?;
+    assert_eq!(Some(named), value_of(&banner, "No revocation"), "{banner}");
     Ok(())
 }
 

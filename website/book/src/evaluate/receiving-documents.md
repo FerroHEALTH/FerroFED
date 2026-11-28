@@ -78,7 +78,8 @@ laboratory reports, Art 14(1)(e), and discharge reports, Art 14(1)(f). A laborat
 Europe Laboratory Report 2.0.0 `Bundle-eu-lab` and `Composition-eu-lab`
 profiles, which a document whose `Composition.type` is LOINC `11502-2`
 names, and mapped by the laboratory mapping the component ships over the
-`KDS_Laborbericht` template into one composition. Declare the member that
+`ferrobridge_laborbericht.v1.0.0` template, which the component ships as
+`ferrobridge_laborbericht.opt`, into one composition. Declare the member that
 stores laboratory reports with its own `[[fhir.receive]]`, naming the
 package `hl7.fhir.eu.laboratory` 2.0.0 and its dependency closure, the
 template and the mapping files, which `eehrxf` writes out of its
@@ -97,7 +98,7 @@ dependencies = [                             # the package's dependency closure
   "/etc/ferrofed/packages/hl7.fhir.eu.extensions.r4-1.3.0.tgz",
   "/etc/ferrofed/packages/hl7.fhir.eu.base-2.0.0.tgz",
 ]
-template = "/etc/ferrofed/mappings/laboratory/KDS_Laborbericht.opt"
+template = "/etc/ferrofed/mappings/laboratory/ferrobridge_laborbericht.opt"
 files = [                                    # the files of eehrxf's laboratory project, in its order
   "/etc/ferrofed/mappings/laboratory/ferrobridge_eu_laboratory.context.yml",
 ]
@@ -120,9 +121,10 @@ A range text, `Observation.basedOn` and an order named by reference alone
 are declared lost, and the answer's `OperationOutcome` names each loss
 ([FerroHEALTH/FerroBRIDGE#1481](https://github.com/FerroHEALTH/FerroBRIDGE/issues/1481)).
 The member's record holds those only in the original document the
-composition keeps. Hazard I-16 of the [clinical safety risk
-file](clinical-safety.md) stays open at S4, P3: a reader of the member's
-record is not told of those losses, so they still arise in normal use.
+composition keeps, and since `eehrxf` 0.52.0 the composition's Comment
+names each by its FHIRPath to a reader of the member's record. Hazard I-16
+of the [clinical safety risk file](clinical-safety.md) is closed at S4, P1
+([#2124](https://github.com/FerroHEALTH/FerroFED/issues/2124)).
 
 ## An imaging or a discharge report
 
@@ -208,7 +210,11 @@ controls include the full validation above
 ([#808](https://github.com/FerroHEALTH/FerroFED/issues/808)). The safety
 review of 2026-10-25 closed both at S4, P1
 ([#1327](https://github.com/FerroHEALTH/FerroFED/issues/1327)). A received laboratory report adds I-16 (a result the
-record does not hold whole), open at S4, P3. A received discharge report
+record does not hold whole), closed at S4, P1: a range text,
+`Observation.basedOn` and an order named by reference alone reach the
+member's record only in the original document, and the composition's
+Comment names each to a reader of the record by its FHIRPath
+([#2124](https://github.com/FerroHEALTH/FerroFED/issues/2124)). A received discharge report
 adds I-21, closed at S4, P1: its diagnoses, procedures and discharge
 medicines reach the member's composition with every element the mapping
 reads, and a diagnosis's severity and certainty are relayed as not

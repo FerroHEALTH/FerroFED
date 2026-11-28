@@ -46,7 +46,7 @@ ferrofed-registry.workspace = true
 ferrofed-identity.workspace = true
 # The TLS material of the terminology server the face asks, read once by the
 # family type (#1750).
-ferrohealth-server = { workspace = true, features = ["reqwest"] }
+ferrohealth-server = { workspace = true, features = ["platform-verifier"] }
 # The `saved` instant of a reserved definition.
 jiff.workspace = true
 # The operational template of a map-mode member, built from its ADL 2 template

@@ -64,11 +64,14 @@ place. A listener or client whose `min_version` lowers the minimum to TLS
 1.2 keeps the classical exchange for a TLS 1.2 peer, since RFC 10024 defines
 the hybrid groups for TLS 1.3 alone; the option stays because eHDSI
 Cryptographic Algorithms 9.0.0 §3 requires at least TLS 1.2 in the eHDSI
-trust model. The certificate signatures that authenticate a peer stay
-classical: no TLS 1.3 signature scheme for ML-DSA is published as an RFC
-yet, the operator's certificates decide the algorithm, and verifying an
-ML-DSA certificate (RFC 9881) belongs to `ferrohealth-server`
-([FerroHEALTH/FerroSYS#449](https://github.com/FerroHEALTH/FerroSYS/issues/449)). The JOSE signatures
+trust model. The certificate signatures that authenticate a peer are the
+operator's choice, so they are scored by certificate and by root: an ML-DSA
+certificate (RFC 9881) authenticates in TLS 1.3 on the listeners, as a
+client identity, and on an outbound chain to a root of `trust_roots_file`
+or `trust_roots_without_revocation_file`, which `ferrohealth-server`
+verifies with webpki on every operating system; any other certificate is
+classical, and a chain to no configured root is the platform verifier's,
+which on macOS refuses ML-DSA. The JOSE signatures
 take ML-DSA (RFC 9964) per peer, as each peer supports it, so each such use
 has a safe row for an ML-DSA peer and an unsafe row for a classical one:
 an issuer whose `algorithms` list ML-DSA alone has its access tokens
@@ -99,7 +102,9 @@ until those services move.
 | TLS 1.3 key exchange of the family clients: the identity services, the audit repository, the terminology server, the OpenID Provider and the OTLP export | X25519MLKEM768 first; X25519, P-256, P-384 for a peer without it | yes | RFC 10024 | `ferrohealth-server tls_client, ferrohealth-smart client, app/ferrofed-server/src/config/tls.rs, app/ferrofed-identity/src/outbound.rs, app/ferrofed-server/src/config/ihe/audit_repository.rs` |
 | TLS 1.3 key exchange of the PostgreSQL store | X25519MLKEM768 first (rustls prefer-post-quantum); X25519, P-256, P-384 for a peer without it | yes | RFC 10024 | `app/ferrofed-server/src/store/connection.rs (client_config)` |
 | TLS 1.2 key exchange where min_version lowers the minimum | ECDHE over X25519, P-256 or P-384 | no | the eHDSI trust model's: Cryptographic Algorithms 9.0.0 §3 requires at least TLS 1.2, and RFC 10024 defines the hybrid groups for TLS 1.3 alone | `ferrohealth-server tls (protocol_versions)` |
-| TLS server and client certificate authentication, mutual TLS to a node included | ECDSA, RSA or Ed25519, as the operator's certificates hold | no | the operator's: its certificates decide the signature algorithm (RFC 8446 §4.4.2.2), and verifying an ML-DSA certificate (RFC 9881) is ferrohealth-server's, FerroHEALTH/FerroSYS#449 | `ferrohealth-server tls, ferrohealth-server tls_client` |
+| TLS certificate authentication by an ML-DSA certificate: the listeners, the client identities FerroFED presents, and an outbound chain to a root of trust_roots_file or trust_roots_without_revocation_file | ML-DSA-44, ML-DSA-65 or ML-DSA-87 in TLS 1.3, an outbound chain verified by webpki on every operating system through the PlatformTls of ferrohealth-server 0.14, with CRLs and OCSP answers an ML-DSA key signs under trust_roots_file | yes | RFC 9881; draft-ietf-tls-mldsa-06 (IANA TLS SignatureScheme 0x0904 to 0x0906) | `ferrohealth-server tls, ferrohealth-server tls_client, app/ferrofed-server/src/onward.rs (transport), app/ferrofed-server/src/binding/ihe/audit/mod.rs, app/ferrofed-server/src/revocation.rs` |
+| TLS certificate authentication by any other certificate | ECDSA, RSA or Ed25519, as the operator's certificates hold | no | the operator's: the certificates it configures for the listeners and the client identities, and the peers' it reaches (RFC 8446 §4.4.2.2) | `ferrohealth-server tls, ferrohealth-server tls_client` |
+| Outbound certificate verification of a chain to no configured root | the operating system verifier's algorithms; the macOS platform verifier refuses ML-DSA (FerroHEALTH/FerroSYS#470) | no | the platform's: its verifier's policy, which rustls-platform-verifier hands the chain to | `ferrohealth-server tls_client` |
 | TLS record protection | AES-128-GCM, AES-256-GCM, ChaCha20-Poly1305 | yes | NIST IR 8547 4.1.3 | `ferrohealth-server tls` |
 | Access token verification, an issuer whose algorithms list ML-DSA alone | ML-DSA-44, ML-DSA-65, ML-DSA-87 | yes | RFC 9964 | `ferrohealth-smart resource, app/ferrofed-server/src/auth/verify.rs` |
 | Access token verification, an issuer at its default algorithms or listing a classical one | RS256, RS384, PS256, PS384, ES256, ES384 | no | RFC 9964 | `ferrohealth-smart resource, app/ferrofed-server/src/auth/verify.rs` |

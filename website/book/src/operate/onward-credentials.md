@@ -355,7 +355,8 @@ gateway reaches that node with, by the keys the identity services take:
 | Key | What it is |
 |---|---|
 | `client_identity_file` | The gateway's client certificate chain and its private key, PEM, the end-entity certificate first. `client_identity` takes the same inline, as a secret. |
-| `trust_roots_file` | A PEM bundle of trust roots, beside the platform's, the node and its authorization server are trusted by. |
+| `trust_roots_file` | A PEM bundle of trust roots, beside the platform's, the node and its authorization server are trusted by. A chain to one of them opens a connection only once a revocation check cleared the endpoint, failing closed while no CRL or OCSP source answers. |
+| `trust_roots_without_revocation_file` | A PEM bundle of trust roots whose PKI publishes no revocation service, trusted with no revocation check; the startup banner names them, and every connection over one is logged. |
 | `min_version` | The oldest TLS version the gateway speaks to the node and its authorization server: `"1.3"` unless lowered to `"1.2"`. |
 
 The node and its authorization server are reached over one transport built
