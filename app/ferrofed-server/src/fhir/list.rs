@@ -396,13 +396,17 @@ fn entries(
         match &native.answer {
             Answer::Document(document) => {
                 let forwarded = document.forwarded();
-                let Some(fetched) = fetched((fhir, caller), native, forwarded) else {
-                    tracing::error!(
-                        request_id = logged,
-                        endpoint,
-                        "a member's document could not be named by a signed URL"
-                    );
-                    return Err(unlisted(federation, gathered, (system, value), "document"));
+                let fetched = match fetched((fhir, caller), native, forwarded) {
+                    Ok(fetched) => fetched,
+                    Err(unnamed) => {
+                        tracing::error!(
+                            request_id = logged,
+                            endpoint,
+                            error = %crate::chain(&unnamed),
+                            "a member's document could not be named by a signed URL"
+                        );
+                        return Err(unlisted(federation, gathered, (system, value), "document"));
+                    }
                 };
                 let custodian = gathered::organisation(federation.snapshot(), &native.chosen.node);
                 let (held_system, held_value) = document.identifier();
@@ -426,15 +430,18 @@ fn entries(
             }
         }
     }
-    let Some((reports, silent)) =
-        super::written::listed(federation, (fhir, caller), gathered, (listing, subject))
-    else {
-        tracing::error!(
-            request_id = logged,
-            "a written report could not be named by a signed URL"
-        );
-        return Err(unlisted(federation, gathered, (system, value), "report"));
-    };
+    let (reports, silent) =
+        match super::written::listed(federation, (fhir, caller), gathered, (listing, subject)) {
+            Ok(listed) => listed,
+            Err(unsigned) => {
+                tracing::error!(
+                    request_id = logged,
+                    error = %crate::chain(&unsigned),
+                    "a written report could not be named by a signed URL"
+                );
+                return Err(unlisted(federation, gathered, (system, value), "report"));
+            }
+        };
     matches.extend(reports);
     outcomes.extend(silent);
     let Some((own, silent)) = super::own::listed(federation, (fhir, caller), gathered) else {
@@ -571,12 +578,10 @@ fn fetched(
     (fhir, caller): (&FhirSettings, &Caller),
     native: &Native,
     forwarded: &Forwarded,
-) -> Option<Fetched> {
+) -> Result<Fetched, Unnamed> {
     let bytes = forwarded.body();
-    let size = u32::try_from(bytes.len()).ok()?;
-    // NOTE: no specification governs this: our own design; a key that cannot sign leaves
-    // the document unnamed, which fails the list with a 500.
-    let token = super::binary::mint(fhir, caller, &native.chosen).ok()?;
+    let size = u32::try_from(bytes.len()).map_err(Unnamed::Size)?;
+    let token = super::binary::mint(fhir, caller, &native.chosen).map_err(Unnamed::Unsigned)?;
     // NOTE: RFC 9110 §8.3; a member that names no media type is read as sending octets.
     let content_type = forwarded
         .headers()
@@ -586,10 +591,23 @@ fn fetched(
         .to_owned();
     // NOTE: FHIR R4 Attachment `hash`: the base64 of the SHA-1 of the data.
     let hash = digest(&SHA1_FOR_LEGACY_USE_ONLY, bytes);
-    Some(Fetched {
+    Ok(Fetched {
         content_type,
         url: format!("Binary/{token}"),
         hash: STANDARD.encode(hash.as_ref()),
         size,
     })
+}
+
+/// Why a member's document cannot be named in the list, which fails the
+/// list with a `500`; no specification governs this: our own design.
+#[derive(Debug, thiserror::Error)]
+pub(super) enum Unnamed {
+    /// The document has more bytes than an `unsignedInt` counts (FHIR R4
+    /// `Attachment.size`).
+    #[error("the document has more bytes than Attachment.size can count")]
+    Size(#[source] std::num::TryFromIntError),
+    /// The URL that names it could not be signed.
+    #[error("the URL that names the document could not be signed")]
+    Unsigned(#[source] ferrohealth_smart::jws::JwsError),
 }

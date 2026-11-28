@@ -82,14 +82,18 @@ pub(super) fn minted_urn() -> String {
 /// `DocumentReference`, each by its `fullUrl`, and an `OperationOutcome`
 /// for each member that did not answer the query and for each vaccination
 /// history that cannot be written, because `subject` says why the patient
-/// cannot be its subject or no person attested the record; `None` when a
-/// URL cannot be signed.
+/// cannot be its subject or no person attested the record.
+///
+/// # Errors
+///
+/// The [`JwsError`](ferrohealth_smart::jws::JwsError) of a URL that cannot
+/// be signed.
 pub(super) fn listed(
     federation: &Federation,
     (fhir, caller): (&FhirSettings, &Caller),
     gathered: &Gathered,
     (listing, subject): (Listing<'_>, Option<&Result<(), String>>),
-) -> Option<Listed> {
+) -> Result<Listed, ferrohealth_smart::jws::JwsError> {
     let snapshot = federation.snapshot();
     let (mut matches, mut outcomes): Listed = (Vec::new(), Vec::new());
     for (written, endpoint, held) in once(federation, gathered) {
@@ -118,8 +122,7 @@ pub(super) fn listed(
             );
             continue;
         };
-        let token =
-            super::binary::mint_written(fhir, caller, (&chosen, written, &held.uid)).ok()?;
+        let token = super::binary::mint_written(fhir, caller, (&chosen, written, &held.uid))?;
         let custodian = organisation(snapshot, &chosen.node);
         let unique = format!("urn:uuid:{object}");
         let id = fhir.ids.document((endpoint.as_str(), &unique));
@@ -161,7 +164,7 @@ pub(super) fn listed(
             ));
         }
     }
-    Some((matches, outcomes))
+    Ok((matches, outcomes))
 }
 
 /// Why the vaccination history of `held` cannot be written, when it cannot:
