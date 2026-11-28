@@ -550,6 +550,11 @@ years = 5                      # every record, at least 3 (Art 9(2)); 3 when uns
 [[access_log.emergency_purpose]]
 system = "http://terminology.hl7.org/CodeSystem/v3-ActReason"
 code = "BTG"                   # break the glass marks an emergency access (Art 11(5))
+
+[access_log.regulatory]         # Xt-EHR D5.2 §7.2.7; none declared writes none
+legal_basis = { lawfulness = "public-task", condition = "health-or-social-care" }
+controllers = ["urn:oid:2.999.7.1"]
+processors = ["urn:oid:2.999.7.2"]
 ```
 
 `patient_namespaces` lists the namespaces your Member State's access
@@ -593,6 +598,21 @@ Each `[[access_log.emergency_purpose]]` needs a `code`, and takes a
 `system`. Without a `system` it matches only a purpose a token declares
 with no system. An empty code or system and an unknown key are refused when
 the configuration loads ([Emergency access](#emergency-access)).
+
+`[access_log.regulatory]` declares the legal basis the gateway processes
+under and the controllers and processors of that processing, which every
+record states on its categories entity: `legal_basis.lawfulness` is the
+GDPR Art 6(1) point (`consent`, `contract`, `legal-obligation`,
+`vital-interests`, `public-task` or `legitimate-interests`), written
+`ehds-legal-basis` `gdpr-art-6-1-<point>`; `legal_basis.condition` the Art
+9(2) point (`explicit-consent`, `employment`, `vital-interests`,
+`not-for-profit-body`, `made-public`, `legal-claims`,
+`substantial-public-interest`, `health-or-social-care`, `public-health` or
+`archiving-or-research`), written `ehds-legal-condition`; and each entry
+of `controllers` and `processors` an identifier of your choosing, written
+`ehds-controller` and `ehds-processor`. Nothing is declared by default, and
+a record then writes none of them. A relayed access keeps the legal ground
+of its federation agreement on its `ehds-relayed` entity.
 
 ## The Annex II 3.2 checklist
 

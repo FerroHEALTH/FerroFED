@@ -94,7 +94,7 @@ pub enum Error {
         key: String,
     },
     /// A refusal of `[oidc]` or `[session]` the keys above do not name, such
-    /// as a sealed store with no key.
+    /// as a zero lifetime.
     #[error(transparent)]
     Session(Box<ferrohealth_session::config::ConfigError>),
 }

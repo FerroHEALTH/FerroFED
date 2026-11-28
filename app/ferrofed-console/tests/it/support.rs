@@ -225,10 +225,7 @@ pub(crate) fn end(state: &ConsoleState, id: &SessionId) -> Result<Option<Ended>,
 
 /// How many sign-ins and sessions the console `state` holds in memory.
 pub(crate) fn occupancy(state: &ConsoleState) -> Result<Occupancy, Box<dyn Error>> {
-    state
-        .sessions()
-        .occupancy()?
-        .ok_or_else(|| "the console keeps its sessions in memory".into())
+    Ok(state.sessions().occupancy()?)
 }
 
 /// A `GET` of `path` carrying the session cookie of `session`.
