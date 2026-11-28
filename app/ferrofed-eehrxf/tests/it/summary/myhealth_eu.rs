@@ -18,10 +18,10 @@ use ferrofed_eehrxf::summary::{Answer, Assembled, Held};
 use ferrofed_testkit::eps;
 use ferrofed_testkit::eps::transcoding::{self, ATC, INGREDIENT, SNOMED, SUBSTANCE};
 use ferrofed_testkit::mock::Server;
-use wiremock::matchers::{method, path};
+use wiremock::matchers::path;
 use wiremock::{Mock, ResponseTemplate};
 
-use super::{allergies, answers, document_asking, header};
+use super::{allergies, answers, document_designating, header};
 
 /// The allergy composition `uid` of one member, coded in SNOMED CT.
 fn coded(uid: &str) -> Held {
@@ -50,7 +50,16 @@ fn asking(server: &Server) -> Result<Terminology, Box<dyn Error>> {
 /// The summary of both members' coded allergies, transcoded for
 /// MyHealth@EU through `server`.
 async fn transcoded(server: &Server) -> Result<Assembled, Box<dyn Error>> {
-    document_asking(
+    designated(server, None).await
+}
+
+/// The summary of [`transcoded`], each coding a translation adds given the
+/// server's designation in `designations` when it is set.
+async fn designated(
+    server: &Server,
+    designations: Option<&str>,
+) -> Result<Assembled, Box<dyn Error>> {
+    document_designating(
         &answers(
             &[coded(
                 "7c4e1d20-0000-4000-8000-0000000000e1::cdr-a.example.org::1",
@@ -65,6 +74,7 @@ async fn transcoded(server: &Server) -> Result<Assembled, Box<dyn Error>> {
             &asking(server)?,
             &MYHEALTH_EU_CORE,
         ),
+        designations,
     )
     .await
 }
@@ -129,14 +139,20 @@ async fn each_allergy_gains_its_atc_ingredient_beside_its_recorded_coding()
 async fn an_allergen_no_translation_reaches_is_kept_as_recorded_and_listed_unbound()
 -> Result<(), Box<dyn Error>> {
     let server = Server::start().await;
-    Mock::given(method("POST"))
-        .and(path("/fhir/ConceptMap/$translate"))
-        .respond_with(ResponseTemplate::new(200).set_body_raw(
-            r#"{"resourceType":"Parameters","parameter":[{"name":"result","valueBoolean":false}]}"#,
-            "application/fhir+json",
-        ))
-        .mount(&server)
-        .await;
+    // NOTE: MyHealth@EU Core 1.0.1 eHDSIAllergenWithExceptions holds the recorded SNOMED CT drug
+    // allergen in no enumerated concept, which $validate-code decides, and no translation reaches it.
+    for operation in [
+        "/fhir/ValueSet/$validate-code",
+        "/fhir/ConceptMap/$translate",
+    ] {
+        Mock::given(path(operation))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                r#"{"resourceType":"Parameters","parameter":[{"name":"result","valueBoolean":false}]}"#,
+                "application/fhir+json",
+            ))
+            .mount(&server)
+            .await;
+    }
     let assembled = transcoded(&server).await?;
     assert_eq!(
         2,
@@ -159,5 +175,65 @@ async fn an_allergen_no_translation_reaches_is_kept_as_recorded_and_listed_unbou
             "no ATC coding is invented: {codings:?}"
         );
     }
+    Ok(())
+}
+
+/// The Dutch designation the stub holds for [`INGREDIENT`].
+const DUTCH: &str = "amoxicilline";
+
+/// Mounts on `server` a `CodeSystem/$lookup` of [`INGREDIENT`] that holds
+/// its Dutch designation (FHIR R4 `$lookup`, the `designation` parts).
+async fn designating(server: &Server) {
+    Mock::given(path("/fhir/CodeSystem/$lookup"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(
+            format!(
+                r#"{{"resourceType":"Parameters","parameter":[{{"name":"name","valueString":"ATC"}},{{"name":"display","valueString":"amoxicillin"}},{{"name":"designation","part":[{{"name":"language","valueCode":"nl"}},{{"name":"value","valueString":"{DUTCH}"}}]}}]}}"#
+            ),
+            "application/fhir+json",
+        ))
+        .mount(server)
+        .await;
+}
+
+/// The coding of each allergy's code in `bundle` whose system is `system`.
+fn codings_of<'b>(bundle: &'b serde_json::Value, system: &str) -> Vec<&'b serde_json::Value> {
+    bundle["entry"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|entry| &entry["resource"])
+        .filter(|resource| resource["resourceType"] == "AllergyIntolerance")
+        .flat_map(|resource| resource["code"]["coding"].as_array().into_iter().flatten())
+        .filter(|coding| coding["system"] == system)
+        .collect()
+}
+
+#[tokio::test]
+async fn each_added_coding_carries_the_designation_in_the_requested_language()
+-> Result<(), Box<dyn Error>> {
+    let server = transcoding::start().await;
+    designating(&server).await;
+    let assembled = designated(&server, Some("nl")).await?;
+    let bundle = serde_json::to_value(&assembled.bundle)?;
+    let added = codings_of(&bundle, ATC);
+    assert_eq!(2, added.len(), "one ATC coding per allergy: {added:?}");
+    for coding in added {
+        assert!(
+            coding.to_string().contains(DUTCH),
+            "the Dutch designation the server holds: {coding}"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_server_that_refuses_the_designation_fails_the_summary() -> Result<(), Box<dyn Error>> {
+    let server = transcoding::start().await;
+    Mock::given(path("/fhir/CodeSystem/$lookup"))
+        .respond_with(ResponseTemplate::new(503))
+        .mount(&server)
+        .await;
+    let refused = designated(&server, Some("nl")).await;
+    assert!(refused.is_err(), "a refused designation is never left out");
     Ok(())
 }

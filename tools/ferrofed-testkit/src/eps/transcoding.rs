@@ -83,12 +83,23 @@ pub async fn start() -> Server {
     server
 }
 
-/// Mounts on `server` the answers of `ConceptMap/$translate` under `/fhir`.
+/// Mounts on `server` the answers of `ConceptMap/$translate` and
+/// `ValueSet/$validate-code` under `/fhir`.
 ///
 /// [`SUBSTANCE`] into ATC answers [`INGREDIENT`] and [`DIAGNOSIS`] into
 /// ICD-10 answers [`CATEGORY`], each `equivalent`, and every other
-/// translation no match.
+/// translation no match. `$validate-code` answers that no recorded concept
+/// is a member: neither SNOMED CT concept is in the MyHealth@EU Core value
+/// set its element binds, the allergen set taking SNOMED CT only through
+/// its non-drug allergens.
 pub async fn mount(server: &Server) {
+    Mock::given(path("/fhir/ValueSet/$validate-code"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(
+            r#"{"resourceType":"Parameters","parameter":[{"name":"result","valueBoolean":false}]}"#,
+            "application/fhir+json",
+        ))
+        .mount(server)
+        .await;
     let answer =
         |body: String| ResponseTemplate::new(200).set_body_raw(body, "application/fhir+json");
     let matched = |system: &str, code: &str, display: &str| {

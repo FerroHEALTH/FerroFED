@@ -638,3 +638,40 @@ async fn a_member_serving_its_own_reports_is_left_out_of_the_laboratory_query() 
     );
     Ok(())
 }
+
+// NOTE: hazard I-16 of the clinical safety risk file: what a received laboratory report holds that
+// the composition does not carry is declared beside the original, by FHIRPath and never by value.
+#[tokio::test]
+async fn a_range_text_the_composition_lacks_is_declared_beside_the_original() -> TestResult {
+    let (a, b) = (creating().await, Server::start().await);
+    let dir = tempfile::tempdir()?;
+    let pdq = supplier().await;
+    let app = gateway(dir.path(), (&a, &b), &pdq)?;
+    let sent = report()?.replacen(
+        "\"referenceRange\":[{",
+        "\"referenceRange\":[{\"text\":\"SENTINEL-RANGE-TEXT-q2v\",",
+        1,
+    );
+    assert!(
+        sent.contains("SENTINEL-RANGE-TEXT-q2v"),
+        "the result states its range in text"
+    );
+    let (status, text) = call(app, post(&sent)?).await?;
+    assert_eq!(StatusCode::OK, status, "{text}");
+    let requests = a.received_requests().await.ok_or("recording is on")?;
+    let write = requests.first().ok_or("the write")?;
+    let composition: Value = serde_json::from_slice(&write.body)?;
+    assert_eq!(
+        vec![String::from("Observation.referenceRange[0].text")],
+        super::declared_beside_original(&composition)?
+    );
+    assert_eq!(
+        1,
+        composition
+            .to_string()
+            .matches("SENTINEL-RANGE-TEXT-q2v")
+            .count(),
+        "the text is kept in the original alone"
+    );
+    Ok(())
+}

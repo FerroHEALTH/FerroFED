@@ -264,7 +264,10 @@ pub struct Assembled {
 /// when it names a server, and each concept at an element one of
 /// `bindings` names with no coding in its systems is translated into them
 /// too ([`Translator::with_bindings`]); a concept no translation reaches is
-/// left as recorded and listed in [`Assembled::unbound`].
+/// left as recorded and listed in [`Assembled::unbound`]. With `designations`
+/// set, each coding a translation adds is given the server's designation in
+/// that language, a BCP 47 tag, where the server holds one
+/// ([`Translator::with_designations`]).
 ///
 /// Every section names each member `elsewhere` lists as serving its own
 /// summary, whose data it leaves out.
@@ -281,7 +284,12 @@ pub async fn assemble(
     request: &Request,
     author: &Author,
     (origins, sections, elsewhere): (&[Origin], &[SectionAnswers], &[Elsewhere]),
-    (mappings, terminology, bindings): (&Mappings, &Terminology, &[Binding]),
+    (mappings, terminology, bindings, designations): (
+        &Mappings,
+        &Terminology,
+        &[Binding],
+        Option<&str>,
+    ),
 ) -> Result<Assembled, AssemblyError> {
     if !request.header.named() {
         return Err(AssemblyError::Unnamed);
@@ -313,6 +321,9 @@ pub async fn assemble(
     };
     let mut translator =
         Translator::new(terminology, &ehn::PATIENT_SUMMARY).with_bindings(bindings);
+    if let Some(language) = designations {
+        translator = translator.with_designations(language);
+    }
     for answers in sections {
         let section = assembly
             .section(answers, (origins, elsewhere), (mappings, &mut translator))

@@ -235,6 +235,9 @@ pub struct FhirSettings {
     /// The required bindings the codes of each summary and report are
     /// translated to meet, as `[eehrxf.terminology] transcode` names them.
     pub bindings: &'static [eehrxf::terminology::translation::Binding],
+    /// The language of the designations each MyHealth@EU coding a summary
+    /// gains, as `[eehrxf.terminology] designations` names it.
+    pub designations: Option<String>,
     /// The `[eehrxf.terminology]` table as written, which a reload
     /// compares.
     pub terminology_written: Option<crate::config::eehrxf::TerminologyServer>,
@@ -671,6 +674,7 @@ impl Fhir {
             terminology: Terminology::none(),
             validating: None,
             bindings: &[],
+            designations: None,
             terminology_written: None,
             written: self.clone(),
         })
