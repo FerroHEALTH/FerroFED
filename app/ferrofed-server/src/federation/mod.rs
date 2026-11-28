@@ -40,7 +40,6 @@ use ferrofed_registry::export::IdentityStateExport;
 use ferrofed_registry::id::{EhrId, EndpointId};
 use ferrofed_registry::incident::Incident;
 use ferrofed_registry::snapshot::RegistrySnapshot;
-use jsonwebtoken::jwk::Jwk;
 use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::{Context, OffsetStrategy, Targeting};
 use openehr_federation::dedup::DedupMode;
@@ -83,7 +82,7 @@ pub struct Federation {
     stored_query_fan_out: bool,
     signing: Option<SigningSettings>,
     signer: Option<Arc<Signer>>,
-    client_keys: Vec<Jwk>,
+    client_keys: Vec<ferrohealth_smart::jws::jwk::Jwk>,
     documents: Vec<PublicDocument>,
     access: Option<Arc<AccessLog>>,
     emergency: EmergencyPurposes,
@@ -223,7 +222,7 @@ impl Federation {
     /// Set publishes beside the `[signing]` keys (FAPI 2.0 Security Profile
     /// §5.4.2).
     #[must_use]
-    pub fn client_keys(&self) -> &[Jwk] {
+    pub fn client_keys(&self) -> &[ferrohealth_smart::jws::jwk::Jwk] {
         &self.client_keys
     }
 

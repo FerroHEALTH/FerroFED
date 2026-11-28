@@ -68,7 +68,8 @@ impl Config {
     /// logged query parameter ([`ServerFault::LoggedQueryParameters`]). An OAuth 2.0 grant refuses a missing key, a
     /// scope outside the SMART on openEHR `system` grammar ([`CredentialsFault::Scope`]),
     /// and a PIX Manager section ([`CredentialsFault::GrantNotHere`]); `[signing]` refuses a key that is no
-    /// P-256 or P-384 key ([`CredentialsFault::SigningKey`]), an overlap window shorter than
+    /// P-256 or P-384 key, and an ML-DSA key that is none ([`CredentialsFault::SigningKey`]),
+    /// a node's `conveyance_ml_dsa` with no ML-DSA key ([`CredentialsFault::ConveyanceMlDsa`]), an overlap window shorter than
     /// five minutes plus the nodes' cache time ([`CredentialsFault::RotationOverlap`]),
     /// a next key on another curve than it is meant for
     /// ([`CredentialsFault::NextKeyAlgorithm`]), and a `jwks_uri` that is no `http` or `https` URL ([`Error::HttpUrl`]).
@@ -372,15 +373,41 @@ impl Config {
         Ok(fhir)
     }
 
-    /// Resolves `[signing]`.
+    /// Resolves `[signing]`, with the nodes whose credentials section sets
+    /// `conveyance_ml_dsa`.
+    ///
+    /// # Errors
+    ///
+    /// The errors of [`resolve_signing`], and
+    /// [`CredentialsFault::ConveyanceMlDsa`] for a node that asks for an
+    /// ML-DSA caller token when `[signing]` names no ML-DSA key.
     fn resolve_signing_keys(
         &self,
         public: Option<&PublicUrl>,
     ) -> Result<Option<SigningSettings>, Error> {
-        self.signing
+        let mut signing = self
+            .signing
             .as_ref()
             .map(|signing| resolve_signing(signing, public))
-            .transpose()
+            .transpose()?;
+        for (endpoint, section) in &self.credentials {
+            if !section.conveyance_ml_dsa {
+                continue;
+            }
+            let Some(keyed) = signing.as_mut().filter(|signing| signing.ml_dsa.is_some()) else {
+                return Err(Error::Credentials(CredentialsFault::ConveyanceMlDsa {
+                    section: format!("credentials.{endpoint}"),
+                }));
+            };
+            let id = EndpointId::new(endpoint.as_str()).map_err(|source| {
+                Error::Credentials(CredentialsFault::EndpointId {
+                    key: endpoint.clone(),
+                    source,
+                })
+            })?;
+            keyed.ml_dsa_nodes.insert(id);
+        }
+        Ok(signing)
     }
 }
 

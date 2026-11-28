@@ -72,6 +72,17 @@ requires are empty as `unavailable`. One `Provenance` names the member.
 Completeness, the access record under `Medical-Imaging` and the `424`
 answers follow the discharge report's.
 
+The composition's `type` carries the report's own code with LOINC
+`18748-4` beside it, the imaging report type of MyHealth@EU's document
+types, so the type meets both guides. Held to MyHealth@EU Medical Imaging
+Report 9.1.1 `bundle-img-myhealtheu`, the report breaks one rule: the
+guide fixes its `Medical-Imaging` category in the code system
+`http://hl7.eu/fhir/eu-health-data-api/CodeSystem/eehrxf-document-priority-category-cs`,
+and HL7 Europe Health Data API 1.0.0-ballot, the release the HL7 Europe
+Imaging Report names, publishes that code system as
+`http://hl7.eu/fhir/health-data-api/CodeSystem/eehrxf-document-priority-category-cs`.
+The report keeps the ballot's URL until the two guides agree.
+
 ## Imaging reports the gateway receives
 
 Declare the member that stores received imaging reports in a

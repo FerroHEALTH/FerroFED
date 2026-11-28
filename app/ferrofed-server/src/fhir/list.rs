@@ -444,12 +444,16 @@ fn entries(
         };
     matches.extend(reports);
     outcomes.extend(silent);
-    let Some((own, silent)) = super::own::listed(federation, (fhir, caller), gathered) else {
-        tracing::error!(
-            request_id = logged,
-            "a member's own report could not be named by a signed URL"
-        );
-        return Err(unlisted(federation, gathered, (system, value), "report"));
+    let (own, silent) = match super::own::listed(federation, (fhir, caller), gathered) {
+        Ok(listed) => listed,
+        Err(unnamed) => {
+            tracing::error!(
+                request_id = logged,
+                error = %crate::chain(&unnamed),
+                "a member's own report could not be named by a signed URL"
+            );
+            return Err(unlisted(federation, gathered, (system, value), "report"));
+        }
     };
     matches.extend(own);
     outcomes.extend(silent);

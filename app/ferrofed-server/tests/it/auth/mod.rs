@@ -22,6 +22,7 @@ mod ferrosmart;
 mod introspection;
 mod kept_token;
 mod keys;
+mod ml_dsa;
 mod other_patient;
 mod patient;
 mod professional;

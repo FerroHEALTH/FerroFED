@@ -39,7 +39,8 @@ and never issues them. The token is a JWT access token, verified as follows:
   verifies the signature under the key its `kid` names. A token with no
   `kid` is verified only when the set holds one candidate key;
 - its JOSE header names an algorithm the issuer's `algorithms` admits, by
-  default RS256, RS384, PS256, PS384, ES256 and ES384. A token signed with
+  default RS256, RS384, PS256, PS384, ES256 and ES384, and ML-DSA-44,
+  ML-DSA-65 and ML-DSA-87 when listed (RFC 9964). A token signed with
   `none` or an HMAC algorithm is refused, and so is an HMAC algorithm in
   `algorithms` at load (RFC 8725 §3.1, §3.2);
 - under the default `profile = "rfc9068"`, its header names the type
@@ -138,7 +139,7 @@ demographic_clients = []
 | `auth.issuer[].issuer` | none | The issuer identifier its tokens carry in `iss`: `https`, or `http` to a loopback host (RFC 8414 §2). An issuer URL that carries a user name or password refuses the start (OpenID Connect Core 1.0 §1.2). Each `auth.issuer[]` key below is the issuer's own; no `[auth]` key stands in for one an issuer leaves out. |
 | `auth.issuer[].kind` | none | `federation` for another party's issuer; unset for a SMART App Launch 2.2 authorization server ([Who the caller is](#who-the-caller-is)). Name each issuer in one table only: a second table of the same issuer refuses the start. |
 | `auth.issuer[].audience` | the public URL | The audiences, of which every token of the issuer names one in `aud` (RFC 9068 §4). Unset, the `gateway.public_url` as written; an issuer without an audience refuses the start. |
-| `auth.issuer[].algorithms` | six | The signature algorithms admitted: RS256, RS384, PS256, PS384, ES256 and ES384. An HMAC algorithm refuses the start. |
+| `auth.issuer[].algorithms` | six | The signature algorithms admitted: RS256, RS384, PS256, PS384, ES256 and ES384 by default; list `"ML-DSA-65"` (or `-44`, `-87`) for an issuer that signs with ML-DSA (RFC 9964). An HMAC algorithm refuses the start. |
 | `auth.issuer[].clock_skew` | `60s` | The leeway on `exp`, `nbf` and `iat`, at most five minutes (RFC 7519 §4.1.4). |
 | `auth.issuer[].jwks_max_age` | `10min` | How long a key set is used before it is read again. |
 | `auth.issuer[].jwks_refresh_interval` | `60s` | The least time between two reads of one key set, after an unknown `kid` or a failed read. |

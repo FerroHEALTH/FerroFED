@@ -32,6 +32,7 @@ mod consent_withheld;
 mod contact_point;
 mod contribution_write;
 mod conveyance;
+mod conveyance_ml_dsa;
 mod created_ehr_id;
 mod credentials;
 mod declared;
@@ -85,6 +86,7 @@ mod onward;
 mod onward_exchange;
 mod onward_fapi2;
 mod onward_lane;
+mod onward_ml_dsa;
 mod onward_mtls;
 #[cfg(feature = "binding-nl")]
 mod onward_nuts;

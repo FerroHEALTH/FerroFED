@@ -45,9 +45,10 @@ fn audience_changed(boot: &Settings, fresh: &Settings) -> bool {
     })
 }
 
-/// Whether `fresh` names other signing keys, another JWK Set location,
-/// another assertion lifetime or another rotation overlap than the process
-/// started with; the keys are compared by `kid`, never by their material.
+/// Whether `fresh` names other signing keys, other nodes signed for with
+/// the ML-DSA key, another JWK Set location, another assertion lifetime or
+/// another rotation overlap than the process started with; the keys are
+/// compared by `kid`, never by their material.
 fn signing_changed(boot: &Settings, fresh: &Settings) -> bool {
     let shape = |settings: &Settings| {
         settings.signing.as_ref().map(|signing| {
@@ -55,6 +56,8 @@ fn signing_changed(boot: &Settings, fresh: &Settings) -> bool {
                 signing.keys.current().kid().to_owned(),
                 signing.keys.retiring().map(|key| key.kid().to_owned()),
                 signing.keys.next().map(|key| key.kid().to_owned()),
+                signing.ml_dsa.as_ref().map(|key| key.kid().to_owned()),
+                signing.ml_dsa_nodes.clone(),
                 signing.jwks_uri.as_str().to_owned(),
                 signing.rotation_overlap,
             )

@@ -46,8 +46,8 @@
 //! request body (RFC 6749 §2.3.1), as an IHE IUA Authorization Server does
 //! (ITI-71 §3.71.4.1.3.1).
 //!
-//! [`Curve::pem`] generates a synthetic private key in PKCS#8
-//! PEM at run time, so no key is ever committed. No specification governs the
+//! [`Curve::pem`] and [`MlDsa::pem`] generate a synthetic private key in
+//! PKCS#8 PEM at run time, so no key is ever committed. No specification governs the
 //! device: our own design.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -56,7 +56,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use aws_lc_rs::rand::SystemRandom;
 use aws_lc_rs::signature::{
     ECDSA_P256_SHA256_FIXED_SIGNING, ECDSA_P384_SHA384_FIXED_SIGNING,
-    ECDSA_P521_SHA512_FIXED_SIGNING, EcdsaKeyPair, EcdsaSigningAlgorithm,
+    ECDSA_P521_SHA512_FIXED_SIGNING, EcdsaKeyPair, EcdsaSigningAlgorithm, ML_DSA_44_SIGNING,
+    ML_DSA_65_SIGNING, ML_DSA_87_SIGNING, PqdsaKeyPair, PqdsaSigningAlgorithm,
 };
 use jsonwebtoken::jwk::JwkSet;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
@@ -117,6 +118,40 @@ impl Curve {
             Self::P521 => &ECDSA_P521_SHA512_FIXED_SIGNING,
         };
         let document = EcdsaKeyPair::generate_pkcs8(algorithm, &SystemRandom::new())
+            .map_err(|_unspecified| KeyGenError)?;
+        Ok(pem::encode(&pem::Pem::new(
+            "PRIVATE KEY",
+            document.as_ref().to_vec(),
+        )))
+    }
+}
+
+/// The parameter set of a synthetic ML-DSA signing key (RFC 9964 §5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MlDsa {
+    /// ML-DSA-44.
+    MlDsa44,
+    /// ML-DSA-65.
+    MlDsa65,
+    /// ML-DSA-87.
+    MlDsa87,
+}
+
+impl MlDsa {
+    /// A fresh private key of this parameter set in PKCS#8 PEM, its seed
+    /// alone (RFC 9881 §6).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`KeyGenError`] when the crypto library cannot generate one.
+    pub fn pem(self) -> Result<String, KeyGenError> {
+        let algorithm: &'static PqdsaSigningAlgorithm = match self {
+            Self::MlDsa44 => &ML_DSA_44_SIGNING,
+            Self::MlDsa65 => &ML_DSA_65_SIGNING,
+            Self::MlDsa87 => &ML_DSA_87_SIGNING,
+        };
+        let document = PqdsaKeyPair::generate(algorithm)
+            .and_then(|pair| pair.to_pkcs8v1())
             .map_err(|_unspecified| KeyGenError)?;
         Ok(pem::encode(&pem::Pem::new(
             "PRIVATE KEY",

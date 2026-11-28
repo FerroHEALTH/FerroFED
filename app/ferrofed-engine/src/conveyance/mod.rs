@@ -6,12 +6,14 @@
 //! N24, N25, §12.4, CP-16).
 //!
 //! The token is signed with the current key of the gateway's
-//! [`KeyRing`](ferrohealth_smart::client::keys::KeyRing), the key whose public half the
-//! gateway publishes as its JWK Set and declares as
-//! `federation.auth.jwks_uri` (N30), so a node verifies
-//! it the way it verifies the gateway's client assertions. Its JOSE header
-//! names the key's algorithm, ES256 for a P-256 key and ES384 for a P-384
-//! one, the key's `kid` and the type [`TYPE`] (RFC 8725 §3.11). A
+//! [`KeyRing`](ferrohealth_smart::client::keys::KeyRing), or with the key the
+//! [`Signer`] holds for that node ([`Signer::key_at`]), an ML-DSA key (RFC
+//! 9964) for a node that verifies one. The gateway publishes both as its JWK
+//! Set and declares it as `federation.auth.jwks_uri` (N30), so a node
+//! verifies the token the way it verifies the gateway's client assertions.
+//! Its JOSE header names the key's algorithm, ES256 for a P-256 key, ES384
+//! for a P-384 one and the parameter set for an ML-DSA key, the key's `kid`
+//! and the type [`TYPE`] (RFC 8725 §3.11). A
 //! deployment whose nodes hold to the FAPI 2.0 Security Profile, which
 //! admits PS256, ES256 and `EdDSA` (§5.4.1), signs with a P-256 key. Its
 //! claims:
@@ -325,8 +327,7 @@ impl Conveyance {
         }
         self.0
             .signer
-            .keys()
-            .current()
+            .key_at(endpoint)
             .sign(TYPE, &claims)
             .map_err(ConveyanceError::Sign)
     }
@@ -372,7 +373,7 @@ pub(crate) mod tests {
 
     use ferrofed_registry::id::{EhrId, EndpointId};
 
-    use super::{Conveyance, ConveyanceError};
+    use super::{Conveyance, ConveyanceError, TYPE};
     use crate::conveyance::caller::{
         Acting, Caller, Principal, Professional, Purpose, Verification,
     };
@@ -382,6 +383,9 @@ pub(crate) mod tests {
     use ferrohealth_smart::assurance::AssuranceLevel;
     use ferrohealth_smart::client::assertion::AssertionKey;
     use ferrohealth_smart::client::keys::KeyRing;
+    use ferrohealth_smart::jws::algorithm::Algorithm;
+    use ferrohealth_smart::jws::compact;
+    use ferrohealth_smart::jws::jwk::Jwk;
 
     /// The code system of the synthetic caller's role.
     const PRACTITIONER_ROLE: &str = "http://terminology.hl7.org/CodeSystem/practitioner-role";
@@ -493,6 +497,38 @@ pub(crate) mod tests {
             conveyance.signed_for(&c),
             Err(ConveyanceError::Unconfined(endpoint)) if endpoint == c
         ));
+    }
+
+    /// RFC 9964 §5: the token for a node the signer holds an ML-DSA key for
+    /// is signed with it and verifies against its public half, and the
+    /// token for any other node is signed with the ring's current key.
+    #[test]
+    fn a_node_with_an_ml_dsa_key_receives_a_token_it_signs() {
+        let a = EndpointId::new("node-a-pub").expect("an id");
+        let b = EndpointId::new("node-b-pub").expect("an id");
+        let pem = ferrofed_testkit::oauth::MlDsa::MlDsa65
+            .pem()
+            .expect("a test key should generate");
+        let own = AssertionKey::from_pem(pem.as_bytes(), None, None).expect("an ML-DSA-65 key");
+        let published = Jwk::try_from(&own.public_jwk()).expect("the public half reads");
+        let signer = Signer::new(Arc::clone(&KEYS), "urn:example:gateway")
+            .with_key_at(a.clone(), Arc::new(own));
+        let conveyance = Conveyance::new(Arc::new(signer), Principal::Caller(caller()));
+        let token = conveyance.signed_for(&a).expect("the token signs");
+        let decoded = compact::decode(&token).expect("the token reads");
+        assert_eq!(Algorithm::MlDsa65, decoded.header().alg);
+        assert_eq!(Some(TYPE), decoded.header().typ.as_deref());
+        let claims = decoded
+            .verify_claims(&published)
+            .expect("the token verifies");
+        assert_eq!(
+            Some("node-a-pub"),
+            claims.get("aud").and_then(|aud| aud.as_str())
+        );
+        let other = conveyance.signed_for(&b).expect("the token signs");
+        let header = compact::decode(&other).expect("the token reads");
+        assert_eq!(Algorithm::Es384, header.header().alg);
+        assert_eq!(Some(KEYS.current().kid()), header.header().kid.as_deref());
     }
 
     #[test]

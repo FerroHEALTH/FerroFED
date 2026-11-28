@@ -4,8 +4,8 @@
 //! The harness side of `DPoP` (RFC 9449): the check a test device makes of a
 //! proof, and the challenge a node answers a proof without its nonce with.
 //!
-//! [`verify`] holds a proof to RFC 9449 §4.3: typed `dpop+jwt`, signed ES256
-//! or ES384 by the public key its header carries, binding the request's
+//! [`verify`] holds a proof to RFC 9449 §4.3: typed `dpop+jwt`, signed ES256,
+//! ES384 or ML-DSA (RFC 9964) by the public key its header carries, binding the request's
 //! method and URL without query and fragment, issued within a minute of
 //! now, with a `jti`, and, for a request carrying an access token, the
 //! token's SHA-256 in `ath` (§7.1). [`challenge`] is the `401` a node sends
@@ -15,8 +15,9 @@
 use aws_lc_rs::digest::{SHA256, digest};
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use ferrohealth_smart::jws::algorithm::Algorithm as SmartAlgorithm;
+use jsonwebtoken::Algorithm;
 use jsonwebtoken::jwk::ThumbprintHash;
-use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use serde::Deserialize;
 use wiremock::ResponseTemplate;
 
@@ -74,22 +75,23 @@ pub fn verify(
     htu: &str,
     token: Option<&str>,
 ) -> Result<Verified, String> {
-    let header = jsonwebtoken::decode_header(proof).map_err(|error| format!("header: {error}"))?;
+    let decoded = ferrohealth_smart::jws::compact::decode(proof)
+        .map_err(|error| format!("header: {error}"))?;
+    let header = decoded.header();
     if header.typ.as_deref() != Some("dpop+jwt") {
         return Err(format!("the proof is typed {:?}", header.typ));
     }
-    if !matches!(header.alg, Algorithm::ES256 | Algorithm::ES384) {
-        return Err(format!("the proof is signed with {:?}", header.alg));
+    if !(matches!(header.alg, SmartAlgorithm::Es256 | SmartAlgorithm::Es384)
+        || header.alg.is_ml_dsa())
+    {
+        return Err(format!("the proof is signed with {}", header.alg.name()));
     }
-    let jwk = header.jwk.ok_or("the proof carries no jwk")?;
-    let key = DecodingKey::from_jwk(&jwk).map_err(|error| format!("jwk: {error}"))?;
-    let mut validation = Validation::new(header.alg);
-    validation.validate_exp = false;
-    validation.validate_aud = false;
-    validation.set_required_spec_claims::<&str>(&[]);
-    let claims = jsonwebtoken::decode::<Proof>(proof, &key, &validation)
-        .map_err(|error| format!("verification: {error}"))?
-        .claims;
+    let jwk = header.jwk.as_ref().ok_or("the proof carries no jwk")?;
+    let claims = decoded
+        .verify_claims(jwk)
+        .map_err(|error| format!("verification: {error}"))?;
+    let claims: Proof = serde_json::from_value(serde_json::Value::Object(claims))
+        .map_err(|error| format!("claims: {error}"))?;
     if claims.htm != method {
         return Err(format!("the proof binds {} for {method}", claims.htm));
     }
@@ -112,10 +114,10 @@ pub fn verify(
         (None, Some(_)) => return Err("the proof binds a token the request lacks".to_owned()),
         (None, None) => {}
     }
-    let jkt = jwk
-        .thumbprint(ThumbprintHash::SHA256)
-        .map_err(|error| format!("thumbprint: {error}"))?;
-    Ok(Verified { jkt, proof: claims })
+    Ok(Verified {
+        jkt: jwk.thumbprint(),
+        proof: claims,
+    })
 }
 
 /// The DPoP-bound access token of `request` and its verified proof.
