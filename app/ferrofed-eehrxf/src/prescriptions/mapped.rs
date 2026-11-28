@@ -20,10 +20,12 @@
 //! Which context compiles and what a page keeps are our own design: no
 //! specification governs them.
 
+use eehrxf::document::language::{DocumentLanguage, EHDSI_LANGUAGE, LanguageError};
 use eehrxf::mapping::{Mapping, MappingError};
 use eehrxf::mappings::{MPD, UnknownContext};
 use eehrxf::receive::openehr::{InstructionError, ReceiveMappingError, ReceivedComposition};
 use eehrxf::receive::{ReceiveError, ReceivedResources};
+use eehrxf::terminology::Terminology;
 use fhir_types::codec::{Json, Value};
 use fhir_types::r4::identifier::Identifier;
 use fhir_types::r4::reference::Reference;
@@ -40,6 +42,7 @@ use openehr_base::v1_3::base_types::identification::uid_based_id::UidBasedId;
 use openehr_mapping_core::template::{PathError, TemplateSource};
 
 use super::RESOURCE;
+use super::conform;
 use super::page::{Kept, Page, Prescription};
 
 /// The context of the MPD project that maps a medication order to a
@@ -98,6 +101,10 @@ pub enum MapModeError {
     /// A composition is not mapped.
     #[error("a composition is not mapped")]
     Run(#[source] MappingError),
+    /// The terminology server gave no answer on whether eHDSILanguage holds
+    /// the language of a composition.
+    #[error("the terminology server gave no answer on a composition's language")]
+    Language(#[source] LanguageError),
     /// No language and territory are named for the compositions of received
     /// dispensations.
     #[error("the map mode names no language and territory for a received dispensation")]
@@ -249,16 +256,23 @@ impl MapMode {
     ///
     /// The patient is named by its identifier alone (FHIR R4
     /// `Reference.identifier`), since the gateway holds no `Patient` for it.
+    /// Each prescription is written in the language-region tag of the
+    /// composition's language and territory once `terminology` answers that
+    /// eHDSILanguage holds it, the binding `MedicationRequest-myhealtheu-epd`
+    /// puts on `MedicationRequest.language`; one it does not hold names no
+    /// language, so its prescriptions are withheld.
     ///
     /// # Errors
     ///
-    /// [`MapModeError::Run`] when the composition is not mapped, and
-    /// [`MapModeError::Resource`] when a mapped resource does not read back.
-    pub fn page(
+    /// [`MapModeError::Run`] when the composition is not mapped,
+    /// [`MapModeError::Language`] when the terminology server gives no
+    /// answer on its language, and [`MapModeError::Resource`] when a mapped
+    /// resource does not read back.
+    pub async fn page(
         &self,
         composition: &str,
         (system, value): (&str, &str),
-        now: &str,
+        (now, terminology): (&str, &Terminology),
     ) -> Result<Page, MapModeError> {
         let patient = Reference {
             identifier: Some(Box::new(Identifier {
@@ -276,6 +290,7 @@ impl MapMode {
                 CallContext::new().with_patient(patient),
             )
             .map_err(MapModeError::Run)?;
+        let language = held_language(composition, terminology).await?;
         let mut page = Page::default();
         for resource in answer
             .bundle()
@@ -289,11 +304,14 @@ impl MapMode {
                 .and_then(Value::as_str)
                 .unwrap_or_default()
                 .to_owned();
-            let kept = Kept {
+            let mut kept = Kept {
                 full_url: None,
                 resource: Value::Object(object),
                 resource_type,
             };
+            if kept.resource_type == RESOURCE {
+                conform::reasoned(&mut kept.resource, language.as_deref());
+            }
             match kept.resource_type.as_str() {
                 RESOURCE => page.prescriptions.push(Prescription {
                     identifiers: identifiers(&kept.resource),
@@ -422,4 +440,32 @@ struct Item {
     kind: Option<String>,
     /// The `archetype_node_id`.
     archetype_node_id: Option<String>,
+}
+
+/// The language-region tag `composition` is written in, once `terminology`
+/// answers that eHDSILanguage holds it.
+///
+/// A composition that records no language and territory, or one the value
+/// set does not hold, names none, so its prescriptions are withheld.
+///
+/// # Errors
+///
+/// [`MapModeError::Language`] when the terminology server gives no answer.
+async fn held_language(
+    composition: &str,
+    terminology: &Terminology,
+) -> Result<Option<String>, MapModeError> {
+    // NOTE: RM 1.1.0 COMPOSITION.language and territory: a composition that does not read
+    // records neither, so it legitimately names no language.
+    let Ok(record) = serde_json::from_str(composition) else {
+        return Ok(None);
+    };
+    let Ok(language) = DocumentLanguage::of_composition(&record) else {
+        return Ok(None);
+    };
+    match language.held(terminology, EHDSI_LANGUAGE).await {
+        Ok(held) => Ok(Some(held.language().tag().to_owned())),
+        Err(refused @ LanguageError::Terminology { .. }) => Err(MapModeError::Language(refused)),
+        Err(_unheld) => Ok(None),
+    }
 }

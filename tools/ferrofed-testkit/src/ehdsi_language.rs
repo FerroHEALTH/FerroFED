@@ -11,7 +11,7 @@
 //! specification governs the harness: our own design.
 
 use wiremock::matchers::{body_string_contains, method, path};
-use wiremock::{Mock, ResponseTemplate};
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use crate::mock::Server;
 
@@ -21,6 +21,12 @@ pub const BASE: &str = "/fhir";
 /// Starts the stub; its FHIR base is its URI followed by [`BASE`].
 pub async fn start() -> Server {
     let server = Server::start().await;
+    mount(&server).await;
+    server
+}
+
+/// Mounts the stub's answers on `server`, beside what it answers already.
+pub async fn mount(server: &MockServer) {
     let answer = |result: bool| {
         ResponseTemplate::new(200).set_body_raw(
             format!(
@@ -34,15 +40,14 @@ pub async fn start() -> Server {
         .and(body_string_contains("nl-NL"))
         .respond_with(answer(true))
         .with_priority(1)
-        .mount(&server)
+        .mount(server)
         .await;
     Mock::given(method("POST"))
         .and(path(format!("{BASE}/ValueSet/$validate-code")))
         .respond_with(answer(false))
         .with_priority(2)
-        .mount(&server)
+        .mount(server)
         .await;
-    server
 }
 
 /// The `[eehrxf.terminology.endpoint]` table that points a gateway at the
