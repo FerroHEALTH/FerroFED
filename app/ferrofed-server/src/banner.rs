@@ -25,12 +25,14 @@
 
 use std::net::SocketAddr;
 
+use ferrofed_identity::profile::Profile;
 use ferrofed_operator_api::manufacturer::MANUFACTURER;
 use ferrofed_registry::snapshot::RegistrySnapshot;
 
 use crate::config::base_path::BasePath;
-use crate::config::stored_queries::Backend;
-use crate::config::transport::{CleartextError, ProtectedSite};
+use crate::config::settings::Settings;
+use crate::config::stored_queries::{Backend, Store};
+use crate::config::transport::{self, CleartextError, ProtectedSite};
 use crate::federation::error::FederationError;
 use crate::support::Support;
 use ferrohealth_server::build_info::{self, BuildInfo};
@@ -154,6 +156,37 @@ impl Deployment {
             audit_spool_in_memory: false,
             support: Support::current(),
         }
+    }
+
+    /// Returns the deployment `settings` describe, with the registry
+    /// `document` read once for the gateway, as `serve` prints it.
+    ///
+    /// The credentials and patient identifiers that travel unencrypted are
+    /// those [`check`](crate::config::transport::check) finds, and the audit
+    /// messages wait in memory when the audit section or a compiled binding
+    /// keeps them there.
+    #[must_use]
+    pub fn serving(
+        settings: &Settings,
+        document: Option<Result<&RegistrySnapshot, &FederationError>>,
+    ) -> Self {
+        // NOTE: no specification governs this: our own design; a document that
+        // does not read has no endpoint URLs, and the build stops on its error.
+        let cleartext = transport::check(settings, document.and_then(Result::ok));
+        Self::of(
+            settings.server.base_path.clone(),
+            settings.server.listen,
+            document,
+            settings.stored_queries.as_ref().map(Store::backend),
+            settings.profile == Profile::Development,
+        )
+        .with_cleartext(cleartext.as_deref())
+        .with_audit_spool_in_memory(
+            crate::audit::spools_in_memory(&settings.audit)
+                || crate::binding::compiled()
+                    .iter()
+                    .any(|binding| binding.spools_in_memory(settings)),
+        )
     }
 
     /// Returns this deployment, saying whether the audit messages wait for

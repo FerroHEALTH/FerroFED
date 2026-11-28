@@ -7,7 +7,6 @@ use std::io::IsTerminal;
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use ferrofed_identity::profile::Profile;
 use tokio::net::TcpListener;
 
 use crate::auth::trust::Trust;
@@ -21,7 +20,7 @@ use crate::state::AppState;
 use crate::support::Support;
 use crate::usage_report::Usage;
 use crate::{
-    EXIT_CONFIG, admin, banner, binding, body, chain, config, metrics, reload, revision, state,
+    EXIT_CONFIG, admin, banner, binding, body, chain, metrics, reload, revision, state,
     trusted_router,
 };
 use ferrohealth_config::loader::Loaded;
@@ -68,28 +67,8 @@ pub(super) fn serve_job(
     let format = settings.telemetry.format;
     let (document, sources) = crate::federation::registry::read_source(&settings);
     if banner::prints(format, stdout_is_terminal) {
-        let described = document.as_ref().map(Result::as_ref);
-        // NOTE: no specification governs this: our own design; a document that
-        // does not read has no endpoint URLs, and the build stops on its error.
-        let cleartext = config::transport::check(&settings, described.and_then(Result::ok));
         banner::print(
-            &banner::Deployment::of(
-                settings.server.base_path.clone(),
-                settings.server.listen,
-                described,
-                settings
-                    .stored_queries
-                    .as_ref()
-                    .map(config::stored_queries::Store::backend),
-                settings.profile == Profile::Development,
-            )
-            .with_cleartext(cleartext.as_deref())
-            .with_audit_spool_in_memory(
-                crate::audit::spools_in_memory(&settings.audit)
-                    || binding::compiled()
-                        .iter()
-                        .any(|binding| binding.spools_in_memory(&settings)),
-            ),
+            &banner::Deployment::serving(&settings, document.as_ref().map(Result::as_ref)),
             console.colour(format),
             format.resolve(stdout_is_terminal),
         );
