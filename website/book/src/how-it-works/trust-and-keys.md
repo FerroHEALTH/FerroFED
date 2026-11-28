@@ -142,7 +142,8 @@ and a node that demands a nonce is answered once more with it.
 **Telling the node who asks** (N24, §12.4). Every request to a node carries `openEHR-federation-client`: a
 query, a routed read or write, a definition request, the ask-all probe and
 the read of an EHR by subject alike. It is a JWS signed with the
-gateway key, ES256 or ES384 as the key's curve says, typed
+gateway key, ES256 or ES384 as the key's curve says, or ML-DSA for a node
+configured for it (RFC 9964), typed
 `openehr-federation-client+jwt`, that lives 60 seconds,
 addressed (`aud`) to that node's endpoint id. It names the verified caller
 (`sub`) and its issuer (`iss_upstream`), how the gateway verified it

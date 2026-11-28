@@ -20,6 +20,10 @@ pub enum SigningKeyError {
     /// alone (RFC 7518 §3.4).
     #[error("the key is no P-256 or P-384 key, the curves ES256 and ES384 sign with")]
     NotEc,
+    /// The ML-DSA key is no ML-DSA-44, ML-DSA-65 or ML-DSA-87 key (RFC 9964
+    /// §5).
+    #[error("the key is no ML-DSA-44, ML-DSA-65 or ML-DSA-87 key")]
+    NotMlDsa,
     /// The previous key is the current key, or the next key is the current
     /// or the previous key.
     #[error("the key is already in the ring")]
@@ -118,6 +122,13 @@ pub enum CredentialsFault {
         found: &'static str,
         /// The algorithm the next key is meant to sign with.
         intended: &'static str,
+    },
+    /// A node's credentials section asks for an ML-DSA caller token, and
+    /// `[signing]` names no ML-DSA key to sign it with.
+    #[error("{section}.conveyance_ml_dsa needs signing.ml_dsa_key_file; set it or remove the key")]
+    ConveyanceMlDsa {
+        /// The node's credentials section.
+        section: String,
     },
     /// A `DPoP` key cannot be used: it is no P-256 or P-384 private key in
     /// PKCS#8 PEM (RFC 9449).

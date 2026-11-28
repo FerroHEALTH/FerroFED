@@ -344,10 +344,25 @@ key_file = "/run/secrets/ferrofed-signing-key.pem"
 # previous_key_file = "/run/secrets/ferrofed-signing-key-previous.pem"
 # next_key_file = "/run/secrets/ferrofed-signing-key-next.pem"   # published ahead, never signs
 # next_key_algorithm = "ES256"   # unset, the current key's algorithm
+# ml_dsa_key_file = "/run/secrets/ferrofed-ml-dsa.pem"   # ML-DSA-44, -65 or -87, PKCS#8; published beside them
 jwks_uri = "https://gateway.example.org/.well-known/jwks.json"
 node_jwks_cache = "1h"      # how long the nodes cache the JWK Set
 rotation_overlap = "65min"     # at least 300 + node_jwks_cache
+
+# With ml_dsa_key_file set, a node that verifies ML-DSA (RFC 9964) receives
+# its caller token signed with it; the section may name nothing else.
+# [credentials."cdr-f"]
+# conveyance_ml_dsa = true
 ```
+
+An `oauth` grant's `private_key_file` and `dpop_key_file` take an ML-DSA
+key as well as an EC one: with `assertion_alg = "ML-DSA-65"` the client
+assertion is signed ML-DSA-65 and its key published in the JWK Set, and the
+`DPoP` proofs are signed with the parameter set of the key. Inbound, an
+`[auth.issuer.<name>]` table whose `algorithms` list `"ML-DSA-65"` has that
+issuer's ML-DSA tokens admitted, and `[auth.dpop] algorithms` does the same
+for proofs. The rows of each use are on the
+[post-quantum inventory](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/post-quantum.md).
 
 ### Secrets, inline or from a file
 

@@ -18,6 +18,10 @@ use crate::federation::describe::DescribeError;
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum FederationError {
+    /// The JWK Set of an `oauth` grant's assertion keys does not read as
+    /// public keys (RFC 7517 §5).
+    #[error("an oauth grant's assertion keys could not be read as a JWK Set")]
+    Unpublished(#[source] serde_json::Error),
     /// The registry document could not be read or refused to load.
     #[error("the registry document {} could not be loaded", path.display())]
     Registry {
