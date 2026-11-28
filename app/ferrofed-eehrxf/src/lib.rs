@@ -44,6 +44,8 @@
 //!   prescriptions and dispensations on that face, each on its own endpoint;
 //! - [`dispensations`]: a dispensation received on that face, read for the
 //!   prescription it names and the member that owns it;
+//! - [`back_translation`]: that dispensation's codes translated back into
+//!   the code systems its owner records;
 //! - [`prescriptions`]: the search of a patient's prescriptions on that
 //!   face, each member's page read and every prescription passed through
 //!   with the `Provenance` that names its member;
@@ -69,6 +71,7 @@
 
 #![doc(test(attr(deny(warnings))))]
 
+pub mod back_translation;
 pub mod discharge;
 pub mod dispensations;
 pub mod face;

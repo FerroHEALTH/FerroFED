@@ -467,3 +467,39 @@ fn a_map_mode_member_receiving_dispensations_with_no_language_is_refused() -> Te
     );
     Ok(())
 }
+
+#[test]
+fn code_systems_named_on_a_prescriptions_entry_are_refused() -> TestResult {
+    let resolved = resolved(&mapped_table(
+        "{ member = \"node-a\", systems = [\"http://snomed.info/sct\"] }",
+    ))?;
+    assert!(
+        matches!(
+            resolved,
+            Err(ferrofed_server::config::error::Error::Fhir(FhirError::SystemsCategory { ref member, .. }))
+                if member == "node-a"
+        ),
+        "{resolved:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn code_systems_without_the_myhealth_eu_transcoding_are_refused() -> TestResult {
+    let terminology =
+        "\n[eehrxf.terminology.endpoint]\nurl = \"http://terminology.example.org/fhir\"\n";
+    let resolved = resolved(&format!(
+        "{}\n[[fhir.serve]]\ncategory = \"Electronic-Dispensations\"\nmembers = [{{ member = \"node-a\", systems = [\"http://snomed.info/sct\"] }}]\n{terminology}",
+        mapped_table("\"node-a\"")
+    ))?;
+    assert!(
+        matches!(
+            resolved,
+            Err(ferrofed_server::config::error::Error::Terminology(
+                ferrofed_server::config::eehrxf::TerminologyFault::Untranscoded
+            ))
+        ),
+        "{resolved:?}"
+    );
+    Ok(())
+}

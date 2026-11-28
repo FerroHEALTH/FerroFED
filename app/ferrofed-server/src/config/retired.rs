@@ -24,8 +24,9 @@ use crate::config::Config;
 ///
 /// `removed::stale` holds every declaration to it
 /// (FerroHEALTH/FerroSYS#339). The workspace version moves only at the cut,
-/// so the first pull request after each cut moves this on.
-pub const PREPARING: &str = "0.0.22";
+/// so the first pull request after each cut moves this on, and
+/// `preparing_names_the_coming_release` fails until it does.
+pub const PREPARING: &str = "0.0.23";
 
 /// Every declaration of this module, for the one-release check.
 #[cfg(test)]
@@ -42,10 +43,42 @@ pub fn check(_config: &Config) -> Result<(), RemovedKeys> {
 }
 
 #[cfg(test)]
+mod book;
+
+#[cfg(test)]
 mod tests {
     use ferrohealth_config::removed::stale;
 
     use super::{ALL, PREPARING};
+
+    /// Returns the three numbers of the release `version`.
+    fn release(version: &str) -> [u64; 3] {
+        let numbers: Vec<u64> = version.split('.').map(|n| n.parse().unwrap()).collect();
+        numbers.try_into().unwrap()
+    }
+
+    /// Whether a changelog fragment is pending under `changelog.d/`.
+    fn fragment_pending() -> bool {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../changelog.d");
+        std::fs::read_dir(dir).unwrap().any(|entry| {
+            let name = entry.unwrap().file_name();
+            let name = name.to_string_lossy();
+            name.ends_with(".md") && name != "README.md"
+        })
+    }
+
+    // NOTE: no specification governs this: our own design; the release window
+    // holds no fragment, so one pending at the workspace version means the cut is past.
+    #[test]
+    fn preparing_names_the_coming_release() {
+        let (preparing, workspace) = (release(PREPARING), release(env!("CARGO_PKG_VERSION")));
+        assert!(
+            preparing > workspace || (preparing == workspace && !fragment_pending()),
+            "PREPARING is {PREPARING} with the workspace at {} and fragments pending; \
+             move it to the release being prepared",
+            env!("CARGO_PKG_VERSION")
+        );
+    }
 
     #[test]
     fn every_refusal_lives_for_the_one_release_that_retires_it() {

@@ -115,6 +115,7 @@ pub mod console_sign_in;
 pub mod containers;
 pub mod crossref;
 pub mod discharge;
+pub mod dispensation_codes;
 pub mod dpop;
 pub mod ehdsi_exchange;
 pub mod ehdsi_language;
