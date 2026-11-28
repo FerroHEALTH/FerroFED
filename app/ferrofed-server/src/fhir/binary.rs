@@ -7,9 +7,10 @@
 //! The list names each member's document by `Binary/{token}`, relative to
 //! the FHIR base, as the HL7 Europe EU Health Data API
 //! `EehrxfMhdDocumentReference` requires of `attachment.url`. The token is a
-//! compact JWS the gateway signs with its own `[signing]` key, of the JOSE
-//! type [`TYPE`] (RFC 8725 §3.11), so it is taken for no other token the
-//! gateway reads. Its `aud` and `iss` are the gateway's FHIR base, its
+//! compact JWS the gateway signs with ML-DSA-65 (RFC 9964) under the key
+//! [`IdKeys::document_url`](crate::ids::IdKeys::document_url) derives from
+//! `fhir.id_key`, of the JOSE type [`TYPE`] (RFC 8725 §3.11), so it is taken
+//! for no other token the gateway reads. Its `aud` and `iss` are the gateway's FHIR base, its
 //! lifetime `fhir.document_url_lifetime`, and it carries the member's
 //! endpoints, its own `ehr_id`, the category and profile the document was
 //! asked in, and the verified caller it was listed for; never a patient
@@ -36,17 +37,14 @@ use ehds_logging::classify::{Basis, Evidence};
 use ehds_logging::record::{Action, DataSubject};
 use ferrofed_eehrxf::face::EPS_COMPOSITION;
 use ferrofed_eehrxf::report::Written;
-use ferrofed_engine::conveyance::signer::Signer;
 use ferrofed_engine::fanout::Completion;
 use ferrofed_engine::hygiene::Withheld;
 use ferrofed_engine::single_node::forward::Forwarded;
 use ferrofed_engine::single_node::native as engine;
 use ferrofed_registry::id::{EhrId, EndpointId};
-use ferrohealth_smart::client::assertion::AssertionError;
 use ferrohealth_smart::jws::JwsError;
 use ferrohealth_smart::jws::claims::{ClaimError, Validation};
-use ferrohealth_smart::jws::compact;
-use ferrohealth_smart::jws::jwk::{Jwk, JwkError};
+use ferrohealth_smart::jws::compact::{self, Header};
 use http::{HeaderValue, StatusCode, header};
 use serde::{Deserialize, Serialize};
 
@@ -127,12 +125,10 @@ enum Named {
 /// Why a token is not taken; every reason answers alike.
 #[derive(Debug, thiserror::Error)]
 enum Untaken {
-    /// The token is no JWS of [`TYPE`] signed by a key of the gateway's.
+    /// The token is no JWS of [`TYPE`] signed by the gateway's document URL
+    /// key.
     #[error("the token is no document URL the gateway signed")]
     Unverified(#[source] Option<JwsError>),
-    /// The key the token names has no public JWK to verify with.
-    #[error("the signing key has no public JWK")]
-    Unkeyed(#[source] JwkError),
     /// The token's registered claims do not hold.
     #[error("the token's claims do not hold")]
     Unclaimed(#[source] ClaimError),
@@ -147,20 +143,19 @@ enum Untaken {
     Unheld,
 }
 
-/// Returns the token naming `chosen`'s document for `caller`, signed by
-/// `signer` for the face `fhir`.
+/// Returns the token naming `chosen`'s document for `caller`, signed for
+/// the face `fhir`.
 ///
 /// # Errors
 ///
-/// The [`AssertionError`] of a key that cannot sign.
+/// The [`JwsError`] of a token that cannot be signed.
 pub(super) fn mint(
-    signer: &Signer,
     fhir: &FhirSettings,
     caller: &Caller,
     chosen: &Chosen,
-) -> Result<String, AssertionError> {
+) -> Result<String, JwsError> {
     signed(
-        (signer, fhir, caller),
+        (fhir, caller),
         (&chosen.native, chosen),
         (CATEGORY, EPS_COMPOSITION),
         (None, None),
@@ -169,20 +164,18 @@ pub(super) fn mint(
 
 /// Returns the token naming, for `caller`, the report of the category
 /// `written` the gateway writes from the composition of the version
-/// `composition` at the member `chosen`, signed by `signer` for the face
-/// `fhir`.
+/// `composition` at the member `chosen`, signed for the face `fhir`.
 ///
 /// # Errors
 ///
-/// The [`AssertionError`] of a key that cannot sign.
+/// The [`JwsError`] of a token that cannot be signed.
 pub(super) fn mint_written(
-    signer: &Signer,
     fhir: &FhirSettings,
     caller: &Caller,
     (chosen, written, composition): (&Chosen, Written, &str),
-) -> Result<String, AssertionError> {
+) -> Result<String, JwsError> {
     signed(
-        (signer, fhir, caller),
+        (fhir, caller),
         (&chosen.via, chosen),
         (written.code(), written.bundle()),
         (Some(composition), None),
@@ -191,35 +184,34 @@ pub(super) fn mint_written(
 
 /// Returns the token naming, for `caller`, the document of the kind `kind`
 /// the member `chosen` serves itself as its `Binary` of the logical id
-/// `binary`, signed by `signer` for the face `fhir`.
+/// `binary`, signed for the face `fhir`.
 ///
 /// # Errors
 ///
-/// The [`AssertionError`] of a key that cannot sign.
+/// The [`JwsError`] of a token that cannot be signed.
 pub(super) fn mint_own(
-    signer: &Signer,
     fhir: &FhirSettings,
     caller: &Caller,
     (chosen, kind, binary): (&Chosen, Kind, &str),
-) -> Result<String, AssertionError> {
+) -> Result<String, JwsError> {
     signed(
-        (signer, fhir, caller),
+        (fhir, caller),
         (&chosen.native, chosen),
         (kind.code(), kind.profile()),
         (None, Some(binary)),
     )
 }
 
-/// Returns the token, signed by `signer` for the face `fhir` and `caller`,
+/// Returns the token, signed for the face `fhir` and `caller`,
 /// naming the document at `endpoint` of the member `chosen`, of `category`
 /// in `profile`, written from the composition `composition` when it is one
 /// the gateway writes, or the member's `Binary` of the id `binary`.
 fn signed(
-    (signer, fhir, caller): (&Signer, &FhirSettings, &Caller),
+    (fhir, caller): (&FhirSettings, &Caller),
     (endpoint, chosen): (&EndpointId, &Chosen),
     (category, profile): (&str, &str),
     (composition, binary): (Option<&str>, Option<&str>),
-) -> Result<String, AssertionError> {
+) -> Result<String, JwsError> {
     let iat = jiff::Timestamp::now().as_second();
     let lifetime = i64::try_from(fhir.document_url_lifetime.as_secs()).unwrap_or(i64::MAX);
     let claims = Claims {
@@ -238,30 +230,23 @@ fn signed(
         composition: composition.map(str::to_owned),
         binary: binary.map(str::to_owned),
     };
-    signer.keys().current().sign(TYPE, &claims)
+    let key = fhir.ids.document_url();
+    let mut header = Header::new(key.algorithm());
+    header.typ = Some(TYPE.to_owned());
+    compact::encode(&header, &claims, key)
 }
 
 /// The claims of `token` when the gateway signed it for the face `fhir`
-/// with a key `signer` holds, of [`TYPE`], unexpired.
-fn verified(signer: &Signer, fhir: &FhirSettings, token: &str) -> Result<Claims, Untaken> {
+/// with its document URL key, of [`TYPE`], unexpired.
+fn verified(fhir: &FhirSettings, token: &str) -> Result<Claims, Untaken> {
     let read = compact::decode(token).map_err(|e| Untaken::Unverified(Some(e)))?;
+    let key = fhir.ids.document_url();
     let header = read.header();
-    if header.typ.as_deref() != Some(TYPE) {
+    if header.typ.as_deref() != Some(TYPE) || header.alg != key.algorithm() {
         return Err(Untaken::Unverified(None));
     }
-    let keys = signer.keys();
-    let key = [
-        Some(keys.current()),
-        keys.previous_at(Instant::now()),
-        keys.next(),
-    ]
-    .into_iter()
-    .flatten()
-    .find(|key| header.kid.as_deref() == Some(key.kid()) && header.alg == key.algorithm())
-    .ok_or(Untaken::Unverified(None))?;
-    let public = Jwk::try_from(&key.public_jwk()).map_err(Untaken::Unkeyed)?;
     let claims = read
-        .verify_claims(&public)
+        .verify_claims(key.public_jwk())
         .map_err(|e| Untaken::Unverified(Some(e)))?;
     Validation::default()
         .with_issuer(fhir.absolute.as_str())
@@ -417,10 +402,10 @@ pub(super) async fn read(asked: Asked, Path(token): Path<String>) -> Response {
 fn taken(admitted: &admission::Admitted<'_>, token: &str) -> Result<(Chosen, Named), Response> {
     let (federation, fhir) = (&admitted.federation, admitted.fhir);
     let (request_id, logged) = (admitted.request_id, &admitted.logged);
-    let Some(signer) = federation.signer() else {
+    if federation.signer().is_none() {
         return Err(conveyed::Unconveyed::Unsigned.respond(request_id, logged));
-    };
-    let claims = verified(signer, fhir, token).map_err(|refused| untaken(&refused, logged))?;
+    }
+    let claims = verified(fhir, token).map_err(|refused| untaken(&refused, logged))?;
     if claims.sub != admitted.caller.identity().subject()
         || claims.caller_iss != admitted.caller.identity().issuer()
     {

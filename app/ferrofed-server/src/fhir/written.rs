@@ -118,10 +118,8 @@ pub(super) fn listed(
             );
             continue;
         };
-        let signer = federation.signer()?;
         let token =
-            super::binary::mint_written(signer, fhir, caller, (&chosen, written, &held.uid))
-                .ok()?;
+            super::binary::mint_written(fhir, caller, (&chosen, written, &held.uid)).ok()?;
         let custodian = organisation(snapshot, &chosen.node);
         let unique = format!("urn:uuid:{object}");
         let id = fhir.ids.document((endpoint.as_str(), &unique));

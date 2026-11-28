@@ -73,7 +73,6 @@ pub(super) fn listed(
         match &own.held {
             prescriptions::Held::Found(pages) => {
                 let base = snapshot.native_endpoint(&own.chosen.native)?.url();
-                let signer = federation.signer()?;
                 for document in pages.iter().flat_map(|page| &page.prescriptions) {
                     let resource = &document.kept.resource;
                     // NOTE: FHIR R4 search: every match carries its logical id; one with none cannot be
@@ -103,13 +102,9 @@ pub(super) fn listed(
                     // changes, so the document is read through the gateway's access check and record.
                     let passed = list::readdressed(resource, |url| {
                         let binary = binary(base, url)?;
-                        let token = super::binary::mint_own(
-                            signer,
-                            fhir,
-                            caller,
-                            (&own.chosen, own.kind, &binary),
-                        )
-                        .ok()?;
+                        let token =
+                            super::binary::mint_own(fhir, caller, (&own.chosen, own.kind, &binary))
+                                .ok()?;
                         Some(format!("Binary/{token}"))
                     })?;
                     matches.push((

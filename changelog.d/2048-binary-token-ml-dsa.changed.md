@@ -1,0 +1,1 @@
+- The document list's `Binary/{token}` URLs are signed with ML-DSA-65 (RFC 9964) under a key derived from `fhir.id_key`, in place of the `[signing]` key, so no classical signature protects them and every replica sharing the key verifies them; the post-quantum inventory counts the use as safe.

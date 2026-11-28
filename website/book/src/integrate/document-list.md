@@ -146,8 +146,9 @@ has any more is a `404`, saying so when a member did not answer. Without
 
 `GET {fhir-base}/Binary/{token}` answers a member's document as the member
 sends it, with the member's media type. The token is a compact JWS the
-gateway signs with its `[signing]` key, of its own JOSE type, so the gateway
-takes no other token it signs for one. It is valid for
+gateway signs with ML-DSA-65 (RFC 9964) under a key it derives from
+`fhir.id_key`, so every replica that shares the key verifies it, of its own
+JOSE type, so the gateway takes no other token it signs for one. It is valid for
 `fhir.document_url_lifetime`, 300 seconds unless set, names the
 gateway's FHIR base as its audience, and carries the member's endpoints,
 the member's own `ehr_id`, the category and profile, and the caller it was

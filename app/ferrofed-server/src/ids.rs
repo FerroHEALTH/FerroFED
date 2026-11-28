@@ -13,7 +13,10 @@
 //! identifier can be read back from an id. To resolve an id the face was given, the
 //! identifier is kept in the store sealed under a second key derived from
 //! the same secret (AES-256-GCM, a random nonce, the id as associated data),
-//! so a row moved to another id does not open. Each key is derived with
+//! so a row moved to another id does not open. The document URLs the face
+//! signs are signed with an ML-DSA-65 key (RFC 9964) whose seed comes from
+//! the same secret, so every replica that shares the key verifies them and
+//! no classical signature protects them. Each key is derived with
 //! HKDF-SHA-256 (RFC 5869) under its own label. No specification governs
 //! the derivation: our own design.
 
@@ -22,6 +25,8 @@ use aws_lc_rs::hkdf::{HKDF_SHA256, KeyType, Prk, Salt};
 use aws_lc_rs::hmac;
 use aws_lc_rs::rand::{SecureRandom, SystemRandom};
 use data_encoding::BASE32_NOPAD;
+use ferrohealth_smart::jws::algorithm::Algorithm;
+use ferrohealth_smart::jws::key::{PrivateKey, SigningKey};
 
 /// The length of `fhir.id_key`, in bytes.
 pub const KEY_LEN: usize = 32;
@@ -34,6 +39,15 @@ const DOCUMENT_ID: &[u8] = b"ferrofed fhir document-id";
 
 /// The HKDF label of the key an identifier is sealed under.
 const SEAL: &[u8] = b"ferrofed fhir seal";
+
+/// The HKDF label of the seed of the key a document URL is signed with.
+const DOCUMENT_URL: &[u8] = b"ferrofed fhir document-url ML-DSA-65";
+
+/// The length of an ML-DSA seed, in bytes (RFC 9964 §4).
+const SEED_LEN: usize = 32;
+
+/// The algorithm a document URL is signed with.
+pub const DOCUMENT_URL_ALGORITHM: Algorithm = Algorithm::MlDsa65;
 
 /// Why an id key, a seal or an opened identifier is refused, naming no
 /// value.
@@ -49,6 +63,9 @@ pub enum IdError {
     /// An identifier could not be written for sealing.
     #[error("an identifier could not be written for sealing")]
     Encode,
+    /// The ML-DSA key of the document URLs could not be derived.
+    #[error("the key of the document URLs could not be derived")]
+    DocumentUrlKey,
     /// A sealed identifier did not open under the key and its id.
     #[error("a sealed identifier does not open under the key and its id")]
     Open,
@@ -59,6 +76,7 @@ pub struct IdKeys {
     patient: hmac::Key,
     document: hmac::Key,
     seal: LessSafeKey,
+    document_url: SigningKey,
     random: SystemRandom,
 }
 
@@ -83,7 +101,9 @@ impl IdKeys {
     ///
     /// # Errors
     ///
-    /// [`IdError::Key`] when it is not 32 bytes of base64url.
+    /// [`IdError::Key`] when it is not 32 bytes of base64url, and
+    /// [`IdError::DocumentUrlKey`] when the document URL key cannot be
+    /// derived.
     pub fn from_base64url(encoded: &str) -> Result<Self, IdError> {
         let trimmed = encoded.trim().trim_end_matches('=');
         let secret = data_encoding::BASE64URL_NOPAD
@@ -97,12 +117,24 @@ impl IdKeys {
         let document = hmac::Key::new(hmac::HMAC_SHA256, &expand(&prk, DOCUMENT_ID, KEY_LEN)?);
         let seal = UnboundKey::new(&AES_256_GCM, &expand(&prk, SEAL, AES_256_GCM.key_len())?)
             .map_err(|_unspecified| IdError::Key)?;
+        let seed = expand(&prk, DOCUMENT_URL, SEED_LEN)?;
+        let document_url = PrivateKey::from_ml_dsa_seed(DOCUMENT_URL_ALGORITHM, &seed)
+            .and_then(|private| SigningKey::new(private, DOCUMENT_URL_ALGORITHM))
+            .map_err(|_refused| IdError::DocumentUrlKey)?;
         Ok(Self {
             patient,
             document,
             seal: LessSafeKey::new(seal),
+            document_url,
             random: SystemRandom::new(),
         })
+    }
+
+    /// The ML-DSA-65 key the face signs its document URLs with and verifies
+    /// them by.
+    #[must_use]
+    pub const fn document_url(&self) -> &SigningKey {
+        &self.document_url
     }
 
     /// The logical id of the patient `system`|`value`.
@@ -274,6 +306,25 @@ mod tests {
         );
         let other = keys.patient(("urn:oid:2.999.1", "synthetic-2"));
         assert_eq!(keys.open(&other, &row), Err(IdError::Open));
+    }
+
+    #[test]
+    fn the_document_url_key_is_ml_dsa_65_derived_from_the_secret() {
+        use ferrohealth_smart::jws::algorithm::Algorithm;
+
+        let keys = IdKeys::from_base64url(KEY).unwrap();
+        let again = IdKeys::from_base64url(KEY).unwrap();
+        let other = IdKeys::from_base64url("AQECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8").unwrap();
+        assert_eq!(keys.document_url().algorithm(), Algorithm::MlDsa65);
+        assert_eq!(
+            keys.document_url().public_jwk(),
+            again.document_url().public_jwk(),
+            "every replica with the secret verifies the URLs"
+        );
+        assert_ne!(
+            keys.document_url().public_jwk(),
+            other.document_url().public_jwk()
+        );
     }
 
     #[test]

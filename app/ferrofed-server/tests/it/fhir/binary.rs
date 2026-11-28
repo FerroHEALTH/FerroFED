@@ -117,6 +117,23 @@ async fn a_read_asks_the_member_by_its_ehr_id_alone() -> TestResult {
     Ok(())
 }
 
+// NOTE: RFC 9964 §5: the URL is signed with ML-DSA-65, which no classical
+// key can forge.
+#[tokio::test]
+async fn a_listed_url_is_signed_with_ml_dsa_65() -> TestResult {
+    let members = Members::start(fhir_document(DOCUMENT_A), fhir_document(DOCUMENT_B)).await?;
+    let dir = tempfile::tempdir()?;
+    let app = members.gateway(dir.path(), ("", ""))?;
+    let url = listed_b(app).await?;
+    let token = url.strip_prefix("Binary/").ok_or("a Binary URL")?;
+    let header = token.split('.').next().ok_or("a header")?;
+    let header: Value =
+        serde_json::from_slice(&base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(header)?)?;
+    assert_eq!(header["alg"], "ML-DSA-65", "{header}");
+    assert_eq!(header["typ"], "ferrofed-document-url+jwt", "{header}");
+    Ok(())
+}
+
 #[tokio::test]
 async fn an_expired_url_is_refused() -> TestResult {
     let members = Members::start(fhir_document(DOCUMENT_A), fhir_document(DOCUMENT_B)).await?;
