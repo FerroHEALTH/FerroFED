@@ -261,3 +261,49 @@ async fn a_report_with_no_attester_is_refused() -> TestResult {
     ));
     Ok(())
 }
+
+/// The sequence number element of the synthetic dose, as the fixture writes
+/// it.
+const SEQUENCE: &str = r#"{ "_type": "ELEMENT", "name": { "_type": "DV_TEXT", "value": "Sequence number" }, "archetype_node_id": "at0025", "value": { "_type": "DV_COUNT", "magnitude": 1 } }"#;
+
+/// The reason element of the synthetic dose, which the `euvac` mapping
+/// carries into no FHIR element.
+const REASON: &str = r#"{ "_type": "ELEMENT", "name": { "_type": "DV_TEXT", "value": "Reason" }, "archetype_node_id": "at0021", "value": { "_type": "DV_TEXT", "value": "Synthetic reason the record gives" } }"#;
+
+// NOTE: hazard I-23 of the clinical safety risk file: an element of the immunisation list the euvac
+// mapping does not carry is named in the history by its openEHR path, never by its value.
+#[tokio::test]
+async fn an_element_the_mapping_leaves_out_is_named_in_the_history_by_path() -> TestResult {
+    let composition = fixture::composition(UID).replace(SEQUENCE, &format!("{SEQUENCE}, {REASON}"));
+    assert!(composition.contains(REASON), "the dose records its reason");
+    let (_, attesters) = version()?;
+    let (_server, terminology) = conforming::language_terminology().await?;
+    let bundle = conforming::attested(
+        &served()?,
+        (
+            &composition,
+            "urn:uuid:4f5c1d1e-0000-4000-8000-000000001982",
+        ),
+        (&header(), &attesters),
+        &terminology,
+    )
+    .await?;
+    let bundle = serde_json::to_value(&bundle)?;
+    let narrative = bundle["entry"][0]["resource"]["section"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|section| section.pointer("/text/div").and_then(Value::as_str))
+        .collect::<String>();
+    assert!(
+        narrative.contains("description[at0017]/items[at0021]"),
+        "the dose's reason is named by its openEHR path: {narrative}"
+    );
+    assert!(
+        !bundle
+            .to_string()
+            .contains("Synthetic reason the record gives"),
+        "never by its value"
+    );
+    Ok(())
+}
