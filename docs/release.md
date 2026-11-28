@@ -100,6 +100,16 @@ flowchart LR
   The joined record, `ferrofed-vX.Y.Z-vulnerability-record.json`, and the raw
   reports, `ferrofed-vX.Y.Z-trivy-reports.tar.gz`, are attached to the draft
   (`security/vex/README.md`).
+- **test-reports** finds the CI run the push of the tagged commit to main
+  started, waits for it, and attaches its reports as
+  `ferrofed-vX.Y.Z-test-reports.tar.gz` with its SHA-256 as
+  `ferrofed-vX.Y.Z-test-reports.tar.gz.sha256sum`: the JUnit reports of the
+  offline and the gated test runs, the node profile findings, the
+  conformance report and the HL7 FHIR Validator's results
+  (`scripts/release/test-reports.sh`; Regulation (EU) 2024/2847 Annex VII
+  point 6, Regulation (EU) 2025/327 Annex III item 4). A run that did not
+  succeed, or one missing an artifact, refuses the release. Tag the commit
+  the release pull request merged as: its push run is the one read.
 - **scan-and-tag** calls `scan-and-tag.yml`, which scans each image digest
   for HIGH and CRITICAL findings that have a fix (`trivy.yaml`) and only then
   applies the tags `release-image.yml` and `release-console.yml` computed, so
@@ -116,7 +126,7 @@ flowchart LR
   configuration and its checksum, the two seed data files, the dashboard
   and alert rules, the information sheet and instructions for use of
   the tag, the vulnerability record and its reports, the Kubernetes
-  package and its checksum, and the EU
+  package and its checksum, the test reports and their checksum, and the EU
   declaration of conformity when `plan` found it issued, and publishes only
   then, and only once both images are scanned and tagged. A draft missing any of them fails the check and stays a draft, so a
   half-assembled release is never visible. A release `plan` did not find the

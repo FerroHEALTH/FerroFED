@@ -38,8 +38,9 @@ item	element	target	section	status	issue
 5	a list of the harmonised standards applied in full or in part	website/book/src/evaluate/cra-risk-assessment.md	How the risks were analysed	documented	-
 5	a list of the harmonised standards applied in full or in part	website/book/src/evaluate/cra-risk-assessment.md	Annex I, Part I, point (2), point by point	documented	-
 5	a list of the harmonised standards applied in full or in part	website/book/src/evaluate/information-sheet.md	(e) Standards, formats and specifications	documented	-
-6	reports of the tests carried out to verify the conformity of the product with digital elements and of the vulnerability handling processes	website/book/src/evaluate/conformance-statement.md	-	partial	#2060
-6	reports of the tests carried out to verify the conformity of the product with digital elements and of the vulnerability handling processes	website/book/src/evaluate/conformance.md	-	partial	#2060
-6	reports of the tests carried out to verify the conformity of the product with digital elements and of the vulnerability handling processes	website/book/src/evaluate/threat-model.md	-	partial	#2060
+6	reports of the tests carried out to verify the conformity of the product with digital elements and of the vulnerability handling processes	website/book/src/evaluate/conformance-statement.md	-	documented	-
+6	reports of the tests carried out to verify the conformity of the product with digital elements and of the vulnerability handling processes	website/book/src/evaluate/conformance.md	-	documented	-
+6	reports of the tests carried out to verify the conformity of the product with digital elements and of the vulnerability handling processes	website/book/src/evaluate/threat-model.md	-	documented	-
+6	reports of the tests carried out to verify the conformity of the product with digital elements and of the vulnerability handling processes	docs/release.md	What the lane does	documented	-
 7	a copy of the EU declaration of conformity	website/book/src/evaluate/technical-documentation.md	The EU declaration of conformity	partial	#940
 8	where applicable, the software bill of materials	website/book/src/operate/container.md	The release binaries	documented	-
