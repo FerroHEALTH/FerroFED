@@ -147,4 +147,4 @@ count because they bind no one the badge counts.
 | EHDS Annex II | 11/18 met | 7 partial | 1 not applicable | [the Annex II checklist](annex-ii.md) |
 | EHDS Chapter III, Annex IV | 29/53 met | 7 open, 6 await an implementing act, 11 manufacturer's tasks | 4 not applicable | [the conformity record](conformity-record.md) |
 | EHDS Annex III | 12/16 documented | 2 planned, 2 partial | - | [the Annex III index](technical-documentation.md#the-annex-iii-index) |
-| CRA Annex VII | 10/12 documented | 2 partial | 1 not applicable | [the Cyber Resilience Act's part](technical-documentation.md#the-cyber-resilience-acts-part) |
+| CRA Annex VII | 11/12 documented | 1 partial | 1 not applicable | [the Cyber Resilience Act's part](technical-documentation.md#the-cyber-resilience-acts-part) |

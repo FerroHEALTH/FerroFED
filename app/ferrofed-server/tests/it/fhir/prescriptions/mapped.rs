@@ -12,13 +12,14 @@
 
 use std::error::Error;
 use std::path::Path;
+use std::sync::LazyLock;
 
 use axum::Router;
 use axum::body::Body;
 use eehrxf::crosswalk::prescription::MPD_MEDICATION_REQUEST;
 use ferrofed_eehrxf::prescriptions::mapped::Template;
-use ferrofed_testkit::medication;
 use ferrofed_testkit::mock::Server;
+use ferrofed_testkit::{ehdsi_language, medication};
 use http::{Request, StatusCode};
 use serde_json::Value;
 use wiremock::matchers::{body_string_contains, method, path};
@@ -87,9 +88,35 @@ fn served() -> String {
     served_with("", "")
 }
 
+/// The stub terminology server every map-mode gateway asks whether
+/// eHDSILanguage holds a composition's language, started once on a runtime
+/// of its own so it outlives each test's runtime.
+#[expect(
+    clippy::expect_used,
+    reason = "a stub that cannot start fails every test that asks it, as a test assertion does"
+)]
+static LANGUAGE: LazyLock<Server> = LazyLock::new(|| {
+    std::thread::spawn(|| {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("a runtime for the stub should build")
+            .block_on(ehdsi_language::start())
+    })
+    .join()
+    .expect("the stub should start")
+});
+
 /// The `[[fhir.serve]]` table of [`served`], with the keys `keys` added to
-/// node A's table and the tables `tables` after it.
+/// node A's table and the tables `tables` after it, and the
+/// `[eehrxf.terminology]` table of [`LANGUAGE`].
 pub(super) fn served_with(keys: &str, tables: &str) -> String {
+    served_in(keys, tables, &ehdsi_language::table(&LANGUAGE))
+}
+
+/// The `[[fhir.serve]]` table of [`served_with`], asking the terminology
+/// server the `[eehrxf.terminology]` table `terminology` names.
+pub(super) fn served_in(keys: &str, tables: &str, terminology: &str) -> String {
     let quoted = |path: &Path| toml::Value::String(path.display().to_string()).to_string();
     let archetypes: Vec<String> = medication::archetype_paths()
         .iter()
@@ -97,9 +124,10 @@ pub(super) fn served_with(keys: &str, tables: &str) -> String {
         .collect();
     format!(
         "\n[[fhir.serve]]\ncategory = \"Electronic-Prescriptions\"\nmembers = [\n  \
-         {{ member = \"node-a\", mode = \"map\", template = {}, archetypes = [{}]{keys} }},\n  \"node-b\",\n]\n{tables}",
+         {{ member = \"node-a\", mode = \"map\", template = {}, archetypes = [{}]{keys} }},\n  \"node-b\",\n]\n{tables}{}",
         quoted(&medication::template_path()),
-        archetypes.join(", ")
+        archetypes.join(", "),
+        terminology
     )
 }
 
@@ -166,6 +194,20 @@ async fn a_map_mode_members_own_orders_are_mapped_beside_a_native_members() -> T
         prescription.pointer("/subject/identifier/value"),
         Some(&Value::from(PATIENT)),
         "FHIR R4 Reference.identifier: the patient the search names"
+    );
+    assert!(
+        prescription
+            .pointer("/text/div")
+            .and_then(Value::as_str)
+            .is_some_and(|div| div.contains("<p>")),
+        "MyHealth@EU Requirements Catalogue 10.0.0 §1.14.2: the order's narrative: {prescription}"
+    );
+    assert!(
+        prescription
+            .pointer("/language")
+            .and_then(Value::as_str)
+            .is_some(),
+        "the language the order is written in: {prescription}"
     );
     assert!(
         !text.contains("synthetic-rx-foreign"),

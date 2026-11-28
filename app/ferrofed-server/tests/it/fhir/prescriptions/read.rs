@@ -27,7 +27,8 @@ use serde_json::Value;
 use wiremock::ResponseTemplate;
 
 use super::{
-    AT_A, Members, RX_A, RX_B, SERVED, as_face, face_id, own_endpoint, page, search, searchset,
+    AT_A, Members, RX_A, RX_B, RX_BARE, SERVED, as_face, face_id, own_endpoint, page, search,
+    searchset,
 };
 use crate::auth::{bearing, claims, minted};
 use crate::ehr_id_collision::{captured, incidents};
@@ -98,6 +99,28 @@ async fn a_prescription_the_search_lists_is_read_at_its_member_as_sent() -> Test
         "the read reaches the member its id names alone"
     );
     assert!(members.no_query().await?, "no query reaches a Query API");
+    Ok(())
+}
+
+// NOTE: MyHealth@EU Requirements Catalogue 10.0.0 §1.14.1: the read serves what the search serves.
+#[tokio::test]
+async fn a_prescription_the_myhealth_eu_profile_refuses_is_not_read() -> TestResult {
+    let members = Members::start(
+        page(searchset("https://cdr-a.example.org", &[RX_BARE], None)),
+        page(searchset("https://cdr-b.example.org", &[RX_B], None)),
+    )
+    .await?;
+    let dir = tempfile::tempdir()?;
+    let id = face_id(AT_A.0, AT_A.1, "rx-bare")?;
+    let (status, text) = call(members.both(dir.path())?, read(&id)?).await?;
+    assert_eq!(StatusCode::FAILED_DEPENDENCY, status, "§11.3: {text}");
+    for named in [
+        "node-a-mpd (node-error)",
+        "MedicationRequest-myhealtheu-epd",
+    ] {
+        assert!(text.contains(named), "{named}: {text}");
+    }
+    assert!(!text.contains("SYNTHETIC-RX-BARE"), "nothing of it: {text}");
     Ok(())
 }
 
@@ -456,7 +479,7 @@ async fn a_caller_confined_to_one_patient_searches_that_patients_prescriptions_a
 async fn a_prescription_with_no_id_to_read_it_by_is_listed_and_warned_of() -> TestResult {
     let own = "rx".repeat(32);
     let long = format!(
-        r#"{{"resourceType":"MedicationRequest","id":"{own}","identifier":[{{"system":"urn:oid:2.999.5.1","value":"SYNTHETIC-RX-LONG"}}],"status":"active","intent":"order","subject":{{"reference":"Patient/p-a"}}}}"#
+        r#"{{"resourceType":"MedicationRequest","language":"en","text":{{"status":"generated","div":"<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Synthetic prescription</p></div>"}},"id":"{own}","identifier":[{{"system":"urn:oid:2.999.5.1","value":"SYNTHETIC-RX-LONG"}}],"status":"active","intent":"order","subject":{{"reference":"Patient/p-a"}},"medicationCodeableConcept":{{"text":"Synthetic medicine"}},"authoredOn":"2026-11-01","requester":{{"display":"Synthetic prescriber"}}}}"#
     );
     let members = Members::start(
         page(searchset("https://cdr-a.example.org", &[&long], None)),

@@ -607,6 +607,44 @@ jobs:
             gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file notes.md
           fi
 
+  # ---- test-reports: the reports of the run that tested the tag -------------
+
+  # The JUnit reports, node profile findings, conformance report and FHIR
+  # Validator results of the CI run the push of the tagged commit to main
+  # started, attached as one tarball with its SHA-256 (Regulation (EU)
+  # 2024/2847 Annex VII point 6, Regulation (EU) 2025/327 Annex III item 4).
+  # It waits for that run and refuses one that did not succeed
+  # (scripts/release/test-reports.sh). No specification governs the
+  # tarball's form: our own design.
+  test-reports:
+    name: test reports
+    needs: [plan, github-release]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      actions: read # find the CI run of the tagged commit and download its artifacts
+      contents: write # attach the reports to the draft
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Pack the reports of the CI run of the tagged commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: bash scripts/release/test-reports.sh "$TAG" "$GITHUB_SHA" test-reports
+      - name: Attach the reports to the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" \
+            "test-reports/ferrofed-${TAG}-test-reports.tar.gz" \
+            "test-reports/ferrofed-${TAG}-test-reports.tar.gz.sha256sum" \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
   # ---- scan-and-tag: the image gate, then the tags ----------------------------
 
   # A call and nothing else. Both images were pushed by digest with no tag;
@@ -631,7 +669,7 @@ jobs:
     name: github release (publish)
     # Every `needs` job has to succeed, the default, so a failed or skipped
     # leg leaves the release a draft.
-    needs: [plan, github-release, build-binaries, build-image, build-console, vulnerability-record, scan-and-tag, archive]
+    needs: [plan, github-release, build-binaries, build-image, build-console, vulnerability-record, scan-and-tag, test-reports, archive]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -697,7 +735,8 @@ jobs:
           # proxy configuration with its SHA-256, the conformance seed data
           # with its SHA-256, the dashboard and alert rules, and the
           # information sheet and instructions for use of this tag, the
-          # Kubernetes package pinned by digest with its SHA-256, the
+          # Kubernetes package pinned by digest with its SHA-256, the test
+          # reports of the run that tested the tag with their SHA-256, the
           # Software Heritage archive record, and the EU declaration of
           # conformity when plan found it issued.
           declaration=""
@@ -720,6 +759,8 @@ jobs:
             "ferrofed-${TAG}-trivy-reports.tar.gz" \
             "ferrofed-${TAG}-kubernetes.tar.gz" \
             "ferrofed-${TAG}-kubernetes.tar.gz.sha256sum" \
+            "ferrofed-${TAG}-test-reports.tar.gz" \
+            "ferrofed-${TAG}-test-reports.tar.gz.sha256sum" \
             "ferrofed-${TAG}-archive.json" \
             ${declaration:+"$declaration"}; do
             printf '%s\n' "$assets" | grep -Fxq "$asset" || missing="$missing $asset"
@@ -757,7 +798,7 @@ jobs:
   # `needs` edge can reach.
   milestone:
     name: close the milestone
-    needs: [plan, github-release, build-binaries, build-image, build-console, vulnerability-record, scan-and-tag, archive, finalize-release]
+    needs: [plan, github-release, build-binaries, build-image, build-console, vulnerability-record, scan-and-tag, test-reports, archive, finalize-release]
     if: ${{ always() && needs.plan.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5

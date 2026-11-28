@@ -254,6 +254,9 @@ A member that serves `Electronic-Prescriptions`:
 - answers `GET {own}/MedicationRequest?patient.identifier={ehr_id_system}|{ehr_id}`
   with a `searchset` of `MedicationRequest-eu-mpd` resources, each with a
   logical `id`, and with `next` links under its own base URL;
+- writes each prescription so that it also conforms to the MyHealth@EU
+  ePrescription profile, with its narrative and its language
+  ([The MyHealth@EU ePrescription profile](#the-myhealtheu-eprescription-profile));
 - answers the same search with `&_id={its id}` with that one prescription.
 
 A member that also serves `Electronic-Dispensations`:
@@ -284,6 +287,52 @@ holds under the same business identifier, so a dispensation sent again is
 never written twice ([Receiving a dispensation](#receiving-a-dispensation),
 hazard I-12 of the
 [clinical safety risk file](../evaluate/clinical-safety.md#the-interoperability-component)).
+
+## The MyHealth@EU ePrescription profile
+
+The gateway serves a prescription, from the search or the read, only when
+it conforms to `MedicationRequest-myhealtheu-epd` of the MyHealth@EU
+ePrescription and eDispensation guide (`myhealth.eu.fhir.epd` 1.0.0-poc),
+which fixes the cardinality the eHealth Network ePrescription guidelines
+3.1 leave to the implementation guides (Art 10(5)). It needs an
+`identifier`, `status`, `intent`, the medicinal product, `subject`,
+`authoredOn` and `requester`, and, when it has a `dispenseRequest`, the
+prescribed quantity. An element with no data carries the FHIR R4
+`data-absent-reason` extension in place of a value, which the guidelines
+ask for. The gateway also asks for the prescription's narrative
+(`text.status` and `text.div`) and the language it is written in
+(`language`): the copy of the original that the pharmacist receives beside
+the translation (Requirements Catalogue v10.0.0, 06.01 and 06.02).
+
+- A member's prescription that fails is not served. The `searchset` leaves
+  it out of the matches and of `Bundle.total`, and a `warning` `outcome`
+  entry names the member and what is missing, never a value
+  (`fhir/prescriptions/mod.rs`:
+  `a_prescription_the_myhealth_eu_profile_refuses_is_withheld_and_its_member_named`).
+  Its read answers `424`, naming the member in `node-error`
+  (`fhir/prescriptions/read.rs`:
+  `a_prescription_the_myhealth_eu_profile_refuses_is_not_read`).
+- A prescription the gateway maps in the map mode carries
+  `data-absent-reason` `unknown` on `identifier`, `authoredOn` or
+  `requester` when the order gives none, the language-region tag of the
+  composition's language and territory (`nl-NL`) once the terminology
+  server of `[eehrxf.terminology]` answers that `eHDSILanguage` holds it,
+  which the profile binds `MedicationRequest.language` to, and a
+  narrative of status `generated` made of the order's own texts: the
+  medicinal product, each dosage instruction and each note
+  (`app/ferrofed-eehrxf/tests/it/mapped.rs`:
+  `a_mapped_prescription_conforms_to_the_myhealth_eu_profile`). The
+  narrative holds no words of the gateway's, so it stays in the language
+  the order was written in. An order in a language `eHDSILanguage` does
+  not hold names none, so its prescription is withheld; a terminology
+  server that does not answer, or none configured, leaves the member's
+  orders unread, named in `node-error`
+  (`an_order_in_a_language_ehdsi_language_does_not_hold_is_withheld`,
+  `an_order_whose_language_gets_no_answer_is_refused`).
+
+The profile's `required` bindings and the profiles of the resources it
+references are not evaluated: the package carries no expansion of the
+value sets, and the gateway checks the `MedicationRequest` alone.
 
 ## Searching a patient's prescriptions
 

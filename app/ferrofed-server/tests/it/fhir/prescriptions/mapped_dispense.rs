@@ -19,7 +19,7 @@ use wiremock::matchers::{body_string_contains, method, path};
 use wiremock::{Mock, ResponseTemplate};
 
 use super::dispense::{DISPENSATION_SYSTEM, DISPENSATION_VALUE, post};
-use super::mapped::{OWN_UID, gateway_with, order, query_api, served_with};
+use super::mapped::{OWN_UID, gateway_with, order, query_api, served_in, served_with};
 use super::{RX_B, own, page, searchset};
 use crate::facade::{EHR_A, NAMESPACE, PATIENT, PATIENT_TAIL, wire};
 use crate::fhir::TestResult;
@@ -218,15 +218,13 @@ async fn a_medicine_coded_in_atc_is_translated_before_it_is_mapped() -> TestResu
     let version = "9e1d2a3b-0000-4000-8000-0000000000d2::cdr-a.example.org::1";
     let a = node_a("", created(version)).await?;
     let terminology = dispensation_codes::start().await;
-    let tables = format!(
-        "{}{}",
-        served_with(
-            ", language = \"en\", territory = \"NL\"",
-            &format!(
-                "\n[[fhir.serve]]\ncategory = \"Electronic-Dispensations\"\nmembers = [{{ member = \"node-a\", systems = [\"{SNOMED}\"] }}]\n"
-            ),
+    ferrofed_testkit::ehdsi_language::mount(&terminology).await;
+    let tables = served_in(
+        ", language = \"en\", territory = \"NL\"",
+        &format!(
+            "\n[[fhir.serve]]\ncategory = \"Electronic-Dispensations\"\nmembers = [{{ member = \"node-a\", systems = [\"{SNOMED}\"] }}]\n"
         ),
-        dispensation_codes::table(&terminology)
+        &dispensation_codes::table(&terminology),
     );
     let body = dispensation().replace(
         r#""system":"http://example.org/fhir/CodeSystem/ferrofed-products","code":"SYN-PRODUCT-0001""#,

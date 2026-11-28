@@ -1,0 +1,1 @@
+- Each release attaches `ferrofed-vX.Y.Z-test-reports.tar.gz` with its SHA-256: the JUnit reports, node profile findings, conformance report and HL7 FHIR Validator results of the CI run that tested its tagged commit, kept with the release for Regulation (EU) 2024/2847 Annex VII point 6 and Regulation (EU) 2025/327 Annex III item 4.

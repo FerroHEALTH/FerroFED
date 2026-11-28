@@ -1,0 +1,1 @@
+- A test holds `config::retired::PREPARING` to the release the workspace prepares, now v0.0.23, so a removal refusal is no longer judged against the release already cut.
