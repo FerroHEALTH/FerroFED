@@ -14,7 +14,9 @@
 //! Europe Medication Prescription and Dispense 1.0.0 profiles, and each
 //! prescription it answers is passed through as an equal JSON value, every
 //! number in the member's text, with one `Provenance` naming it
-//! ([`searchset`]). The member's pages are read by [`page`].
+//! ([`searchset`]). The member's pages are read by [`page`], and each
+//! prescription served is held to the MyHealth@EU ePrescription profile by
+//! [`conform`].
 //!
 //! The answer is paged by the gateway (FHIR R4 `http.html` §3.1.0.14): a
 //! `_count` bounds a page (FHIR R4 search §3.1.1.5.3) and the `next` link
@@ -28,6 +30,7 @@
 //! vendored 4.0.1 copies, `docs/specs/fhir-r4/search.html` and
 //! `docs/specs/fhir-r4/http.html`.
 
+pub mod conform;
 pub mod mapped;
 pub mod page;
 pub mod searchset;

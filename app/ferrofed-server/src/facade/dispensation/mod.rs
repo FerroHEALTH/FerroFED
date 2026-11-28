@@ -207,7 +207,13 @@ async fn prescribed(
         .to_string();
     let (natives, maps) = tokio::join!(
         prescriptions::asked(federation, arrived, chosen, withheld),
-        crate::facade::mapped::asked(federation, arrived, located, (patient, &now), &fhir.mapped)
+        crate::facade::mapped::asked(
+            federation,
+            arrived,
+            located,
+            (patient, &now),
+            (&fhir.mapped, &fhir.terminology)
+        )
     );
     let mut members = natives?;
     members.extend(maps?);

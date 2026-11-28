@@ -25,6 +25,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Instant;
 
+use eehrxf::terminology::Terminology;
 use ferrofed_eehrxf::medication::Medication;
 use ferrofed_eehrxf::prescriptions::mapped::MapMode;
 use ferrofed_eehrxf::prescriptions::page::Page;
@@ -70,7 +71,7 @@ pub(crate) async fn asked(
     arrived: &Arrived<'_>,
     located: &Located,
     (patient, now): ((&str, &str), &str),
-    mapped: &BTreeMap<String, MapMode>,
+    (mapped, terminology): (&BTreeMap<String, MapMode>, &Terminology),
 ) -> Result<Vec<Member>, Unprescribed> {
     let snapshot = federation.snapshot();
     let targets = &located.targets;
@@ -102,7 +103,9 @@ pub(crate) async fn asked(
     for (endpoint, answered) in &queried {
         let (chosen, mode, system_id) = member_of(snapshot, targets, mapped, endpoint)?;
         let (held, composed) = match answered {
-            Answered::Rows(held) => paged(held, (mode, &system_id), (patient, now)),
+            Answered::Rows(held) => {
+                paged(held, (mode, &system_id), (patient, now), terminology).await
+            }
             Answered::Silent { status, left } => (
                 Held::Unanswered {
                     status: *status,
@@ -263,10 +266,11 @@ fn member_of<'m>(
 /// composition's read from the columns `sources` places, mapped by `mode`
 /// for the patient `patient` at `now`, with the UUID of each page's
 /// versioned composition.
-fn paged(
+async fn paged(
     held: &[ferrofed_eehrxf::summary::Held],
     (mode, system_id): (&MapMode, &SystemId),
     (patient, now): ((&str, &str), &str),
+    terminology: &Terminology,
 ) -> (Held, Vec<Composed>) {
     let mut pages: Vec<Page> = Vec::new();
     let mut composed = Vec::new();
@@ -281,7 +285,10 @@ fn paged(
         if !owned {
             continue;
         }
-        match mode.page(&held.composition, patient, now) {
+        match mode
+            .page(&held.composition, patient, (now, terminology))
+            .await
+        {
             Ok(page) => {
                 composed.push(Composed {
                     object: Uuid::parse_str(&version.object_id().value()).ok(),
@@ -330,6 +337,7 @@ pub(crate) async fn read(
     arrived: &Arrived<'_>,
     (chosen, mode, namespaces): (&Chosen, &MapMode, &[IdentifierNamespace]),
     (composition, entry, now): (&str, u8, &str),
+    terminology: &Terminology,
 ) -> Result<Fetched, Failure> {
     let budget = federation.budget();
     let overall = arrived
@@ -353,11 +361,15 @@ pub(crate) async fn read(
     let Some(system_id) = snapshot.node(&chosen.node).map(Node::system_id) else {
         return Ok(Fetched::Held(Held::Found(Vec::new())));
     };
-    Ok(Fetched::Held(picked(
-        &body,
-        (mode, system_id),
-        (&patient, composition, entry, now),
-    )))
+    Ok(Fetched::Held(
+        picked(
+            &body,
+            (mode, system_id),
+            (&patient, composition, entry, now),
+            terminology,
+        )
+        .await,
+    ))
 }
 
 /// What a member answered the read of one composition.
@@ -470,10 +482,11 @@ async fn read_at(
 /// The page of the one prescription at `entry` the composition `body`
 /// maps to by `mode`, for `patient` at `now`, when the composition is the
 /// own order of the member owning `system_id`, renamed by `composition`.
-fn picked(
+async fn picked(
     body: &[u8],
     (mode, system_id): (&MapMode, &SystemId),
     ((system, value), composition, entry, now): (&(String, String), &str, u8, &str),
+    terminology: &Terminology,
 ) -> Held {
     let unusable = |reason| Held::Unusable {
         status: StatusCode::OK,
@@ -493,7 +506,7 @@ fn picked(
         return Held::Found(Vec::new());
     }
     let text = String::from_utf8_lossy(body);
-    let mut page = match mode.page(&text, (system, value), now) {
+    let mut page = match mode.page(&text, (system, value), (now, terminology)).await {
         Ok(page) => page,
         Err(reason) => return unusable(Unread::Mapped(reason)),
     };
