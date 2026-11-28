@@ -4,6 +4,7 @@
 //! The credentials of one endpoint, and every other secret, with every
 //! `_file` sibling read at boot.
 
+use std::collections::BTreeSet;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -70,7 +71,8 @@ struct Beside<'a> {
 /// server are reached with, when it names any.
 ///
 /// A section may name TLS material alone, when the transport authenticates
-/// the gateway. An `oauth` grant reaches its token endpoint with the same
+/// the gateway, or `conveyance_ml_dsa` alone, for a node that takes no
+/// credentials. An `oauth` grant reaches its token endpoint with the same
 /// material, read once, so one that authenticates by, or binds its tokens
 /// to, a TLS client certificate presents the one the node is reached with
 /// (RFC 8705 §2, §3).
@@ -105,7 +107,9 @@ pub(crate) fn resolve_node_credentials(
         presented.as_ref(),
     ) {
         Ok(scheme) => node_secretless(&table, node_scope(&table, scheme)?)?,
-        Err(Error::Credentials(CredentialsFault::NoScheme { .. })) if material.is_some() => {
+        Err(Error::Credentials(CredentialsFault::NoScheme { .. }))
+            if material.is_some() || credentials.conveyance_ml_dsa =>
+        {
             return Ok((None, material));
         }
         Err(refused) => return Err(refused),
@@ -447,8 +451,15 @@ pub(crate) fn resolve_signing(
             .with_next(next)
             .map_err(ring_refused("signing.next_key_file"))?;
     }
+    let ml_dsa = signing
+        .ml_dsa_key_file
+        .as_deref()
+        .map(|path| ml_dsa_key("signing.ml_dsa_key", path))
+        .transpose()?;
     Ok(SigningSettings {
         keys: Arc::new(keys),
+        ml_dsa: ml_dsa.map(Arc::new),
+        ml_dsa_nodes: BTreeSet::new(),
         jwks_uri,
         rotation_overlap: overlap,
     })
@@ -492,21 +503,41 @@ fn next_key(path: &Path, intended: Algorithm) -> Result<AssertionKey, Error> {
     Ok(next)
 }
 
-/// Reads the signing key the `_file` sibling of `key` names.
+/// Reads the signing key the `_file` sibling of `key` names, an EC key.
 fn signing_key(key: &str, path: &Path) -> Result<AssertionKey, Error> {
+    let (read, refused) = any_key(key, path)?;
+    if !matches!(read.algorithm(), Algorithm::Es256 | Algorithm::Es384) {
+        return Err(refused(SigningKeyError::NotEc));
+    }
+    Ok(read)
+}
+
+/// Reads the ML-DSA key the `_file` sibling of `key` names (RFC 9964 §5).
+fn ml_dsa_key(key: &str, path: &Path) -> Result<AssertionKey, Error> {
+    let (read, refused) = any_key(key, path)?;
+    if !read.algorithm().is_ml_dsa() {
+        return Err(refused(SigningKeyError::NotMlDsa));
+    }
+    Ok(read)
+}
+
+/// Reads the private key the `_file` sibling of `key` names, with the
+/// refusal that names that sibling.
+fn any_key(
+    key: &str,
+    path: &Path,
+) -> Result<(AssertionKey, impl Fn(SigningKeyError) -> Error), Error> {
     let pem = read_secret::<Secret>(key, None, Some(path))?.ok_or_else(|| Error::Missing {
         key: format!("{key}_file"),
     })?;
-    let refused = |source| {
+    let named = format!("{key}_file");
+    let refused = move |source| {
         Error::Credentials(CredentialsFault::SigningKey {
-            key: format!("{key}_file"),
+            key: named.clone(),
             source,
         })
     };
     let read = AssertionKey::from_pem(pem.expose().as_bytes(), None, None)
         .map_err(|source| refused(SigningKeyError::Key(source)))?;
-    if !matches!(read.algorithm(), Algorithm::Es256 | Algorithm::Es384) {
-        return Err(refused(SigningKeyError::NotEc));
-    }
-    Ok(read)
+    Ok((read, refused))
 }

@@ -107,9 +107,11 @@ async fn admitted_with(onward: &str) -> TestResult {
     let signing = federation.signing().ok_or("the keys are configured")?;
     let mut published: jsonwebtoken::jwk::JwkSet =
         serde_json::from_value(signing.keys.published())?;
-    published
-        .keys
-        .extend(federation.client_keys().iter().cloned());
+    for key in federation.client_keys() {
+        published
+            .keys
+            .push(serde_json::from_value(serde_json::to_value(key)?)?);
+    }
     endpoint.trust(published);
 
     let report = check_a(&federation).await?;

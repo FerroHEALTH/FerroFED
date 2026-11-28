@@ -10,7 +10,7 @@ use std::error::Error;
 use std::path::Path;
 
 use ferrofed_testkit::listener::ListenerCertificates;
-use ferrofed_testkit::oauth::Curve;
+use ferrofed_testkit::oauth::{Curve, MlDsa};
 use toml::{Table, Value};
 
 use crate::config::Config;
@@ -104,6 +104,9 @@ timeout = '1s'
 [federation.consent]
 disclose = true
 emergency = "apply"
+
+[credentials."node-a-query"]
+conveyance_ml_dsa = true
 
 [credentials."node-a-query".credentials.oauth]
 token_endpoint = "https://as.example.org/token"
@@ -201,6 +204,7 @@ key_file = "@DIR@/listener.key"
 
 [signing]
 key_file = "@DIR@/signing.pem"
+ml_dsa_key_file = "@DIR@/ml-dsa.pem"
 jwks_uri = "https://gateway.example.org/fed/.well-known/jwks.json"
 node_jwks_cache = '5min'
 rotation_overlap = '10min'
@@ -260,6 +264,10 @@ fn files(dir: &Path, tag: &str, listener: &ListenerCertificates) -> TestResult {
     std::fs::write(
         dir.join("signing.pem"),
         Curve::P384.pem().map_err(|_unavailable| "a key")?,
+    )?;
+    std::fs::write(
+        dir.join("ml-dsa.pem"),
+        MlDsa::MlDsa65.pem().map_err(|_unavailable| "a key")?,
     )?;
     std::fs::write(dir.join("registry.toml"), "")?;
     for secret in ["token", "password"] {
