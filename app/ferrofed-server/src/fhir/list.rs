@@ -396,7 +396,7 @@ fn entries(
         match &native.answer {
             Answer::Document(document) => {
                 let forwarded = document.forwarded();
-                let Some(fetched) = fetched(federation, (fhir, caller), native, forwarded) else {
+                let Some(fetched) = fetched((fhir, caller), native, forwarded) else {
                     tracing::error!(
                         request_id = logged,
                         endpoint,
@@ -566,19 +566,17 @@ fn unlisted(
 /// The document `forwarded` carries, as `native`'s entry names it: its
 /// media type, the URL signed for `caller` it is read at, the SHA-1 digest
 /// of its bytes in base64, and their number, or `None` when they are too
-/// many for an `unsignedInt` or no key can sign the URL.
+/// many for an `unsignedInt` or the URL cannot be signed.
 fn fetched(
-    federation: &Federation,
     (fhir, caller): (&FhirSettings, &Caller),
     native: &Native,
     forwarded: &Forwarded,
 ) -> Option<Fetched> {
     let bytes = forwarded.body();
     let size = u32::try_from(bytes.len()).ok()?;
-    let signer = federation.signer()?;
     // NOTE: no specification governs this: our own design; a key that cannot sign leaves
     // the document unnamed, which fails the list with a 500.
-    let token = super::binary::mint(signer, fhir, caller, &native.chosen).ok()?;
+    let token = super::binary::mint(fhir, caller, &native.chosen).ok()?;
     // NOTE: RFC 9110 §8.3; a member that names no media type is read as sending octets.
     let content_type = forwarded
         .headers()
