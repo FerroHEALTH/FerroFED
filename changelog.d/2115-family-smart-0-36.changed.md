@@ -1,0 +1,1 @@
+- FerroFED takes the FerroHEALTH family's `fhir-types` 0.4 and `ferrohealth-smart` 0.36 line: `ferrohealth-session` 0.33, `ihe-atna` and `ehds-logging` 0.31, `ihe-iti` and `nl-generic-functions` 0.28, and FerroBRIDGE's `ferrobridge-term` 0.24, `ferrobridge-validator` 0.25, `fhirconnect` 0.15 and `eehrxf` 0.49. The console's `[session]` keeps the memory store alone.
