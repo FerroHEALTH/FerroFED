@@ -1,0 +1,1 @@
+- Each release saves the repository at Software Heritage, waits until the archive holds the tagged commit, attaches `ferrofed-vX.Y.Z-archive.json` with the commit's SWHID and names the SWHID in the notes, so the copy outside GitHub that Regulation (EU) 2025/327 Art 30(3) asks for exists for every release.

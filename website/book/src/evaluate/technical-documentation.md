@@ -223,31 +223,30 @@ The repository keeps most of it:
 - **The images,** by digest in the GitHub Container Registry, with their
   attestations. A withdrawal moves tags and deletes no image.
 
-Two parts are not covered by those settings. The CI run of the release
-commit holds the conformance report and the FHIR validation results as
-workflow artifacts, which GitHub deletes when the repository's artifact
-retention period ends. And no setting of the repository guarantees that
-GitHub serves it for ten years. So at each release Cadasto B.V. keeps an
-archive copy outside GitHub, for ten years from the release date:
+No setting of the repository guarantees that GitHub serves it for ten
+years, so every release is also archived outside GitHub. The release lane
+asks Software Heritage to save the public repository, waits until the visit
+succeeded, checks that the archive holds the tagged commit, and attaches
+`ferrofed-vX.Y.Z-archive.json`: the commit's SWHID, `swh:1:rev:<commit>`
+(SWHID specification v1.2 §5.4 and §5.8, computed as git computes the
+commit id), the save request and the visit. The release notes name the
+SWHID. The archive holds the tag's tree, so this book's pages, `docs/`,
+`conformance/`, `CHANGELOG.md` and the EU declaration of conformity's source
+are kept with the source
+([`docs/release.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/release.md),
+What the lane does). A release whose archive is not confirmed stays a
+draft.
 
-```sh
-git bundle create ferrofed-vX.Y.Z.bundle vX.Y.Z
-gh release download vX.Y.Z --repo FerroHEALTH/FerroFED --dir ferrofed-vX.Y.Z
-gh run list --repo FerroHEALTH/FerroFED --workflow ci.yml \
-  --commit "$(git rev-list -n1 vX.Y.Z)" --event push
-gh run download <run id> --repo FerroHEALTH/FerroFED \
-  --name conformance-report --name eehrxf-fhir-validation --dir ferrofed-vX.Y.Z/ci
-```
-
-The release download also holds the release's EU declaration of
-conformity when the release carries one. Where Cadasto B.V. publishes the
-archived declaration again, if the repository stops serving a release
-within those ten years, is the manufacturer's decision and is still open
+The release assets themselves, the binaries, the attestations, the test
+reports and the accompanying documents, are kept by the immutable release and the images
+by digest. Where Cadasto B.V. publishes the declaration again, if the
+repository stops serving a release within those ten years, is the
+manufacturer's decision and is still open
 ([Decisions open to the manufacturer](#decisions-open-to-the-manufacturer)).
 
 Art 30(3) also asks the manufacturer to make the source code available to
 the relevant authorities "upon a reasoned request". The source of every
-release is public at its tag, and the archive keeps it.
+release is public at its tag, and Software Heritage keeps it.
 
 ## The EU declaration of conformity
 
@@ -267,8 +266,9 @@ https://github.com/FerroHEALTH/FerroFED/releases/download/vX.Y.Z/ferrofed-vX.Y.Z
 ```
 
 The immutable-releases setting keeps each attached declaration unchanged
-and online, and the archive copy of [Keeping it for ten
-years](#keeping-it-for-ten-years) holds it too. Annex III, point 6, has
+and online, and the Software Heritage archive of the tag ([Keeping it for
+ten years](#keeping-it-for-ten-years)) holds the record it is written
+from. Annex III, point 6, has
 its copy there.
 
 `scripts/release/declaration-of-conformity.sh` writes it at the release's
