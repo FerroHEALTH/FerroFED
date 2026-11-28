@@ -390,7 +390,6 @@ async fn each_members_prescriptions_are_answered_as_sent_with_a_provenance_namin
     Ok(())
 }
 
-// conformance: CP-26 track-10
 // NOTE: MyHealth@EU Requirements Catalogue 10.0.0 §1.14.1 and §1.14.2: a prescription is served
 // only in MedicationRequest-myhealtheu-epd, with its narrative and its language.
 #[tokio::test]
@@ -438,6 +437,7 @@ async fn a_prescription_the_myhealth_eu_profile_refuses_is_withheld_and_its_memb
     Ok(())
 }
 
+// conformance: CP-26 track-10
 #[tokio::test]
 async fn each_member_is_asked_by_its_ehr_id_alone() -> TestResult {
     let members = Members::start(
