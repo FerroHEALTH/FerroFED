@@ -20,6 +20,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
+use eehrxf::terminology::Terminology;
 use ehds_logging::category::Category;
 use ehds_logging::classify::{Basis, Evidence};
 use ehds_logging::record::{Action, DataSubject, EhrAt, PatientIdentifier, PatientLookup};
@@ -226,7 +227,7 @@ pub(crate) async fn search(
     federation: &Arc<Federation>,
     arrived: &Arrived<'_>,
     (patient, now): ((&str, &str), &str),
-    (declared, mapped): (&BTreeSet<String>, &BTreeMap<String, MapMode>),
+    (declared, mapped, terminology): (&BTreeSet<String>, &BTreeMap<String, MapMode>, &Terminology),
 ) -> Result<Prescribed, Unprescribed> {
     let located = located(federation, arrived, patient).await?;
     let (completion, targets) = (located.completion, &located.targets);
@@ -258,9 +259,10 @@ pub(crate) async fn search(
         set_aside: targets.set_aside.clone(),
         unresolved,
     };
+    let modes = (mapped, terminology);
     let (natives, maps) = tokio::join!(
         asked(federation, arrived, chosen, targets.plan.withheld()),
-        mapped::asked(federation, arrived, &located, (patient, now), mapped)
+        mapped::asked(federation, arrived, &located, (patient, now), modes)
     );
     prescribed.members = natives?;
     prescribed.members.extend(maps?);

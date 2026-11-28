@@ -128,9 +128,15 @@ ferrofed 0.0.22
   Registry         4 members, 4 endpoints
   Stored queries   off
   Unencrypted      credentials.node-a-query
+                   credentials.node-a-query.credentials.oauth
                    credentials.node-b-query
+                   credentials.node-b-query.credentials.oauth
                    credentials.node-c-query
+                   credentials.node-c-query.credentials.oauth
                    credentials.node-d-query
+                   credentials.node-d-query.credentials.oauth
+                   pixm.manager[0].endpoint.credentials and patient identifiers
+                   pixm.manager[0].endpoint.credentials.oauth, the gateway's client credentials
 
   DEVELOPMENT: this deployment runs the development profile, which relaxes
   checks a production deployment must pass, such as encryption to a loopback

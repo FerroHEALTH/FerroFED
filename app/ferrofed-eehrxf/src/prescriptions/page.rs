@@ -103,6 +103,10 @@ pub struct Page {
     pub outcomes: Vec<Kept>,
     /// The member's `next` link, resolved against its base.
     pub next: Option<Url>,
+    /// Why each prescription of the page the gateway does not serve is
+    /// withheld, in the page's order, naming no value
+    /// ([`super::conform::hold`]).
+    pub withheld: Vec<String>,
 }
 
 /// Why a member's success is no page of prescriptions; no variant's text

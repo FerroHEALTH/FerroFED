@@ -73,6 +73,11 @@
 //! to name the patient behind an `ehr_id` in, when a request named none, so
 //! a search of the log by the patient's identifier finds the access (Art
 //! 9(1)).
+//! `[access_log.regulatory]` is the logging component's declaration of the
+//! legal basis the gateway processes under (the GDPR Art 6(1) point and Art
+//! 9(2) condition) and of its controllers and processors, which every record
+//! states (Xt-EHR D5.2 §7.2.7); the default declares none and the record
+//! then writes none.
 //! `max_named_ehrs`, 50 by default, is the most `ehr_id`s the record of a
 //! query over many patients' data names from the `ehr_id` column its rows
 //! deliver; above it, or at `0`, the record states the query's scope (Art
@@ -116,6 +121,9 @@ pub struct AccessLog {
     /// names, read from the delivered rows; above it, and at `0`, the record
     /// states the query's scope instead (Art 9(1)).
     pub max_named_ehrs: usize,
+    /// The legal basis and the controllers and processors every record
+    /// states (Xt-EHR D5.2 §7.2.7).
+    pub regulatory: ehds_logging::regulatory::Regulatory,
 }
 
 impl Default for AccessLog {
@@ -129,6 +137,7 @@ impl Default for AccessLog {
             emergency_purpose: Vec::new(),
             patient_namespaces: Vec::new(),
             max_named_ehrs: 50,
+            regulatory: ehds_logging::regulatory::Regulatory::default(),
         }
     }
 }
@@ -218,6 +227,9 @@ pub struct AccessLogSettings {
     /// The most `ehr_id`s the record of a query over many patients' data
     /// names.
     pub max_named_ehrs: usize,
+    /// The legal basis and the controllers and processors every record
+    /// states.
+    pub regulatory: ehds_logging::regulatory::Regulatory,
 }
 
 impl Default for AccessLogSettings {
@@ -229,6 +241,7 @@ impl Default for AccessLogSettings {
             emergency: EmergencyPurposes::default(),
             patient_namespaces: Vec::new(),
             max_named_ehrs: AccessLog::default().max_named_ehrs,
+            regulatory: ehds_logging::regulatory::Regulatory::default(),
         }
     }
 }
@@ -305,5 +318,6 @@ pub(crate) fn resolve(table: &AccessLog) -> Result<AccessLogSettings, Error> {
         emergency,
         patient_namespaces,
         max_named_ehrs: table.max_named_ehrs,
+        regulatory: table.regulatory.clone(),
     })
 }

@@ -28,6 +28,7 @@ mod patient;
 mod population;
 mod professional;
 mod query;
+mod regulatory;
 mod relayed;
 mod retention;
 mod routed;

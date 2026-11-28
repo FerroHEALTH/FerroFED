@@ -1,0 +1,1 @@
+- A map-mode member of `Electronic-Prescriptions` now needs `[eehrxf.terminology]`: the gateway writes each mapped prescription's language only once that server answers that `eHDSILanguage` holds the composition's language and territory, so without one the member's orders are unread and it is named in `node-error` (#2035).
