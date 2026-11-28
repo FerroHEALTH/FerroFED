@@ -14,7 +14,7 @@ Client assertions FerroFED signs (private_key_jwt, FAPI 2.0)	ES256 or ES384	no	R
 The caller token FerroFED signs for each node	ES256 or ES384	no	RFC 9964	app/ferrofed-engine/src/conveyance/mod.rs
 DPoP proofs FerroFED signs	ES256 or ES384	no	RFC 9964	ferrohealth-smart client dpop, app/ferrofed-engine/src/dispatch/dpop.rs
 Nuts grants FerroFED signs	ES256 or ES384	no	RFC 9964	app/ferrofed-engine/src/onward/grant/nl/nuts.rs, app/ferrofed-server/src/config/nl/nuts.rs
-Signed Binary tokens of the document list	ES256 or ES384	no	RFC 9964	app/ferrofed-server/src/fhir/binary.rs
+Signed Binary tokens of the document list	ML-DSA-65, under a key derived from fhir.id_key	yes	RFC 9964	app/ferrofed-server/src/fhir/binary.rs, app/ferrofed-server/src/ids.rs
 Console sign-in ID token verification	RS256, RS384, RS512, PS256, PS384, PS512, ES256, ES384, EdDSA	no	RFC 9964	ferrohealth-smart oidc, app/ferrofed-console/src/config/settings.rs
 Patient and document ids of the FHIR face, and identifier sealing	HMAC-SHA-256, AES-256-GCM, HKDF-SHA-256	yes	NIST IR 8547 4.1.3	app/ferrofed-server/src/ids.rs
 Caller references in the security log	HMAC-SHA-256	yes	NIST IR 8547 4.1.3	app/ferrofed-server/src/auth/reference.rs

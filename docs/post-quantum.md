@@ -68,9 +68,11 @@ yet, the operator's certificates decide the algorithm, and verifying an
 ML-DSA certificate (RFC 9881) belongs to `ferrohealth-server`
 ([FerroHEALTH/FerroSYS#449](https://github.com/FerroHEALTH/FerroSYS/issues/449)). The JOSE signatures of the
 access tokens, the client assertions, the caller token, the `DPoP` proofs,
-the Nuts grants, the document tokens and the console sign-in stay classical
+the Nuts grants and the console sign-in stay classical
 until the issuers, nodes and authorization servers FerroFED works with sign
-and verify with ML-DSA (RFC 9964). The document list's attachment hash is
+and verify with ML-DSA (RFC 9964). The document tokens FerroFED signs and
+verifies itself are ML-DSA-65 already, under a key every replica derives
+from `fhir.id_key`. The document list's attachment hash is
 SHA-1 because FHIR R4 `Attachment.hash` defines it so, as a hash "not
 intended to support digital signatures"; SHA-1 is below the 128-bit floor of
 §4.1.3, so the row counts as not safe. The release workflows sign with what
@@ -95,7 +97,7 @@ until those services move.
 | The caller token FerroFED signs for each node | ES256 or ES384 | no | RFC 9964 | `app/ferrofed-engine/src/conveyance/mod.rs` |
 | DPoP proofs FerroFED signs | ES256 or ES384 | no | RFC 9964 | `ferrohealth-smart client dpop, app/ferrofed-engine/src/dispatch/dpop.rs` |
 | Nuts grants FerroFED signs | ES256 or ES384 | no | RFC 9964 | `app/ferrofed-engine/src/onward/grant/nl/nuts.rs, app/ferrofed-server/src/config/nl/nuts.rs` |
-| Signed Binary tokens of the document list | ES256 or ES384 | no | RFC 9964 | `app/ferrofed-server/src/fhir/binary.rs` |
+| Signed Binary tokens of the document list | ML-DSA-65, under a key derived from fhir.id_key | yes | RFC 9964 | `app/ferrofed-server/src/fhir/binary.rs, app/ferrofed-server/src/ids.rs` |
 | Console sign-in ID token verification | RS256, RS384, RS512, PS256, PS384, PS512, ES256, ES384, EdDSA | no | RFC 9964 | `ferrohealth-smart oidc, app/ferrofed-console/src/config/settings.rs` |
 | Patient and document ids of the FHIR face, and identifier sealing | HMAC-SHA-256, AES-256-GCM, HKDF-SHA-256 | yes | NIST IR 8547 4.1.3 | `app/ferrofed-server/src/ids.rs` |
 | Caller references in the security log | HMAC-SHA-256 | yes | NIST IR 8547 4.1.3 | `app/ferrofed-server/src/auth/reference.rs` |
