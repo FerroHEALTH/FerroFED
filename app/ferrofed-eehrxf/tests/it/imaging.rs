@@ -12,9 +12,13 @@
 )]
 
 use std::error::Error;
+use std::path::PathBuf;
 
 use eehrxf::crosswalk::imaging::{IMAGING_COMPOSITION, IMAGING_DIAGNOSTIC_REPORT, IMAGING_REPORT};
-use eehrxf::document::imaging::IMAGING_BUNDLE;
+use eehrxf::dataset::ResourceProfile;
+use eehrxf::document::imaging::{IMAGING_BUNDLE, MYHEALTHEU_IMAGING_TYPE};
+use eehrxf::receive::ReceivedDocument;
+use eehrxf::receive::conform::CheckError;
 use eehrxf::terminology::Terminology;
 use ferrofed_eehrxf::imaging::{self, ARCHETYPE, ELEMENT, SLUG, Served};
 use ferrofed_eehrxf::prescriptions::mapped::Template;
@@ -281,5 +285,67 @@ async fn a_report_naming_a_lost_finding_conforms_to_bundle_report_eu_imaging() -
     )
     .await?;
     assert!(breaks.is_empty(), "{breaks:#?}");
+    Ok(())
+}
+
+/// The vendored MyHealth@EU Medical Imaging Report 9.1.1 package.
+fn myhealth_eu() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../docs/specs/ehdsi-imaging/myhealth.eu.fhir.imaging-9.1.1.tgz")
+}
+
+/// The profile at `url` of [`myhealth_eu`].
+fn myhealth_eu_profile(url: &str) -> Result<ResourceProfile, Box<dyn Error>> {
+    Ok(ResourceProfile::read(
+        std::fs::File::open(myhealth_eu())?,
+        url,
+    )?)
+}
+
+// NOTE: MyHealth@EU Medical Imaging Report 9.1.1 binds composition-img-myhealtheu Composition.type
+// required to eHDSIDocumentTypes, whose eHDSIMedicalImagingReportType holds LOINC 18748-4 alone.
+#[tokio::test]
+async fn a_written_imaging_report_carries_the_catalogue_type_and_one_category_myhealth_eu_refuses()
+-> TestResult {
+    let report = written().await?;
+    let [composition] = of_type(&report, "Composition")[..] else {
+        return Err("one Composition".into());
+    };
+    let codings: Vec<(&str, &str)> = composition["type"]["coding"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|coding| Some((coding["system"].as_str()?, coding["code"].as_str()?)))
+        .collect();
+    assert!(
+        codings.contains(&(MYHEALTHEU_IMAGING_TYPE.system, MYHEALTHEU_IMAGING_TYPE.code)),
+        "the catalogue's imaging report type: {codings:?}"
+    );
+    assert!(
+        codings.len() > 1,
+        "beside the report's own code: {codings:?}"
+    );
+    let checked = ReceivedDocument::read(&report.to_string())?.check(
+        &myhealth_eu_profile(
+            "http://fhir.ehdsi.eu/imaging/StructureDefinition/bundle-img-myhealtheu",
+        )?,
+        &myhealth_eu_profile(
+            "http://fhir.ehdsi.eu/imaging/StructureDefinition/composition-img-myhealtheu",
+        )?,
+    );
+    // NOTE: composition-img-myhealtheu fixes its imaging category in .../fhir/eu-health-data-api/...,
+    // and Health Data API 1.0.0-ballot, which BundleReportEuImaging's closure holds, names .../fhir/health-data-api/.
+    let Err(CheckError::NonConformant { findings }) = checked else {
+        return Err(format!("the one refusal the guide still holds: {checked:?}").into());
+    };
+    let refused: Vec<&str> = findings
+        .iter()
+        .map(|finding| finding.element.as_str())
+        .collect();
+    assert_eq!(
+        vec!["Composition.category:imaging"],
+        refused,
+        "{findings:?}"
+    );
     Ok(())
 }
