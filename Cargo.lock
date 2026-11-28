@@ -1100,9 +1100,9 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
 name = "eehrxf"
-version = "0.49.0"
+version = "0.50.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fdeb9f51b481f2f2c65fb50a5d778885939ae076aa243cb0d4131517a39d0b09"
+checksum = "ccb7a40c2c7f8ce9cd6123ba0f6277b1f60fb1e7bd6075ace7e9235ccb172a23"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -1229,9 +1229,9 @@ checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
 name = "ferrobridge-fhirpath"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8cb713ca370aa60f3af6f8c9233e2619c452f4e277171e19df5357e34a3bf777"
+checksum = "e97ddc6e8ab70ba745ab0fb5872b2d5305cce9a01a33cbbf9d38950e6692fec5"
 dependencies = [
  "base64 0.23.1",
  "chumsky",
@@ -1248,9 +1248,9 @@ dependencies = [
 
 [[package]]
 name = "ferrobridge-term"
-version = "0.24.0"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "910bf88cd98ee4fd87a2964d8aa6cc60263bdd3cc8adea9b203a8eb2fe71a2b4"
+checksum = "b11493b4439081860d31f68c68ed2c80ec2917f1d6ec6ad3f0854dd085fb8af5"
 dependencies = [
  "async-trait",
  "backon",
@@ -1267,9 +1267,9 @@ dependencies = [
 
 [[package]]
 name = "ferrobridge-validator"
-version = "0.25.0"
+version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bceb06c7f6b381bf99037871bf34cc049dab7d40602457aa47ed8a67b9c9253d"
+checksum = "5a24898420283d34e903bedf41cbaefa8dfd80e12f292cebf750414dff491d26"
 dependencies = [
  "ferrobridge-fhirpath",
  "ferrobridge-term",
@@ -1832,9 +1832,9 @@ dependencies = [
 
 [[package]]
 name = "fhirconnect"
-version = "0.15.0"
+version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "496d1583188fba31581b7b311602b4046b77c27e4bfde021d2788ce2ab535126"
+checksum = "27b5c85c4440c434896d7c38a11c7850e5315f2ba8e08834a284e5a5f082a7b8"
 dependencies = [
  "base64 0.23.1",
  "fhir-types",
