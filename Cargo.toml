@@ -402,7 +402,7 @@ ferrohealth-ui = "=0.6.11"
 # and service credentials. It checks tokens and never issues them. Required by
 # a caret range, as the IHE crates; 0.34 is the one-registry release, where an
 # issuer is a SMART authorization server unless it is `federation` (#1946).
-ferrohealth-smart = { version = "0.36.0", default-features = false, features = ["fetch", "axum", "openehr", "server-tls"] }
+ferrohealth-smart = { version = "0.37.0", default-features = false, features = ["fetch", "axum", "openehr", "server-tls"] }
 # The secret and redaction types of FerroHEALTH/FerroSYS (#1397): `Secret`,
 # `WriteOnly` and `SecretUrl`, which never render a credential, and the
 # key-or-file rule every `<key>_file` sibling is read by. Pinned exactly, as
@@ -430,7 +430,7 @@ ferrohealth-session = { version = "=0.33.0", default-features = false }
 # every outbound table's `endpoint` takes (#1815, FerroHEALTH/FerroSYS#353);
 # 0.4.4 is the release ferrohealth-server 0.8.4 requires (#1834); 0.4.5
 # gives the default provenance an empty load's (FerroHEALTH/FerroSYS#395).
-ferrohealth-config = "=0.4.5"
+ferrohealth-config = "=0.5.0"
 # The health family of FerroHEALTH/FerroSYS (#1397): the readiness
 # document, and with `registry` the indicators and the lifecycle the gateway
 # runs. Pinned exactly, at the version ferrohealth-server requires.
@@ -442,7 +442,7 @@ ferrohealth-health = { version = "=0.1.1", default-features = false }
 # `revocation`). Pinned exactly, as a product pins every family crate; 0.12.4
 # prefers the hybrid group X25519MLKEM768 (RFC 10024) on every rustls
 # listener and client (#1991).
-ferrohealth-server = { version = "=0.12.4", default-features = false }
+ferrohealth-server = { version = "=0.13.0", default-features = false }
 # The telemetry of FerroHEALTH/FerroSYS (#1397): the `[telemetry]` section,
 # the console, the panic line, the request log with the HTTP server metrics,
 # and the one OpenTelemetry provider read by Prometheus and pushed over OTLP.
