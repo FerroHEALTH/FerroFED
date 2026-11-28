@@ -40,10 +40,17 @@ fn compiled() -> Result<(MapMode, String), Box<dyn Error>> {
     Ok((MapMode::compile(written)?, composition))
 }
 
-#[test]
-fn an_order_composition_maps_to_one_mpd_prescription_with_its_product() -> TestResult {
+#[tokio::test]
+async fn an_order_composition_maps_to_one_mpd_prescription_with_its_product() -> TestResult {
     let (mode, composition) = compiled()?;
-    let page = mode.page(&composition, PATIENT, "2026-11-04T10:00:00Z")?;
+    let (_server, terminology) = crate::conforming::language_terminology().await?;
+    let page = mode
+        .page(
+            &composition,
+            PATIENT,
+            ("2026-11-04T10:00:00Z", &terminology),
+        )
+        .await?;
     let [prescription] = page.prescriptions.as_slice() else {
         return Err(format!("{} prescriptions, not one", page.prescriptions.len()).into());
     };
@@ -242,13 +249,65 @@ fn an_order_the_composition_does_not_hold_names_nothing() -> TestResult {
 
 // NOTE: MyHealth@EU Requirements Catalogue 10.0.0 §1.14.1 and §1.14.2: what the map mode writes is
 // served, so it conforms to MedicationRequest-myhealtheu-epd with its narrative and language.
-#[test]
-fn a_mapped_prescription_conforms_to_the_myhealth_eu_profile() -> TestResult {
+#[tokio::test]
+async fn a_mapped_prescription_conforms_to_the_myhealth_eu_profile() -> TestResult {
     let (mode, composition) = compiled()?;
-    let page = mode.page(&composition, PATIENT, "2026-11-04T10:00:00Z")?;
+    let (_server, terminology) = crate::conforming::language_terminology().await?;
+    let page = mode
+        .page(
+            &composition,
+            PATIENT,
+            ("2026-11-04T10:00:00Z", &terminology),
+        )
+        .await?;
     let [prescription] = page.prescriptions.as_slice() else {
         return Err(format!("{} prescriptions, not one", page.prescriptions.len()).into());
     };
     ferrofed_eehrxf::prescriptions::conform::held(&prescription.kept.resource)?;
+    Ok(())
+}
+
+// NOTE: MedicationRequest-myhealtheu-epd binds MedicationRequest.language required to
+// eHDSILanguage, which holds no en-NL, so an order written in English names no language.
+#[tokio::test]
+async fn an_order_in_a_language_ehdsi_language_does_not_hold_is_withheld() -> TestResult {
+    let (mode, composition) = compiled()?;
+    let english = composition.replace(
+        r#""code_string":"nl"},"territory""#,
+        r#""code_string":"en"},"territory""#,
+    );
+    assert_ne!(english, composition, "the fixture is written in Dutch");
+    let (_server, terminology) = crate::conforming::language_terminology().await?;
+    let page = mode
+        .page(&english, PATIENT, ("2026-11-04T10:00:00Z", &terminology))
+        .await?;
+    let [prescription] = page.prescriptions.as_slice() else {
+        return Err(format!("{} prescriptions, not one", page.prescriptions.len()).into());
+    };
+    assert!(prescription.kept.resource.get("language").is_none());
+    assert!(matches!(
+        ferrofed_eehrxf::prescriptions::conform::held(&prescription.kept.resource),
+        Err(ferrofed_eehrxf::prescriptions::conform::Unheld::NoLanguage)
+    ));
+    Ok(())
+}
+
+#[tokio::test]
+async fn an_order_whose_language_gets_no_answer_is_refused() -> TestResult {
+    let (mode, composition) = compiled()?;
+    let refused = mode
+        .page(
+            &composition,
+            PATIENT,
+            (
+                "2026-11-04T10:00:00Z",
+                &eehrxf::terminology::Terminology::none(),
+            ),
+        )
+        .await;
+    assert!(
+        matches!(refused, Err(MapModeError::Language(_))),
+        "{refused:?}"
+    );
     Ok(())
 }

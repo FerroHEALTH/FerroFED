@@ -112,6 +112,7 @@ async fn read_of(
                 modes: &admitted.fhir.mapped,
                 namespaces: &admitted.fhir.receive_namespaces,
                 now: &now,
+                terminology: &admitted.fhir.terminology,
             };
             let mapped = (readable == Readable::Prescription).then_some(&mapped);
             if let Err(missing) = trc::binding(admitted, &arrived) {

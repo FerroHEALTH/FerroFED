@@ -114,7 +114,7 @@ pub fn template() -> Result<Written, Box<dyn Error>> {
 fn settings() -> Settings {
     let now = "2026-03-02T09:00:00Z";
     Settings::new("Device/ferrofed-testkit", now)
-        .with_defaults(Defaults::at(now).with_language("en").with_territory("NL"))
+        .with_defaults(Defaults::at(now).with_language("nl").with_territory("NL"))
 }
 
 /// A synthetic `collection` of one `MedicationRequest-eu-mpd` of the

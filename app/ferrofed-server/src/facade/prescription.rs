@@ -37,6 +37,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Instant;
 
+use eehrxf::terminology::Terminology;
 use ehds_logging::category::Category;
 use ehds_logging::classify::{Basis, Evidence};
 use ehds_logging::record::{Action, DataSubject, EhrAt, PatientLookup, WrittenVersion};
@@ -73,6 +74,9 @@ pub(crate) struct Mapped<'a> {
     pub(crate) namespaces: &'a [IdentifierNamespace],
     /// The instant the mapping runs at.
     pub(crate) now: &'a str,
+    /// The terminology server the language of each composition is held to
+    /// eHDSILanguage by.
+    pub(crate) terminology: &'a Terminology,
 }
 
 /// What a read by the face's id reads: a prescription or a dispensation.
@@ -316,6 +320,7 @@ async fn held(
                 arrived,
                 (chosen, mode, held.namespaces),
                 (locator.resource(), entry, held.now),
+                held.terminology,
             )
             .await
             .map_err(Unfound::Failure)?;

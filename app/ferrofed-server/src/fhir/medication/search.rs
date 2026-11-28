@@ -81,7 +81,7 @@ pub(in crate::fhir) async fn search(asked: Asked, uri: Uri) -> Response {
             federation,
             &arrived,
             (patient, &now),
-            (declared, &fhir.mapped),
+            (declared, &fhir.mapped, &fhir.terminology),
         )
         .await;
         let (request_id, outbound) = (admitted.request_id, admitted.outbound);

@@ -314,13 +314,21 @@ the translation (Requirements Catalogue v10.0.0, 06.01 and 06.02).
   `a_prescription_the_myhealth_eu_profile_refuses_is_not_read`).
 - A prescription the gateway maps in the map mode carries
   `data-absent-reason` `unknown` on `identifier`, `authoredOn` or
-  `requester` when the order gives none, the composition's language, and a
+  `requester` when the order gives none, the language-region tag of the
+  composition's language and territory (`nl-NL`) once the terminology
+  server of `[eehrxf.terminology]` answers that `eHDSILanguage` holds it,
+  which the profile binds `MedicationRequest.language` to, and a
   narrative of status `generated` made of the order's own texts: the
   medicinal product, each dosage instruction and each note
   (`app/ferrofed-eehrxf/tests/it/mapped.rs`:
   `a_mapped_prescription_conforms_to_the_myhealth_eu_profile`). The
   narrative holds no words of the gateway's, so it stays in the language
-  the order was written in.
+  the order was written in. An order in a language `eHDSILanguage` does
+  not hold names none, so its prescription is withheld; a terminology
+  server that does not answer, or none configured, leaves the member's
+  orders unread, named in `node-error`
+  (`an_order_in_a_language_ehdsi_language_does_not_hold_is_withheld`,
+  `an_order_whose_language_gets_no_answer_is_refused`).
 
 The profile's `required` bindings and the profiles of the resources it
 references are not evaluated: the package carries no expansion of the
