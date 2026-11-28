@@ -34,6 +34,7 @@ use ferrofed_engine::hygiene::Withheld;
 use ferrofed_engine::single_node::forward::Forwarded;
 use ferrofed_engine::single_node::native_search::{By, SearchAsked, Searched};
 use ferrofed_registry::id::EndpointId;
+use ferrohealth_smart::jws::JwsError;
 use fhir_types::codec::Value;
 use http::StatusCode;
 use openehr_federation::status::EndpointStatus;
@@ -54,25 +55,53 @@ use crate::federation::Federation;
 /// The operation an access record names for the read.
 const OPERATION: &str = "Binary";
 
+/// Why a member's own document cannot be named in the list, which fails
+/// the list with a `500`; no specification governs this: our own design.
+#[derive(Debug, thiserror::Error)]
+pub(super) enum Unnamed {
+    /// The member's own endpoint is not in the registry the documents were
+    /// gathered from.
+    #[error("the member's own endpoint {endpoint} is not in the registry")]
+    Endpoint {
+        /// The endpoint's id.
+        endpoint: String,
+    },
+    /// An attachment URL names no `Binary` of the member, which the gather
+    /// holds every listed document to.
+    #[error("an attachment URL names no Binary of the member")]
+    NotBinary,
+    /// The URL that names the document could not be signed.
+    #[error("the URL that names the document could not be signed")]
+    Unsigned(#[source] JwsError),
+}
+
 /// The entries the list names for the documents the members of `gathered`
 /// that serve them themselves answered with, on the face `fhir`, for
 /// `caller`: each member's `DocumentReference` as it holds it, its
 /// attachment URLs readdressed to URLs the gateway signs, each by its
 /// `fullUrl`, and an `OperationOutcome` for each member that did not answer
-/// or answered what the list cannot pass through; `None` when a URL cannot
-/// be signed.
+/// or answered what the list cannot pass through.
+///
+/// # Errors
+///
+/// The [`Unnamed`] cause of a document that cannot be named by a signed URL.
 pub(super) fn listed(
     federation: &Federation,
     (fhir, caller): (&FhirSettings, &Caller),
     gathered: &Gathered,
-) -> Option<Listed> {
+) -> Result<Listed, Unnamed> {
     let snapshot = federation.snapshot();
     let (mut matches, mut outcomes): Listed = (Vec::new(), Vec::new());
     for own in &gathered.own {
         let endpoint = own.chosen.native.as_str();
         match &own.held {
             prescriptions::Held::Found(pages) => {
-                let base = snapshot.native_endpoint(&own.chosen.native)?.url();
+                let base = snapshot
+                    .native_endpoint(&own.chosen.native)
+                    .ok_or_else(|| Unnamed::Endpoint {
+                        endpoint: endpoint.to_owned(),
+                    })?
+                    .url();
                 for document in pages.iter().flat_map(|page| &page.prescriptions) {
                     let resource = &document.kept.resource;
                     // NOTE: FHIR R4 search: every match carries its logical id; one with none cannot be
@@ -100,13 +129,30 @@ pub(super) fn listed(
                     let id = fhir.ids.document((endpoint, held));
                     // NOTE: no specification governs this: our own design; the attachment URL alone
                     // changes, so the document is read through the gateway's access check and record.
-                    let passed = list::readdressed(resource, |url| {
-                        let binary = binary(base, url)?;
-                        let token =
-                            super::binary::mint_own(fhir, caller, (&own.chosen, own.kind, &binary))
-                                .ok()?;
-                        Some(format!("Binary/{token}"))
-                    })?;
+                    let mut unnamed = None;
+                    let readdressed = list::readdressed(resource, |url| {
+                        let named =
+                            binary(base, url)
+                                .ok_or(Unnamed::NotBinary)
+                                .and_then(|binary| {
+                                    super::binary::mint_own(
+                                        fhir,
+                                        caller,
+                                        (&own.chosen, own.kind, &binary),
+                                    )
+                                    .map_err(Unnamed::Unsigned)
+                                });
+                        match named {
+                            Ok(token) => Some(format!("Binary/{token}")),
+                            Err(cause) => {
+                                unnamed = Some(cause);
+                                None
+                            }
+                        }
+                    });
+                    let Some(passed) = readdressed else {
+                        return Err(unnamed.unwrap_or(Unnamed::NotBinary));
+                    };
                     matches.push((
                         format!("{}/DocumentReference/{}", fhir.absolute, id.as_str()),
                         Match::Passed(list::renamed(passed, id.as_str())),
@@ -130,7 +176,7 @@ pub(super) fn listed(
             }
         }
     }
-    Some((matches, outcomes))
+    Ok((matches, outcomes))
 }
 
 /// `GET {fhir-base}/Binary/{token}` of a document of the kind `kind` that
@@ -299,4 +345,21 @@ pub(super) fn accessed(
         inserted: None,
         transformations: Vec::new(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use ferrohealth_smart::jws::JwsError;
+
+    use super::Unnamed;
+
+    /// RFC 0201: a document URL that could not be signed carries its cause,
+    /// which the list's `500` logs, apart from a URL that names no `Binary`.
+    #[test]
+    fn a_signing_failure_carries_its_cause_and_a_url_naming_no_binary_has_none() {
+        let unsigned = Unnamed::Unsigned(JwsError::Malformed);
+        let cause = std::error::Error::source(&unsigned).map(ToString::to_string);
+        assert_eq!(Some(JwsError::Malformed.to_string()), cause);
+        assert!(std::error::Error::source(&Unnamed::NotBinary).is_none());
+    }
 }

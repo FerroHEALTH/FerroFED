@@ -53,8 +53,9 @@ impl Unconveyed {
     }
 }
 
-/// The signer of `settings`'s `[signing]` key, naming the gateway `id` to
-/// every node and the `client_id` of its grant to a node it holds one at.
+/// The signer of `settings`'s `[signing]` keys, naming the gateway `id` to
+/// every node and the `client_id` of its grant to a node it holds one at,
+/// and signing with the ML-DSA key for each node that asks for it.
 ///
 /// Returns `None` when `[signing]` is not set.
 pub(crate) fn signer(settings: &Settings, id: &FederationId) -> Option<Signer> {
@@ -63,6 +64,11 @@ pub(crate) fn signer(settings: &Settings, id: &FederationId) -> Option<Signer> {
     for (endpoint, scheme) in &settings.credentials {
         if let Scheme::Oauth { grant, .. } = scheme {
             signer = signer.with_issuer_at(endpoint.clone(), &grant.client_id);
+        }
+    }
+    if let Some(key) = &signing.ml_dsa {
+        for endpoint in &signing.ml_dsa_nodes {
+            signer = signer.with_key_at(endpoint.clone(), Arc::clone(key));
         }
     }
     Some(signer)

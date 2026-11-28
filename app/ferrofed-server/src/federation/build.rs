@@ -18,7 +18,7 @@ use ferrofed_identity::role::resolver::Resolver;
 use ferrofed_identity::session::ResolutionBindings;
 use ferrofed_registry::id::NodeId;
 use ferrofed_registry::snapshot::{Endpoint, RegistrySnapshot};
-use jsonwebtoken::jwk::{Jwk, JwkSet};
+use ferrohealth_smart::jws::jwk::Jwk;
 use openehr_federation::aql::{Context, Targeting};
 use openehr_federation::id::FederationId;
 
@@ -32,6 +32,7 @@ use crate::config::emergency::EmergencyLimit;
 use crate::config::settings::{ConsentDisclosure, Scheme, Settings};
 use crate::federation::describe;
 use crate::health::dependencies::Dependencies;
+use crate::jwks::JwkSet;
 use crate::localization::{self, LocalizationPolicy};
 use crate::metrics::nodes::NodeRequests;
 use crate::onward::NodeTransport;
@@ -216,7 +217,7 @@ impl Federation {
             stored_query_fan_out: settings.federation.fan_out_stored_queries,
             signing: settings.signing.clone(),
             signer: Some(signer),
-            client_keys: client_keys(settings),
+            client_keys: client_keys(settings)?,
             documents: documents(settings)?,
             access,
             emergency: settings.access_log.emergency.clone(),
@@ -392,32 +393,26 @@ fn documents(settings: &Settings) -> Result<Vec<PublicDocument>, FederationError
 }
 
 /// The public half of the assertion keys of every `oauth` grant `settings`
-/// configures, its previous and next keys among them, each once, in
-/// endpoint order.
-fn client_keys(settings: &Settings) -> Vec<Jwk> {
-    let mut keys: Vec<Jwk> = Vec::new();
+/// configures, its previous and next keys among them, each once by `kid`,
+/// in endpoint order (RFC 7517 §4).
+///
+/// # Errors
+///
+/// Returns [`FederationError::Unpublished`] when a ring's JWK Set does not
+/// read as public keys.
+fn client_keys(settings: &Settings) -> Result<Vec<Jwk>, FederationError> {
+    let mut keys = JwkSet::default();
     for scheme in settings.credentials.values() {
-        let published: Vec<Jwk> = match scheme {
-            // NOTE: RFC 7517 §5, the crate renders each ring's JWK Set, which reads as one;
-            // a set no JWK reader takes is legitimately not published.
-            Scheme::Oauth { grant, .. } => grant
-                .assertion_keys
-                .iter()
-                .filter_map(|ring| serde_json::from_value::<JwkSet>(ring.published()).ok())
-                .flat_map(|set| set.keys)
-                .collect(),
-            _ => Vec::new(),
-        };
-        for key in published {
-            if !keys
-                .iter()
-                .any(|known| known.common.key_id == key.common.key_id)
-            {
-                keys.push(key);
-            }
+        if let Scheme::Oauth { grant, .. } = scheme
+            && let Some(ring) = &grant.assertion_keys
+        {
+            keys.extend(
+                serde_json::from_value::<JwkSet>(ring.published())
+                    .map_err(FederationError::Unpublished)?,
+            );
         }
     }
-    keys
+    Ok(keys.keys)
 }
 
 /// The configuration's default `ehr_id` index capacity.
