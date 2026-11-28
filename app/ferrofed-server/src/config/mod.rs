@@ -526,6 +526,10 @@ pub struct NodeCredentials {
     /// with, `[credentials."<endpoint id>".tls]` (RFC 8705); the node is then
     /// reached over `https` alone when it names a client identity.
     pub tls: Option<TlsClientSection>,
+    /// Whether the caller token the gateway signs for this node is signed
+    /// with `[signing] ml_dsa_key_file` (RFC 9964), `false` by default: the
+    /// deployment's choice per node, once the node verifies ML-DSA.
+    pub conveyance_ml_dsa: bool,
 }
 
 /// The gateway's signing keys and their publication (§13.1, N25).
@@ -537,7 +541,9 @@ pub struct NodeCredentials {
 /// so every node holds it before any replica signs with it. Each
 /// is a P-256 or a P-384 private key in PKCS#8 PEM, read from its file at
 /// boot, and signs ES256 or ES384 as its curve says (RFC 7518 §3.4). The
-/// JWK Set is served at
+/// ML-DSA key, when set, is published beside them and signs the caller
+/// token of each node whose credentials section sets `conveyance_ml_dsa`
+/// (RFC 9964). The JWK Set is served at
 /// `{base}/.well-known/jwks.json`, and `jwks_uri` is the absolute URL the
 /// `OPTIONS {base}/` body declares for it.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -553,6 +559,9 @@ pub struct Signing {
     /// The algorithm the next key is meant to sign with, `ES256` or `ES384`;
     /// unset, the current key's. A next key on another curve is refused.
     pub next_key_algorithm: Option<SigningAlgorithm>,
+    /// The file holding the ML-DSA key, an ML-DSA-44, ML-DSA-65 or
+    /// ML-DSA-87 private key in PKCS#8 PEM (RFC 9881 §6).
+    pub ml_dsa_key_file: Option<PathBuf>,
     /// The absolute URL nodes fetch the JWK Set from: the gateway's own
     /// `{base}/.well-known/jwks.json` at its public address, or wherever the
     /// deployment publishes the keys (§13.1).
@@ -571,6 +580,7 @@ impl Default for Signing {
             previous_key_file: None,
             next_key_file: None,
             next_key_algorithm: None,
+            ml_dsa_key_file: None,
             jwks_uri: None,
             node_jwks_cache: units::Duration::from_hours(1),
             rotation_overlap: units::Duration::from_mins(65),

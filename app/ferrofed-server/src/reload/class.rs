@@ -45,7 +45,7 @@ pub(super) fn federation(error: &FederationError) -> &'static str {
         }
         FederationError::Clients(_) => "node-clients",
         FederationError::Transport(_) => "http-client",
-        FederationError::Unsigned => "signing",
+        FederationError::Unsigned | FederationError::Unpublished(_) => "signing",
         FederationError::RetentionEndpointUnknown { .. } => "access-log",
         FederationError::Audit(_) | FederationError::Binding(BindingError::Audit(_)) => "audit",
         #[cfg(feature = "binding-ihe")]

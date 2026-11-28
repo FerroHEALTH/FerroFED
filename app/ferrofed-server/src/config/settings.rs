@@ -18,6 +18,7 @@ use ferrofed_identity::role::localizer::OnFailure;
 use ferrofed_registry::id::EndpointId;
 use ferrofed_registry::replica::Replica;
 use ferrohealth_secret::secret::Secret;
+use ferrohealth_smart::client::assertion::AssertionKey;
 use ferrohealth_smart::client::keys::KeyRing;
 use openehr_federation::aggregate::AggregateFunction;
 use openehr_federation::aql::OffsetStrategy;
@@ -124,6 +125,10 @@ pub const JWKS_PATH: &str = "/.well-known/jwks.json";
 pub struct SigningSettings {
     /// The current key and, while its window lasts, the previous one.
     pub keys: Arc<KeyRing>,
+    /// The ML-DSA key, published beside the ring.
+    pub ml_dsa: Option<Arc<AssertionKey>>,
+    /// The nodes whose caller token the ML-DSA key signs.
+    pub ml_dsa_nodes: BTreeSet<EndpointId>,
     /// The absolute URL `OPTIONS {base}/` declares for the JWK Set.
     pub jwks_uri: Uri,
     /// How long the previous key is published after the process starts.
