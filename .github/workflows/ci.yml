@@ -737,8 +737,9 @@ jobs:
       # the copies of the information sheet and the instructions for use a
       # release attaches, over a stub tree (#769), and the EU declaration of
       # conformity, over a stub tree, with the manufacturer's file read as the
-      # release lane reads it (#940), and which release becomes the latest, over
-      # a stub remote (#1087).
+      # release lane reads it (#940), which release becomes the latest, over
+      # a stub remote (#1087), and the Software Heritage archive record, over
+      # a stub save request (#2045).
       - name: changelog
         if: ${{ !cancelled() }}
         run: |
@@ -750,6 +751,7 @@ jobs:
           bash scripts/release/latest.sh --self-test
           bash scripts/release/milestone.sh --self-test
           bash scripts/release/accompanying-documents.sh --self-test
+          bash scripts/release/archive.sh --self-test
           bash scripts/release/declaration-of-conformity.sh --self-test
           bash scripts/release/declaration-of-conformity.sh status
           bash scripts/release/changelog.sh --check

@@ -100,6 +100,13 @@ flowchart LR
   The joined record, `ferrofed-vX.Y.Z-vulnerability-record.json`, and the raw
   reports, `ferrofed-vX.Y.Z-trivy-reports.tar.gz`, are attached to the draft
   (`security/vex/README.md`).
+- **archive** asks Software Heritage to save the public repository, waits
+  until the visit succeeded, checks that the archive holds the tagged
+  commit, and attaches `ferrofed-vX.Y.Z-archive.json`, the record with the
+  commit's SWHID (`swh:1:rev:<commit>`), the save request and the visit,
+  and names the SWHID in the notes (`scripts/release/archive.sh`;
+  Regulation (EU) 2025/327 Art 30(3)). A rejected request, a failed visit
+  or a commit the archive does not hold refuses the release.
 - **scan-and-tag** calls `scan-and-tag.yml`, which scans each image digest
   for HIGH and CRITICAL findings that have a fix (`trivy.yaml`) and only then
   applies the tags `release-image.yml` and `release-console.yml` computed, so
@@ -116,7 +123,7 @@ flowchart LR
   configuration and its checksum, the two seed data files, the dashboard
   and alert rules, the information sheet and instructions for use of
   the tag, the vulnerability record and its reports, the Kubernetes
-  package and its checksum, and the EU
+  package and its checksum, the Software Heritage archive record, and the EU
   declaration of conformity when `plan` found it issued, and publishes only
   then, and only once both images are scanned and tagged. A draft missing any of them fails the check and stays a draft, so a
   half-assembled release is never visible. A release `plan` did not find the
@@ -389,8 +396,7 @@ slow one.
      release is published: the data Art 49(4) lists, with the results of
      the European digital testing environment (Art 40). The owner enters
      it, or the authorised representative where one is appointed, and keeps
-     the database's confirmation with the release's archive copy (§ After
-     the tag, step 5).
+     the database's confirmation for ten years (Art 30(3)).
 
    The step cannot be completed yet. The Commission establishes the
    database (Art 49(1)), and the list of data to enter is a delegated act
@@ -540,16 +546,12 @@ without a version bump, because a published version is immutable
 4. **Bring the standing instructions up to date.** `CLAUDE.md`'s status names
    the released version and the milestone now being built, in a pull request
    of its own, never inside the version bump.
-5. **Archive the release for ten years.** Regulation (EU) 2025/327 Art 30(3)
-   keeps the technical documentation and the EU declaration of conformity
-   for 10 years after the release is placed on the market. The owner keeps
-   the archive copy the
-   [technical documentation](https://ferrofed.eu/docs/evaluate/technical-documentation.html#keeping-it-for-ten-years)
-   names, outside GitHub: the tag's bundle, the release assets and the
-   conformance and FHIR validation artifacts of the CI run on the release
-   commit, which GitHub deletes when its artifact retention ends. The
-   release assets include the EU declaration of conformity when the
-   release carries one.
+5. **Check the archive record.** Regulation (EU) 2025/327 Art 30(3) keeps
+   the technical documentation and the EU declaration of conformity for 10
+   years after the release is placed on the market. The `archive` job saved
+   the repository at Software Heritage; open the `browse` URL of
+   `ferrofed-vX.Y.Z-archive.json` and check that it shows the tag's tree
+   ([technical documentation](https://ferrofed.eu/docs/evaluate/technical-documentation.html#keeping-it-for-ten-years)).
 
 ## Cutting a security patch release
 

@@ -569,6 +569,44 @@ jobs:
             "ferrofed-${TAG}-trivy-reports.tar.gz" \
             --repo "$GITHUB_REPOSITORY" --clobber
 
+  # ---- archive: the copy outside GitHub -------------------------------------
+
+  # Saves the public repository at Software Heritage, waits for the visit,
+  # checks that the archive holds the tagged commit, attaches the record
+  # with the commit's SWHID and names the SWHID in the notes (Regulation (EU)
+  # 2025/327 Art 30(3); scripts/release/archive.sh). No specification
+  # governs the record's form: our own design.
+  archive:
+    name: archive
+    needs: [plan, github-release]
+    runs-on: ubuntu-latest
+    timeout-minutes: 130
+    permissions:
+      contents: write # attach the record and name it in the draft's notes
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Archive the repository at Software Heritage
+        env:
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: bash scripts/release/archive.sh "$TAG" "$GITHUB_SHA" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" archive
+      - name: Attach the record and name the SWHID in the notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: |
+          set -euo pipefail
+          record="archive/ferrofed-${TAG}-archive.json"
+          gh release upload "$TAG" "$record" --repo "$GITHUB_REPOSITORY" --clobber
+          swhid="$(jq -r '.swhid' "$record")"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq '.body' > notes.md
+          if ! grep -qF "$swhid" notes.md; then
+            printf '\nArchived at Software Heritage: %s\n' "$swhid" >> notes.md
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file notes.md
+          fi
+
   # ---- scan-and-tag: the image gate, then the tags ----------------------------
 
   # A call and nothing else. Both images were pushed by digest with no tag;
@@ -593,7 +631,7 @@ jobs:
     name: github release (publish)
     # Every `needs` job has to succeed, the default, so a failed or skipped
     # leg leaves the release a draft.
-    needs: [plan, github-release, build-binaries, build-image, build-console, vulnerability-record, scan-and-tag]
+    needs: [plan, github-release, build-binaries, build-image, build-console, vulnerability-record, scan-and-tag, archive]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -659,8 +697,9 @@ jobs:
           # proxy configuration with its SHA-256, the conformance seed data
           # with its SHA-256, the dashboard and alert rules, and the
           # information sheet and instructions for use of this tag, the
-          # Kubernetes package pinned by digest with its SHA-256, and the
-          # EU declaration of conformity when plan found it issued.
+          # Kubernetes package pinned by digest with its SHA-256, the
+          # Software Heritage archive record, and the EU declaration of
+          # conformity when plan found it issued.
           declaration=""
           case "$DECLARATION" in
             true) declaration="ferrofed-${TAG}-eu-declaration-of-conformity.md" ;;
@@ -681,6 +720,7 @@ jobs:
             "ferrofed-${TAG}-trivy-reports.tar.gz" \
             "ferrofed-${TAG}-kubernetes.tar.gz" \
             "ferrofed-${TAG}-kubernetes.tar.gz.sha256sum" \
+            "ferrofed-${TAG}-archive.json" \
             ${declaration:+"$declaration"}; do
             printf '%s\n' "$assets" | grep -Fxq "$asset" || missing="$missing $asset"
           done
@@ -717,7 +757,7 @@ jobs:
   # `needs` edge can reach.
   milestone:
     name: close the milestone
-    needs: [plan, github-release, build-binaries, build-image, build-console, vulnerability-record, scan-and-tag, finalize-release]
+    needs: [plan, github-release, build-binaries, build-image, build-console, vulnerability-record, scan-and-tag, archive, finalize-release]
     if: ${{ always() && needs.plan.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5

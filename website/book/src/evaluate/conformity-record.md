@@ -82,10 +82,10 @@ conformity](technical-documentation.md#the-eu-declaration-of-conformity)).
 
 | Status | Rows |
 |---|---|
-| met | 29 |
+| met | 30 |
 | open | 7 |
 | awaits-act | 8 |
-| manufacturer | 14 |
+| manufacturer | 13 |
 | not-applicable | 4 |
 | all | 62 |
 
@@ -116,7 +116,7 @@ conformity](technical-documentation.md#the-eu-declaration-of-conformity)).
 | Art 30(1)(n) | "establish channels of complaint and keep distributors informed thereof" | 26 March 2027 | met | [Making a complaint](post-market.md#making-a-complaint); [`docs/post-market.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/post-market.md), The channels | - | - |
 | Art 30(1)(o) | "keep a register of complaints and a register of non-conforming EHR systems" | 26 March 2027 | met | [The registers](post-market.md#the-registers); [`docs/registers/complaints.tsv`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/registers/complaints.tsv); [`docs/registers/non-conforming-versions.tsv`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/registers/non-conforming-versions.tsv) | - | - |
 | Art 30(2) | "ensure that procedures are in place to ensure that the design, development and deployment of the harmonised software components" | 26 March 2027 | met | [Changes to the harmonised components](technical-documentation.md#changes-to-the-harmonised-components); [Review and change](clinical-safety.md#review-and-change); [`scripts/checks/technical-documentation.sh`](https://github.com/FerroHEALTH/FerroFED/blob/main/scripts/checks/technical-documentation.sh) | - | A release that changes a harmonised component is held until its clinical safety review and its change row exist. Checking against the Art 36 common specifications waits on their adoption (Art 36(1) row). |
-| Art 30(3) | "keep the technical documentation referred to in Article 37 and the EU declaration of conformity referred to in Article 39 for 10 years" | 26 March 2027 | manufacturer | [Keeping it for ten years](technical-documentation.md#keeping-it-for-ten-years); [`docs/release.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/release.md), After the tag | [#2045](https://github.com/FerroHEALTH/FerroFED/issues/2045) | The tag ruleset and immutable releases keep the repository's part. The archive copy outside GitHub at each release is Cadasto B.V.'s to make and keep, and this repository holds no record that it was made. |
+| Art 30(3) | "keep the technical documentation referred to in Article 37 and the EU declaration of conformity referred to in Article 39 for 10 years" | 26 March 2027 | met | [Keeping it for ten years](technical-documentation.md#keeping-it-for-ten-years); [`docs/release.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/release.md), What the lane does | - | The tag ruleset and immutable releases keep the repository's part, and each release saves the repository at Software Heritage and attaches the record that names the tagged commit's SWHID. |
 | Art 30(3) | "make available the source code or the programming logic included in the technical documentation, upon a reasoned request" | 26 March 2027 | met | [Keeping it for ten years](technical-documentation.md#keeping-it-for-ten-years) | - | The source of every release is public at its tag. |
 | Art 30(4) | "A manufacturer of EHR systems established outside the Union" | 26 March 2027 | not-applicable | [(a) The manufacturer](information-sheet.md#a-the-manufacturer) | - | Cadasto B.V. is established in the Netherlands, in the Union. |
 | Art 30(5) | "upon a reasoned request from a market surveillance authority, provide it with all the information and documentation" | 26 March 2027 | met | [Cooperation with the authorities](post-market.md#cooperation-with-the-authorities); [`docs/post-market.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/post-market.md), A request from an authority | - | - |
@@ -143,7 +143,7 @@ conformity](technical-documentation.md#the-eu-declaration-of-conformity)).
 | Art 40(3) | "manufacturers shall use the digital testing environments referred to in paragraphs 1 and 2 of this Article" | 26 March 2027 | awaits-act | [The European digital testing environment](technical-documentation.md#the-european-digital-testing-environment); [`scripts/checks/ehds-acts.sh`](https://github.com/FerroHEALTH/FerroFED/blob/main/scripts/checks/ehds-acts.sh) | [#675](https://github.com/FerroHEALTH/FerroFED/issues/675) | No testing environment exists to use: the Art 40(4) implementing act is not adopted, and the Commission's initiative 17513 was in inter-service consultation, with no published draft, when ehds-acts last read it (2026-11-24). |
 | Art 41(1) | "affixed visibly, legibly and indelibly to the accompanying documents of the EHR system" | 26 March 2027 | manufacturer | [`docs/release.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/release.md), Before the tag | [#940](https://github.com/FerroHEALTH/FerroFED/issues/940) | Planned on the information sheet, the instructions for use and the declaration, once a declaration is issued. |
 | Art 41(2) | "affixed before placing the EHR system on the market" | 26 March 2027 | manufacturer | [`docs/release.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/release.md), Before the tag | [#940](https://github.com/FerroHEALTH/FerroFED/issues/940) | No release has been placed on the market with the marking. |
-| Art 41(3) | "subject to the general principles set out in Article 30 of Regulation (EC) No 765/2008" | 26 March 2027 | manufacturer | [`docs/release.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/release.md), Before the tag | [#940](https://github.com/FerroHEALTH/FerroFED/issues/940) | Regulation (EC) No 765/2008 is not vendored here, so this record does not restate its Art 30; the release process cites its Art 30(1). |
+| Art 41(3) | "subject to the general principles set out in Article 30 of Regulation (EC) No 765/2008" | 26 March 2027 | manufacturer | [`docs/release.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/release.md), Before the tag | [#940](https://github.com/FerroHEALTH/FerroFED/issues/940) | Its Art 30(1) has the manufacturer or its authorised representative alone affix the CE marking and its Art 30(3) makes affixing the manufacturer's acceptance of responsibility, so the marking stays Cadasto B.V.'s act; the release process names it. |
 | Art 49(2) | "enter the required data as referred to in paragraph 4 of this Article into the EU database" | 26 March 2029 for (a) to (c), 26 March 2031 for (d) to (f) | awaits-act | [`docs/release.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/release.md), Before the tag; [`scripts/checks/ehds-acts.sh`](https://github.com/FerroHEALTH/FerroFED/blob/main/scripts/checks/ehds-acts.sh) | [#2061](https://github.com/FerroHEALTH/FerroFED/issues/2061) | The Commission has not established the database (Art 49(1)) and the Art 49(4) delegated act listing the data is not adopted; ehds-acts watches Art 49(4). The entry is then Cadasto B.V.'s, with the Art 40 result. |
 
 ### The declaration item by item
@@ -192,12 +192,9 @@ cannot complete any of them:
   market, after its declaration is issued, as step 8 of
   [`docs/release.md`](https://github.com/FerroHEALTH/FerroFED/blob/main/docs/release.md)
   describes. Art 41(3) applies the general principles of Art 30 of
-  Regulation (EC) No 765/2008, which is not vendored here; have it read
-  before the first marking.
-- **Art 30(3): keep the archive copy** of each release outside GitHub for
-  ten years, as [Keeping it for ten
-  years](technical-documentation.md#keeping-it-for-ten-years) describes, and
-  keep a record that it was made.
+  Regulation (EC) No 765/2008: the manufacturer or its authorised
+  representative alone affixes the marking (Art 30(1)), and affixing it
+  takes responsibility for the product's conformity (Art 30(3)).
 - **Art 49(2): register in the EU database** once the Commission
   establishes it and the Art 49(4) delegated act lists the data, with the
   result of the testing environment.
