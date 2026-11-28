@@ -4,9 +4,10 @@
 //! Mutual TLS to the identity services `[[pixm.manager]]`, `[pdqm]`,
 //! `[pmir]` and `[registry.mcsd]` name (#507): each harness server sits
 //! behind the testkit's mutual-TLS front, the gateway presents the client
-//! identity of `tls.client_identity_file` and trusts the front by
-//! `tls.trust_roots_file`, and a gateway without the identity is refused at the
-//! handshake and fails closed.
+//! identity of `tls.client_identity_file` and trusts the front's CA, which
+//! publishes no revocation service, by `tls.trust_roots_without_revocation_file`,
+//! and a gateway without the identity is refused at the handshake and fails
+//! closed.
 #![allow(
     clippy::panic_in_result_fn,
     reason = "test assertions in tests that return their setup errors"
@@ -58,7 +59,7 @@ fn tls_keys(dir: &Path, name: &str, front: &MutualTls) -> Result<String, Box<dyn
     std::fs::write(&identity, front.client_identity())?;
     std::fs::write(&roots, front.trust_roots())?;
     Ok(format!(
-        "endpoint.tls = {{ client_identity_file = {}, trust_roots_file = {} }}\n",
+        "endpoint.tls = {{ client_identity_file = {}, trust_roots_without_revocation_file = {} }}\n",
         toml::Value::String(identity.display().to_string()),
         toml::Value::String(roots.display().to_string())
     ))
@@ -69,7 +70,7 @@ fn roots_only(dir: &Path, name: &str, front: &MutualTls) -> Result<String, Box<d
     let roots = dir.join(format!("{name}-roots.pem"));
     std::fs::write(&roots, front.trust_roots())?;
     Ok(format!(
-        "endpoint.tls = {{ trust_roots_file = {} }}\n",
+        "endpoint.tls = {{ trust_roots_without_revocation_file = {} }}\n",
         toml::Value::String(roots.display().to_string())
     ))
 }

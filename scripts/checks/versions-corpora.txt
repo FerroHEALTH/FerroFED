@@ -53,7 +53,7 @@ docs/specs/ihe-mhd|IHE MHD FHIR package
 docs/specs/openehr-ckm-ips|openEHR CKM International Patient Summary template
 docs/specs/openehr-ckm-laboratory|openEHR CKM laboratory test result template
 docs/specs/openehr-ckm-medication|openEHR CKM medication archetypes
-docs/specs/kds-laborbericht|KDS Laborbericht operational template
+docs/specs/ferrobridge-laboratory|FerroBRIDGE laboratory report template
 docs/specs/ferrobridge-discharge|FerroBRIDGE discharge report template
 docs/specs/ferrobridge-imaging|FerroBRIDGE imaging report template
 docs/specs/ferroehr-definitions|FerroEHR professional definitions

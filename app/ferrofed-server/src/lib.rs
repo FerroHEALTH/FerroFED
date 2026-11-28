@@ -99,6 +99,7 @@ pub mod report;
 pub mod request_id;
 pub mod request_log;
 pub mod revision;
+pub mod revocation;
 pub mod route_area;
 pub mod running;
 pub mod security;

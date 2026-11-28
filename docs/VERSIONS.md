@@ -327,7 +327,7 @@ for `openEHR-EHR-INSTRUCTION.medication_order.v3`,
 | openEHR CKM International Patient Summary template | template `937fca6c-ec24-4c0f-8986-623843b6ebca`, CKM cid `1013.26.376` asset version 1 (DRAFT), pin-set digest `ac31d1254c60a728686eb84e9dd78084de8b05ea9082342c7ed5404b7843f736`, OET sha256 `e293bc003fc787e95318be0e18f32ae7ca8903ef8475ed7644b86258a59e5a34` | `scripts/vendor/openehr-ckm.sh`, `docs/specs/openehr-ckm-ips/PROVENANCE.md` |
 | openEHR CKM laboratory test result template | template `0ce44071-d6e5-4fa2-9a41-046f9b4aea66`, CKM cid `1013.26.408` asset version 3 (DRAFT), pin-set digest `7ae45e1e0bbc1d7e9c3f6c76c5667519229207d694bcb0c28039f6ea9a761f94`, OET sha256 `3811e80486c9fa526881e1ec891ba320b92547794ffec5447618ee9cb0216ec3` | `scripts/vendor/openehr-ckm.sh`, `docs/specs/openehr-ckm-laboratory/PROVENANCE.md` |
 | openEHR CKM medication archetypes | `openEHR-EHR-INSTRUCTION.medication_order.v3` CKM cid `1013.1.5946` revision 3.2.1 asset version 7 and `openEHR-EHR-ACTION.medication.v1` CKM cid `1013.1.123` revision 1.6.0 asset version 44 (both PUBLISHED), `openEHR-EHR-CLUSTER.medication_authorisation.v0` CKM cid `1013.1.2300` asset version 3, `openEHR-EHR-CLUSTER.medication_order_summary.v0` CKM cid `1013.1.2306` asset version 6 and `openEHR-EHR-CLUSTER.medication_supply_amount.v0` CKM cid `1013.1.2453` asset version 5 (all three DRAFT, revision 0.0.1-alpha), pin-set digest `d6435a63b0d59b1557a939c30080ea0c212c2e058480c74cead2b5855528a655`, ADL sha256 `206c2a07fa1a7197ebc9ed7a29a418ecfc9cb6b63fa2aaf811e780ee69df9e9b` and `7e2484d4aec5ad8c5ceb5edb466a82b43b45396fbe3abaa4ee4a298b8e6437bc` | `scripts/vendor/openehr-ckm.sh`, `docs/specs/openehr-ckm-medication/PROVENANCE.md` |
-| KDS Laborbericht operational template | `openFHIR/openfhir` commit `5e4d68007518fcddae1907b333a86f495791aa53` path `core/src/test/resources/kds/laborbericht/KDS_Laborbericht.opt` with the repository's `LICENSE`, pin-set digest `f912510948c8f407557ebb4ed1bdc3189cb386c3d63792a8429560222e53b424`, OPT sha256 `6c00892f282d192c79010e9e6f0ee7bf07cc2c2923ca78a93f3ef05fd301ca97` | `scripts/vendor/kds-laborbericht.sh`, `docs/specs/kds-laborbericht/PROVENANCE.md` |
+| FerroBRIDGE laboratory report template | `FerroHEALTH/FerroBRIDGE` commit `33ca7e19dc55af6114988e89ed58a79a09f16b6a` (eehrxf 0.52.0) path `crates/eehrxf/mappings/laboratory/ferrobridge_laborbericht.opt` (template `ferrobridge_laborbericht.v1.0.0`) with the `LICENSE-Apache-2.0` beside it, pin-set digest `ea50f04e67a2a132d2fe16ee4dca1b098f53654c902dc2dcb8c8748007e560fa`, OPT sha256 `aa45515ae9962e71316b37acbd1ac36b9b310a9b291f58035c5dc2ae65ad3f6b` | `scripts/vendor/ferrobridge-laboratory.sh`, `docs/specs/ferrobridge-laboratory/PROVENANCE.md` |
 | FerroBRIDGE medication template | `FerroHEALTH/FerroBRIDGE` commit `230fb966ebfb571a50101e4dec554ca1e2314081` (`eehrxf` 0.35.0) paths `tools/ferrobridge-testkit/fixtures/adl2/ferrobridge_medication.adlt` and `tools/ferrobridge-testkit/fixtures/adl2/ferrobridge_patient_summary.adlt`, with `openEHR-EHR-COMPOSITION.encounter.v1`, `openEHR-EHR-COMPOSITION.health_summary.v1`, `openEHR-EHR-SECTION.adhoc.v1`, `openEHR-EHR-SECTION.immunisation_list.v0`, `openEHR-EHR-EVALUATION.problem_diagnosis.v1`, `openEHR-EHR-EVALUATION.adverse_reaction_risk.v2`, `openEHR-EHR-EVALUATION.device_summary.v0`, `openEHR-EHR-ACTION.procedure.v1`, `openEHR-EHR-CLUSTER.medication.v2`, `openEHR-EHR-CLUSTER.therapeutic_direction.v1`, `openEHR-EHR-CLUSTER.dosage.v2` and `openEHR-EHR-CLUSTER.timing_daily.v1` from `openEHR/CKM-mirror` commit `c3fdc43dcf0eb7ef0cfe60f548fcdebc24c70094`, pin-set digest `766a4c3a2b0c7c48034acd5ad75c3099f537d4421a6a99a980c6dd613208094c`, template sha256 `7f196e7274b55d0542c1dcdee4ba8d2fc4a09d3b6feddbdb375694ed17b411e5` | `scripts/vendor/ferrobridge-medication.sh`, `docs/specs/ferrobridge-medication/PROVENANCE.md` |
 | FerroBRIDGE discharge report template | `FerroHEALTH/FerroBRIDGE` commit `3f1953aa208c0a9d81c1847f3891b42876c1a806` (template v1.1.0) path `tools/ferrobridge-testkit/fixtures/adl2/ferrobridge_discharge_report.adlt`, with `openEHR-EHR-COMPOSITION.transfer_summary.v1`, `openEHR-EHR-EVALUATION.problem_diagnosis.v1`, `openEHR-EHR-ACTION.procedure.v1` and the mirror's `LICENSE` from `openEHR/CKM-mirror` commit `c3fdc43dcf0eb7ef0cfe60f548fcdebc24c70094`, pin-set digest `17811510292ad89df2a37c5ab38b32f6c2439f2c65d7ca5106052ac0dc12a318` | `scripts/vendor/ferrobridge-discharge.sh`, `docs/specs/ferrobridge-discharge/PROVENANCE.md` |
 | FerroBRIDGE imaging report template | `FerroHEALTH/FerroBRIDGE` tag `v0.0.24` (commit `bc1c3e555b5418daff29c01dc4e11fa24f5d1ebe`) path `tools/ferrobridge-testkit/fixtures/adl2/ferrobridge_imaging_report.adlt`, with `openEHR-EHR-COMPOSITION.report-result.v1`, `openEHR-EHR-OBSERVATION.imaging_exam_result.v1`, `openEHR-EHR-CLUSTER.organisation.v1` and the mirror's `LICENSE` from `openEHR/CKM-mirror` commit `c3fdc43dcf0eb7ef0cfe60f548fcdebc24c70094`, pin-set digest `48c45dfcd2823642bb82f6d63cc1b7511fbe8a56b2eddabfa959b062fc055f16` | `scripts/vendor/ferrobridge-imaging.sh`, `docs/specs/ferrobridge-imaging/PROVENANCE.md` |
@@ -461,7 +461,7 @@ and the root `Cargo.toml` `[workspace.dependencies]` disagree.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `fhir-types` | 0.4.0 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
+| `fhir-types` | 0.5.0 | `docs/architecture.md`, the root `Cargo.toml` `[workspace.dependencies]` |
 | `fhir-search` | 0.1.131 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 The `pixm` feature takes `r4` and `terminology`: that root set holds every
@@ -497,11 +497,11 @@ received document is validated in full by FerroBRIDGE's `ferrobridge-validator`
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `eehrxf` | 0.51.0 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
-| `fhirconnect` | 0.15.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `eehrxf` | 0.52.0 | the root `Cargo.toml` `[workspace.dependencies]`, the information sheet, the clinical safety risk file |
+| `fhirconnect` | 0.16.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 | `openehr-mapping-core` | 0.9.1 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-term` | 0.24.2 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ferrobridge-validator` | 0.25.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-term` | 0.25.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ferrobridge-validator` | 0.26.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Audit crates (crates.io)
 
@@ -514,8 +514,8 @@ where FerroFED's own code, tests or guards still read them.
 
 | Item | Pin | Repeated in |
 |---|---|---|
-| `ihe-atna` | 0.31.0 | the root `Cargo.toml` `[workspace.dependencies]` |
-| `ehds-logging` | 0.31.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ihe-atna` | 0.32.0 | the root `Cargo.toml` `[workspace.dependencies]` |
+| `ehds-logging` | 0.32.0 | the root `Cargo.toml` `[workspace.dependencies]` |
 
 ## Metrics crates (crates.io)
 

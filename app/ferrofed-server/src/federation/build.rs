@@ -194,9 +194,9 @@ impl Federation {
             .with_demographics(demographics.is_some());
         let requests = NodeRequests::new(snapshot.endpoints().map(Endpoint::id))
             .with_latencies(Arc::clone(&observed.latencies));
-        let access = access_log(settings, &snapshot)?.map(Arc::new);
         let federation = Self {
             id,
+            access: access_log(settings, &snapshot)?.map(Arc::new),
             snapshot: Arc::new(snapshot),
             clients,
             resolver,
@@ -219,10 +219,10 @@ impl Federation {
             signer: Some(signer),
             client_keys: client_keys(settings)?,
             documents: documents(settings)?,
-            access,
             emergency: settings.access_log.emergency.clone(),
             emergency_limit: settings.emergency,
             anomaly: settings.anomaly,
+            _clearings: onward.clearings,
         };
         describe::describe(&federation, false).map_err(FederationError::Describe)?;
         Ok(Some(federation))
@@ -290,6 +290,7 @@ impl Federation {
             emergency: EmergencyPurposes::default(),
             emergency_limit: EmergencyLimit::default(),
             anomaly: AnomalyRules::default(),
+            _clearings: Vec::new(),
         }
     }
 }

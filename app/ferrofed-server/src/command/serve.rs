@@ -25,6 +25,7 @@ use crate::{
 };
 use ferrohealth_config::loader::Loaded;
 use ferrohealth_server::cli::ConfigArgs;
+use ferrohealth_server::revocation::Clearing;
 use ferrohealth_server::serve::Listener;
 use ferrohealth_server::telemetry::TelemetryBuildError;
 use ferrohealth_server::tls::ReloadableTls;
@@ -68,7 +69,8 @@ pub(super) fn serve_job(
     let (document, sources) = crate::federation::registry::read_source(&settings);
     if banner::prints(format, stdout_is_terminal) {
         banner::print(
-            &banner::Deployment::serving(&settings, document.as_ref().map(Result::as_ref)),
+            &banner::Deployment::serving(&settings, document.as_ref().map(Result::as_ref))
+                .with_unchecked_roots(crate::revocation::unchecked_in(tree)),
             console.colour(format),
             format.resolve(stdout_is_terminal),
         );
@@ -83,8 +85,10 @@ pub(super) fn serve_job(
             return ExitCode::FAILURE;
         }
     };
-    let telemetry = match telemetry(&settings, &runtime) {
-        Ok(telemetry) => Arc::new(telemetry),
+    // NOTE: no specification governs this: our own design; the collector's clearing
+    // is held for the whole process, so an https collector stays cleared while it exports.
+    let (telemetry, _collector_clearing) = match telemetry(&settings, &runtime) {
+        Ok((telemetry, clearing)) => (Arc::new(telemetry), clearing),
         Err(error) => {
             eprintln!("ferrofed: cannot start: {}", chain(&error));
             return ExitCode::from(EXIT_CONFIG);
@@ -316,7 +320,8 @@ fn console(stdout_is_terminal: bool) -> Result<Console, InitError> {
 
 /// The telemetry `settings` configure, built inside `runtime`: the
 /// Prometheus reader always, and the trace export and the metrics push
-/// `[telemetry.otlp]` asks for.
+/// `[telemetry.otlp]` asks for, with what keeps an `https` collector under
+/// `trust_roots_file` cleared for revocation.
 ///
 /// # Errors
 ///
@@ -325,7 +330,7 @@ fn console(stdout_is_terminal: bool) -> Result<Console, InitError> {
 fn telemetry(
     settings: &Settings,
     runtime: &tokio::runtime::Runtime,
-) -> Result<Telemetry, TelemetryBuildError> {
+) -> Result<(Telemetry, Option<Clearing>), TelemetryBuildError> {
     // NOTE: no specification governs this: our own design; the OTLP export is a tonic
     // client, which is built inside the runtime it will run on.
     let _entered = runtime.enter();

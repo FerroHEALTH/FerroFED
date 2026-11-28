@@ -53,6 +53,7 @@ fn the_banner_names_the_manufacturer_its_contact_and_its_address() -> TestResult
         development: false,
         cleartext: Vec::new(),
         audit_spool_in_memory: false,
+        unchecked_roots: Vec::new(),
         support: Support::NoPeriod,
     };
     let banner = render("9.9.9", &deployment, false, Rendering::Pretty)

@@ -572,6 +572,8 @@ messages! {
     TomlLargerThanBytes = "toml-larger-than-bytes",
     /// `Trust roots file`
     TrustRootsFile = "trust-roots-file",
+    /// `Trust roots file, no revocation check`
+    TrustRootsWithoutRevocationFile = "trust-roots-without-revocation-file",
     /// `Type the value of …, or choose Keep.`
     TypeValueChooseKeep = "type-value-choose-keep",
     /// `… Unless an operator confirms it by…`

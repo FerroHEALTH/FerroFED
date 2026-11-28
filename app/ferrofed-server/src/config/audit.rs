@@ -292,7 +292,7 @@ fn resolve_repository(
     // NOTE: no specification governs this: our own design; the TLS is read at load, so a
     // file that cannot be read stops `config check` before the trail is started.
     ferrohealth_smart::config::ServerTls
-        .build(&key("endpoint.tls"), &table.endpoint.tls)
+        .build(&key("endpoint.tls"), &table.endpoint.tls, &[])
         .map_err(|source| Error::Smart {
             section: key("endpoint"),
             source: Box::new(ferrohealth_smart::config::ConfigError::TlsBuild {

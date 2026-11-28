@@ -119,7 +119,7 @@ fn reaching(
     let roots = dir.join("atna-roots.pem");
     std::fs::write(&roots, repository.trust_roots())?;
     Ok(format!(
-        "url = \"{}\"\ntls = {{ trust_roots_file = {} }}\nconnect_timeout = '500ms'\nretry_max = '400ms'\n{extra}",
+        "url = \"{}\"\ntls = {{ trust_roots_without_revocation_file = {} }}\nconnect_timeout = '500ms'\nretry_max = '400ms'\n{extra}",
         repository.url(),
         toml::Value::String(roots.display().to_string())
     ))

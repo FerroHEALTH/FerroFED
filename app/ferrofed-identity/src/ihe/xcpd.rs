@@ -182,8 +182,9 @@ pub enum Transport {
 /// connections complete only over a chain the check cleared, presenting the
 /// client certificate the check was built with.
 ///
-/// It builds the one configuration whatever table it is handed, since the
-/// check was built from the gateway's own `tls` table. `Debug` shows the
+/// It builds the one configuration whatever table and endpoints it is
+/// handed, since the check was built from the gateway's own `tls` table and
+/// the localizer clears the route before each exchange. `Debug` shows the
 /// check as the check shows itself, never a key.
 #[derive(Debug, Clone)]
 pub struct GatedTls(RevocationCheck);
@@ -207,6 +208,7 @@ impl TlsBuilder for GatedTls {
         &self,
         _key: &str,
         _section: &TlsClientSection,
+        _endpoints: &[Url],
     ) -> Result<PresentedTls, Box<dyn std::error::Error + Send + Sync>> {
         Ok(PresentedTls::new(
             Arc::clone(self.0.config()),

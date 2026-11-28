@@ -194,7 +194,8 @@ async fn a_key_set_file_verifies_and_a_missing_one_is_503() -> TestResult {
 }
 
 /// The key set settings `[auth]` resolves for one SMART issuer at
-/// `issuer`, its `[auth.tls]` table naming `trust_roots_file` when one is
+/// `issuer`, its `[auth.tls]` table naming the harness CA, which publishes no
+/// revocation service, in `trust_roots_without_revocation_file` when one is
 /// given.
 fn resolved(
     issuer: &str,
@@ -202,7 +203,7 @@ fn resolved(
 ) -> Result<KeySetSettings, Box<dyn Error>> {
     let tls = roots.map_or_else(String::new, |file| {
         format!(
-            "[auth.tls]\ntrust_roots_file = {}\n\n",
+            "[auth.tls]\ntrust_roots_without_revocation_file = {}\n\n",
             toml::Value::String(file.display().to_string())
         )
     });
@@ -219,8 +220,8 @@ fn resolved(
 }
 
 /// An issuer behind a private certificate authority is reached with the
-/// roots `[auth.tls] trust_roots_file` names, and without them its metadata
-/// cannot be read and its tokens are a `503` (#1929).
+/// roots `[auth.tls] trust_roots_without_revocation_file` names, and without
+/// them its metadata cannot be read and its tokens are a `503` (#1929).
 // conformance: CP-17
 #[tokio::test]
 async fn auth_tls_trust_roots_reach_an_issuer_behind_a_private_ca() -> TestResult {

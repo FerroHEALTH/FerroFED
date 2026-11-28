@@ -141,7 +141,7 @@ fn tls_keys(dir: &Path, front: &MutualTls) -> Result<String, Box<dyn Error>> {
     std::fs::write(&identity, front.client_identity())?;
     std::fs::write(&roots, front.trust_roots())?;
     Ok(format!(
-        "tls = {{ client_identity_file = {}, trust_roots_file = {} }}\n",
+        "tls = {{ client_identity_file = {}, trust_roots_without_revocation_file = {} }}\n",
         toml::Value::String(identity.display().to_string()),
         toml::Value::String(roots.display().to_string())
     ))

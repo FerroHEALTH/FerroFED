@@ -149,8 +149,15 @@ pub(crate) const NUTS: &[Field] = &[
 ];
 
 /// The TLS settings a node's credential takes beside any grant.
-pub const TLS: &[Field] = &[Field {
-    key: "tls.trust_roots_file",
-    label: Msg::TrustRootsFile,
-    kind: Kind::Path,
-}];
+pub const TLS: &[Field] = &[
+    Field {
+        key: "tls.trust_roots_file",
+        label: Msg::TrustRootsFile,
+        kind: Kind::Path,
+    },
+    Field {
+        key: "tls.trust_roots_without_revocation_file",
+        label: Msg::TrustRootsWithoutRevocationFile,
+        kind: Kind::Path,
+    },
+];
