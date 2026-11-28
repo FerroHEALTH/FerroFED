@@ -738,8 +738,9 @@ jobs:
       # release attaches, over a stub tree (#769), and the EU declaration of
       # conformity, over a stub tree, with the manufacturer's file read as the
       # release lane reads it (#940), which release becomes the latest, over
-      # a stub remote (#1087), and the test reports a release attaches, over
-      # stub artifacts (#2060).
+      # a stub remote (#1087), the test reports a release attaches, over
+      # stub artifacts (#2060), and the Software Heritage archive record,
+      # over a stub save request (#2045).
       - name: changelog
         if: ${{ !cancelled() }}
         run: |
@@ -752,6 +753,7 @@ jobs:
           bash scripts/release/milestone.sh --self-test
           bash scripts/release/accompanying-documents.sh --self-test
           bash scripts/release/test-reports.sh --self-test
+          bash scripts/release/archive.sh --self-test
           bash scripts/release/declaration-of-conformity.sh --self-test
           bash scripts/release/declaration-of-conformity.sh status
           bash scripts/release/changelog.sh --check
