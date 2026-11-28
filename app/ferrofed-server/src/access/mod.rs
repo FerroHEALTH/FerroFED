@@ -92,6 +92,7 @@ pub struct AccessLog {
     retention: RetentionPolicy,
     labels: LabelPolicy,
     emergency: EmergencyPurposes,
+    regulatory: ehds_logging::regulatory::Regulatory,
     patient_namespaces: Vec<IdentifierNamespace>,
     max_named_ehrs: usize,
     sink: Arc<dyn AccessSink>,
@@ -116,6 +117,7 @@ impl AccessLog {
             retention: RetentionPolicy::default(),
             labels: LabelPolicy::default(),
             emergency: EmergencyPurposes::default(),
+            regulatory: ehds_logging::regulatory::Regulatory::default(),
             patient_namespaces: Vec::new(),
             max_named_ehrs: crate::config::access_log::AccessLog::default().max_named_ehrs,
             sink,
@@ -173,6 +175,14 @@ impl AccessLog {
     #[must_use]
     pub fn with_emergency(mut self, emergency: EmergencyPurposes) -> Self {
         self.emergency = emergency;
+        self
+    }
+
+    /// This log, each record stating the legal basis and the controllers and
+    /// processors of `regulatory` (Xt-EHR D5.2 §7.2.7).
+    #[must_use]
+    pub fn with_regulatory(mut self, regulatory: ehds_logging::regulatory::Regulatory) -> Self {
+        self.regulatory = regulatory;
         self
     }
 
@@ -347,6 +357,7 @@ impl Accessed {
             emergency,
             inserted: self.inserted,
             transformations: self.transformations.clone(),
+            regulatory: self.log.regulatory.clone(),
         }
     }
 }

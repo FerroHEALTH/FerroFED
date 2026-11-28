@@ -16,6 +16,7 @@
 use std::error::Error;
 use std::path::PathBuf;
 
+use eehrxf::document::authored::recorded_author;
 use eehrxf::document::discharge::{DISCHARGE_REPORT_FORM, HDR_SLOTS};
 use eehrxf::document::language::DocumentLanguage;
 use eehrxf::document::section::Section;
@@ -29,7 +30,7 @@ use openehr_mapping_core::template::TemplateSource;
 use crate::medication::{
     ENTRY, OTHER_CARE, Written, details, held, order, patient_summary_template, summary_order,
 };
-use crate::sender::{authored, displayed, sent};
+use crate::sender::{displayed, named, sent};
 
 /// The workspace root, two levels above this crate's manifest.
 const ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
@@ -537,24 +538,19 @@ pub fn received_document(
         SENT_AT,
         "Discharge report",
     );
-    let (subject, device) = authored(
-        &mut document,
-        identifiers,
-        (
-            "Synthetic hospital system",
-            ("hospital", "Synthetic hospital"),
-        ),
-    )?;
+    let subject = named(&mut document, identifiers)?;
     let composition =
         full_composition("5b0c3f7e-0000-4000-8000-00000000d1c2::hospital.example.org::1");
     let record = serde_json::from_str(&composition)?;
+    // NOTE: MyHealth@EU composition-hdr-myhealtheu Composition.author allows no Device; the composition's own author signs.
+    let author = document.with_author(&recorded_author(&record)?)?;
     document.with_language(DocumentLanguage::of_composition(&record)?)?;
     let run = Mapping::compile_project(source, &HDR)?.to_fhir_with(
         &composition,
-        &Settings::new(device.clone(), SENT_AT),
+        &Settings::new(author.clone(), SENT_AT),
         CallContext::new()
             .with_patient(reference(&subject))
-            .with_who(reference(&device)),
+            .with_who(reference(&author)),
     )?;
     // NOTE: HL7 Europe HDR 1.0.0 composition-eu-hdr cmp-hdr-2 requires the discharge summary or
     // the hospital course, which the sending system writes.
