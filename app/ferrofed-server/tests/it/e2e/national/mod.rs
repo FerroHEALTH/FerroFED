@@ -70,10 +70,10 @@ const GIVEN: &str = "SENTINEL-GIVEN-6p2k";
 const BIRTH_DATE: &str = "1970-01-01";
 
 /// Node A's prescription, on its own FHIR endpoint.
-const RX_A: &str = r#"{"resourceType":"MedicationRequest","id":"rx-a1","identifier":[{"system":"urn:oid:2.999.5.1","value":"SYNTHETIC-RX-A1"}],"status":"active","intent":"order","subject":{"reference":"Patient/p-a"},"medicationCodeableConcept":{"text":"Synthetic medicine A"}}"#;
+const RX_A: &str = r#"{"resourceType":"MedicationRequest","language":"en","text":{"status":"generated","div":"<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Synthetic prescription</p></div>"},"id":"rx-a1","identifier":[{"system":"urn:oid:2.999.5.1","value":"SYNTHETIC-RX-A1"}],"status":"active","intent":"order","subject":{"reference":"Patient/p-a"},"medicationCodeableConcept":{"text":"Synthetic medicine A"},"authoredOn":"2026-11-01","requester":{"display":"Synthetic prescriber"}}"#;
 
 /// Node B's prescription, on its own FHIR endpoint.
-const RX_B: &str = r#"{"resourceType":"MedicationRequest","id":"rx-b1","identifier":[{"system":"urn:oid:2.999.5.2","value":"SYNTHETIC-RX-B1"}],"status":"active","intent":"order","subject":{"reference":"Patient/p-b"},"medicationCodeableConcept":{"text":"Synthetic medicine B"}}"#;
+const RX_B: &str = r#"{"resourceType":"MedicationRequest","language":"en","text":{"status":"generated","div":"<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Synthetic prescription</p></div>"},"id":"rx-b1","identifier":[{"system":"urn:oid:2.999.5.2","value":"SYNTHETIC-RX-B1"}],"status":"active","intent":"order","subject":{"reference":"Patient/p-b"},"medicationCodeableConcept":{"text":"Synthetic medicine B"},"authoredOn":"2026-11-01","requester":{"display":"Synthetic prescriber"}}"#;
 
 /// The identifier value of node A's prescription.
 const RX_A_IDENTIFIER: &str = "SYNTHETIC-RX-A1";

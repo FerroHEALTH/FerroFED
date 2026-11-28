@@ -29,7 +29,7 @@ use crate::support::{call, send};
 const HELD: &str = r#"{"resourceType":"MedicationDispense","id":"md-1","meta":{"versionId":"1","lastUpdated":"2026-10-16T10:00:00Z"},"status":"completed","medicationCodeableConcept":{"text":"Synthetic medicine A"},"subject":{"reference":"Patient/p-a"}}"#;
 
 /// Node A's prescription at the member's version `3`.
-const RX_A_VERSIONED: &str = r#"{"resourceType":"MedicationRequest","id":"rx-a1","meta":{"versionId":"3"},"status":"active","intent":"order","subject":{"reference":"Patient/p-a"},"medicationCodeableConcept":{"text":"Synthetic medicine A"}}"#;
+const RX_A_VERSIONED: &str = r#"{"resourceType":"MedicationRequest","language":"en","text":{"status":"generated","div":"<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Synthetic prescription</p></div>"},"identifier":[{"system":"urn:oid:2.999.5.1","value":"SYNTHETIC-RX-A1"}],"id":"rx-a1","meta":{"versionId":"3"},"status":"active","intent":"order","subject":{"reference":"Patient/p-a"},"medicationCodeableConcept":{"text":"Synthetic medicine A"},"authoredOn":"2026-11-01","requester":{"display":"Synthetic prescriber"}}"#;
 
 /// A `searchset` holding the dispensation `resource`.
 fn dispensed(resource: &str) -> String {

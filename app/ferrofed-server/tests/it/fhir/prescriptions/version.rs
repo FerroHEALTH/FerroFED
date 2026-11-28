@@ -21,7 +21,7 @@ use crate::fhir::{FHIR, TestResult};
 use crate::support::{Logs, send};
 
 /// Node A's prescription at the member's version `3`.
-const RX_A_VERSIONED: &str = r#"{"resourceType":"MedicationRequest","id":"rx-a1","meta":{"versionId":"3"},"status":"active","intent":"order","subject":{"reference":"Patient/p-a"},"medicationCodeableConcept":{"text":"Synthetic medicine A"}}"#;
+const RX_A_VERSIONED: &str = r#"{"resourceType":"MedicationRequest","language":"en","text":{"status":"generated","div":"<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Synthetic prescription</p></div>"},"identifier":[{"system":"urn:oid:2.999.5.1","value":"SYNTHETIC-RX-A1"}],"id":"rx-a1","meta":{"versionId":"3"},"status":"active","intent":"order","subject":{"reference":"Patient/p-a"},"medicationCodeableConcept":{"text":"Synthetic medicine A"},"authoredOn":"2026-11-01","requester":{"display":"Synthetic prescriber"}}"#;
 
 /// A `versionId` that is no FHIR `id`, as JSON string text: a space, a
 /// quote and a slash.

@@ -10,8 +10,9 @@
 //! `url_file`, a secret; the CA certificates the database's certificate is
 //! verified by, `ca_file`, the platform's roots when it is unset; how many
 //! connections the gateway opens, `max_connections`; how long one statement
-//! or connection may take, `timeout_ms`; and how often rows past their
-//! window are deleted, `sweep_interval`. The connection always requires
+//! or connection may take, `timeout`, a duration, `10s` unless set; and how
+//! often rows past their window are deleted, `sweep_interval`, a duration,
+//! `1m` unless set. The connection always requires
 //! TLS: a connection string that does not set `sslmode=require` is refused
 //! under every profile.
 //!
@@ -67,10 +68,10 @@ pub struct Store {
     /// How many connections the gateway opens to the database, 1 to
     /// [`MAX_CONNECTIONS`].
     pub max_connections: usize,
-    /// How long one connection, or one statement, may take, in
-    /// milliseconds; zero is refused.
+    /// How long one connection, or one statement, may take, a duration;
+    /// zero is refused.
     pub timeout: units::Duration,
-    /// How often the rows past their window are deleted, in seconds; zero
+    /// How often the rows past their window are deleted, a duration; zero
     /// is refused.
     pub sweep_interval: units::Duration,
 }
