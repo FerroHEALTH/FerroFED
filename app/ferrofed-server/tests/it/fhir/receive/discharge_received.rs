@@ -97,6 +97,13 @@ async fn a_discharge_report_is_written_to_its_member_by_its_ehr_id_alone() -> Te
         Some(sent.as_str()),
         "the received report is kept byte for byte"
     );
+    // NOTE: hazards I-21 and I-22 of the clinical safety risk file: what the report holds that the
+    // composition does not carry is named to the record's reader, by FHIRPath and never by value.
+    let lost = super::declared_losses(&composition)?;
+    assert!(
+        lost.iter().any(|path| path == "Composition.section[0]"),
+        "{lost:?}"
+    );
     assert!(
         received(&b).await?.is_empty(),
         "N23: no other member is asked"

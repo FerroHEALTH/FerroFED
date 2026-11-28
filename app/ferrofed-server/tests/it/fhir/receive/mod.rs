@@ -335,3 +335,56 @@ pub(super) fn bound() -> Result<ServerSettings, Box<dyn Error>> {
         .push(crate::support::caller::patients_issuer(binding));
     Ok(server)
 }
+
+/// The elements a received report's `composition` declares beside its
+/// original in `feeder_audit/feeder_system_audit/other_details`, each by
+/// its `FHIRPath`, in order.
+pub(super) fn declared_beside_original(composition: &Value) -> Result<Vec<String>, Box<dyn Error>> {
+    use eehrxf::receive::openehr::{DECLARATION, NOT_CARRIED};
+    let tree = composition
+        .pointer("/feeder_audit/feeder_system_audit/other_details")
+        .ok_or("the feeder audit declares the losses")?;
+    assert_eq!(
+        Some(DECLARATION),
+        tree.pointer("/name/value").and_then(Value::as_str),
+        "the declaration's name"
+    );
+    let mut declared = Vec::new();
+    for item in tree["items"].as_array().into_iter().flatten() {
+        assert_eq!(
+            Some(NOT_CARRIED),
+            item.pointer("/value/value").and_then(Value::as_str),
+            "each declared element says the original keeps it"
+        );
+        declared.push(
+            item.pointer("/name/value")
+                .and_then(Value::as_str)
+                .ok_or("a declared element names its path")?
+                .to_owned(),
+        );
+    }
+    Ok(declared)
+}
+
+/// The elements a received report's `composition` declares it does not
+/// carry, as its reader sees them: the `FHIRPath`s of the comment in
+/// `context/other_context` that opens with
+/// [`COMMENT_LEAD`](eehrxf::receive::openehr::COMMENT_LEAD), which name
+/// the same elements, in order, as [`declared_beside_original`].
+pub(super) fn declared_losses(composition: &Value) -> Result<Vec<String>, Box<dyn Error>> {
+    let comment = composition
+        .pointer("/context/other_context/items")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|item| item.pointer("/value/value").and_then(Value::as_str))
+        .find_map(|text| text.strip_prefix(eehrxf::receive::openehr::COMMENT_LEAD))
+        .ok_or("no comment names a loss to the record's reader")?;
+    let named: Vec<String> = comment.split("; ").map(str::to_owned).collect();
+    assert_eq!(
+        declared_beside_original(composition)?,
+        named,
+        "the comment names what the feeder audit declares"
+    );
+    Ok(named)
+}

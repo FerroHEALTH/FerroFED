@@ -27,6 +27,10 @@
 //! of each summary and report into the systems the MyHealth@EU Core
 //! required bindings take ([`Transcode`]); the default, `none`, translates
 //! only a summary's codes, into the eHealth Network's preferred systems.
+//! With `transcode = "myhealth-eu"`, `designations`, a BCP 47 language tag
+//! such as `nl`, also gives each MyHealth@EU coding a summary gains the
+//! server's designation in that language where the server holds one
+//! (`CodeSystem/$lookup`).
 //! The table is optional: with none,
 //! the component fails closed where it needs a server, refusing a received
 //! coding that carries no display, and names every `required` binding no
@@ -69,6 +73,9 @@ pub struct TerminologyServer {
     /// The codings each summary and report the face writes gains through
     /// the server beside the recorded ones.
     pub transcode: Transcode,
+    /// The language, a BCP 47 tag, of the designations each MyHealth@EU
+    /// coding a summary gains is given, when one is set.
+    pub designations: Option<String>,
 }
 
 /// The codings a summary or a report gains through the terminology
@@ -114,6 +121,7 @@ impl Default for TerminologyServer {
                 ..EndpointSection::default()
             },
             transcode: Transcode::None,
+            designations: None,
         }
     }
 }
@@ -126,6 +134,9 @@ pub struct TerminologySettings {
     pub endpoint: EndpointSection,
     /// The codings each summary and report gains through the server.
     pub transcode: Transcode,
+    /// The language of the designations each MyHealth@EU coding a summary
+    /// gains, a BCP 47 tag, when one is set.
+    pub designations: Option<String>,
 }
 
 /// Why the terminology server's client cannot be built.
@@ -144,6 +155,15 @@ pub enum TerminologyFault {
         "[[fhir.serve]] names a member's code systems, which need [eehrxf.terminology] transcode = \"myhealth-eu\""
     )]
     Untranscoded,
+    /// `designations` is set without `transcode = "myhealth-eu"`, whose
+    /// codings it designates.
+    #[error(
+        "[eehrxf.terminology] designations names the language of MyHealth@EU codings, which need transcode = \"myhealth-eu\""
+    )]
+    Undesignated,
+    /// `designations` is no BCP 47 language tag.
+    #[error("[eehrxf.terminology] designations is no BCP 47 language tag, such as nl or pt-BR")]
+    Language,
 }
 
 impl Config {
@@ -174,6 +194,14 @@ impl Config {
         if declares && table.transcode != Transcode::MyhealthEu {
             return Err(TerminologyFault::Untranscoded.into());
         }
+        if let Some(language) = &table.designations {
+            if table.transcode != Transcode::MyhealthEu {
+                return Err(TerminologyFault::Undesignated.into());
+            }
+            if !language_tag(language) {
+                return Err(TerminologyFault::Language.into());
+            }
+        }
         let url = crate::config::endpoint::checked(ENDPOINT, &table.endpoint)?;
         let url_key = format!("{ENDPOINT}.url");
         let section = format!("{ENDPOINT}.credentials");
@@ -194,14 +222,35 @@ impl Config {
         Ok(Some(TerminologySettings {
             endpoint: table.endpoint.clone(),
             transcode: table.transcode,
+            designations: table.designations.clone(),
         }))
     }
+}
+
+/// Whether `tag` is a BCP 47 language tag: a primary language subtag of two
+/// or three letters, then subtags of one to eight letters or digits
+/// (RFC 5646 §2.1).
+fn language_tag(tag: &str) -> bool {
+    let mut subtags = tag.split('-');
+    let Some(primary) = subtags.next() else {
+        return false;
+    };
+    (2..=3).contains(&primary.len())
+        && primary.chars().all(|c| c.is_ascii_alphabetic())
+        && subtags.all(|subtag| {
+            (1..=8).contains(&subtag.len()) && subtag.chars().all(|c| c.is_ascii_alphanumeric())
+        })
 }
 
 /// The terminology of [`terminology`]: the component's seam, the client the
 /// validator of a received document asks, and the bindings the codes of
 /// each summary and report are translated to meet.
-pub type Built = (Terminology, Option<BridgeTerminology>, &'static [Binding]);
+pub type Built = (
+    Terminology,
+    Option<BridgeTerminology>,
+    &'static [Binding],
+    Option<String>,
+);
 
 /// Builds the terminology `settings` describe.
 ///
@@ -213,7 +262,7 @@ pub type Built = (Terminology, Option<BridgeTerminology>, &'static [Binding]);
 /// The [`TerminologyFault`] that keeps the client from being built.
 pub fn terminology(settings: Option<&TerminologySettings>) -> Result<Built, TerminologyFault> {
     let Some(settings) = settings else {
-        return Ok((Terminology::none(), None, &[]));
+        return Ok((Terminology::none(), None, &[], None));
     };
     let client = BridgeTerminology::from_endpoint(&settings.endpoint, ENDPOINT)
         .map_err(|error| TerminologyFault::Client(Box::new(error)))?;
@@ -221,5 +270,53 @@ pub fn terminology(settings: Option<&TerminologySettings>) -> Result<Built, Term
         Terminology::server(Arc::new(client.clone())),
         Some(client),
         settings.transcode.bindings(),
+        settings.designations.clone(),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use super::{TerminologyFault, language_tag};
+    use crate::config::Config;
+    use crate::config::error::Error;
+
+    /// The `[eehrxf.terminology]` of `keys`, resolved.
+    fn resolved(keys: &str) -> Result<Option<super::TerminologySettings>, Error> {
+        let text = format!(
+            "[fhir]\n\n[eehrxf.terminology]\n{keys}\n[eehrxf.terminology.endpoint]\nurl = \"https://terminology.example.org/fhir\"\n"
+        );
+        Config::from_sources(Some(&text), &BTreeMap::new())
+            .expect("the configuration reads")
+            .resolve_terminology()
+    }
+
+    /// RFC 5646 §2.1: a primary language subtag of two or three letters,
+    /// then subtags of one to eight letters or digits.
+    #[test]
+    fn a_language_tag_is_read_by_its_subtags() {
+        for tag in ["nl", "pt-BR", "zh-Hant-TW", "gsw"] {
+            assert!(language_tag(tag), "{tag}");
+        }
+        for tag in ["", "n", "dutch", "nl_NL", "nl-", "nl-123456789"] {
+            assert!(!language_tag(tag), "{tag}");
+        }
+    }
+
+    #[test]
+    fn designations_need_the_myhealth_eu_transcoding_and_a_language_tag() {
+        assert!(matches!(
+            resolved("designations = \"nl\"\n"),
+            Err(Error::Terminology(TerminologyFault::Undesignated))
+        ));
+        assert!(matches!(
+            resolved("transcode = \"myhealth-eu\"\ndesignations = \"Dutch\"\n"),
+            Err(Error::Terminology(TerminologyFault::Language))
+        ));
+        let settings = resolved("transcode = \"myhealth-eu\"\ndesignations = \"nl\"\n")
+            .expect("the table resolves")
+            .expect("the table is set");
+        assert_eq!(Some("nl"), settings.designations.as_deref());
+    }
 }

@@ -2,15 +2,16 @@
 -- SPDX-License-Identifier: BUSL-1.1
 -- FerroBRIDGE's discharge report template over six published CKM archetypes
 -- (fixtures/ckm/discharge and fixtures/ckm/medication): a transfer of care
--- summary COMPOSITION, whose context is the hospital stay, with three ad hoc
--- SECTIONs: a diagnostic summary holding EVALUATION.problem_diagnosis.v1,
+-- summary COMPOSITION, whose context is the hospital stay and whose
+-- other_context adds a free-text Comment to the archetype's open tree, with
+-- three ad hoc SECTIONs: a diagnostic summary holding EVALUATION.problem_diagnosis.v1,
 -- significant procedures holding ACTION.procedure.v1, and discharge
 -- medications holding INSTRUCTION.medication_order.v3. No specification
 -- governs this template: our own design for the HL7 Europe Hospital
 -- Discharge Report sections of the same names. Node identifiers are
 -- at-coded, the ADL 1.4 codes of the CKM sources.
 template (adl_version=2.4.0; rm_release=1.1.0)
-    openEHR-EHR-COMPOSITION.ferrobridge_discharge_report.v1.0.0
+    openEHR-EHR-COMPOSITION.ferrobridge_discharge_report.v1.1.0
 
 specialize
     openEHR-EHR-COMPOSITION.transfer_summary.v1
@@ -32,6 +33,13 @@ description
 
 definition
     COMPOSITION[at0000.1] matches {
+        /context/other_context[at0001]/items matches {
+            ELEMENT[at0.1] occurrences matches {0..1} matches {
+                value matches {
+                    DV_TEXT matches {*}
+                }
+            }
+        }
         content matches {
             use_archetype SECTION[at0000.2, openEHR-EHR-SECTION.adhoc-ferrobridge_diagnostic_summary.v1]
             use_archetype SECTION[at0000.3, openEHR-EHR-SECTION.adhoc-ferrobridge_significant_procedures.v1]
@@ -45,6 +53,10 @@ terminology
             ["at0000.1"] = <
                 text = <"Discharge report">
                 description = <"The report of a hospital stay written at discharge.">
+            >
+            ["at0.1"] = <
+                text = <"Comment">
+                description = <"Narrative about the report for its reader, such as the elements of a received document the composition does not carry.">
             >
             ["at0000.2"] = <
                 text = <"Diagnostic summary">
