@@ -1,0 +1,1 @@
+- The startup banner sample on the configuration page is rendered by a test from the quickstart configuration and the version being built, so it no longer drifts at a release, and it now names every credential the quickstart sends unencrypted, the onward OAuth lanes and the PIX Manager among them.
