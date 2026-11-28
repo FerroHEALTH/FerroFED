@@ -39,7 +39,8 @@ use crate::support::{call, chain, error_body};
 const NAME: &str = "org.example::upgraded";
 
 /// The `[store]` table of the database `name` on `server`, its connection
-/// string and its CA written to files under `dir`.
+/// string and its CA written to files under `dir`, every connection and
+/// statement under the store's default `timeout`, as a deployment runs it.
 pub(crate) fn store_toml(
     server: &PostgresTls,
     name: &str,
@@ -50,7 +51,7 @@ pub(crate) fn store_toml(
     let url = dir.join(format!("{name}-url"));
     std::fs::write(&url, format!("{}\n", server.url(name)))?;
     Ok(format!(
-        "\n[store]\nurl_file = {}\nca_file = {}\nmax_connections = 2\ntimeout = '5s'\n",
+        "\n[store]\nurl_file = {}\nca_file = {}\nmax_connections = 2\n",
         toml::Value::String(url.display().to_string()),
         toml::Value::String(ca.display().to_string()),
     ))
