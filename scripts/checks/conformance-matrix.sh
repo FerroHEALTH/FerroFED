@@ -294,6 +294,8 @@ badge_length_check "$BADGES"/*.json conformance/post-quantum-badge.json conforma
 badge_length_self_test > /dev/null || problem "the shared badge length check fails its self-test"
 badge_count_color_self_test > /dev/null || problem "the shared badge colour rule fails its self-test"
 badge_length_readme README.md || problem "a static README badge runs past the length limits"
+badge_block_check README.md || problem "the README badge block holds more than one line of prose"
+badge_render_check README.md || problem "a README badge renders as text"
 printf '[![x](https://img.shields.io/badge/CRA-information%%20for%%20all%%20users-blue?logo=x)](x)\n' > "$work/long.md"
 if badge_length_readme "$work/long.md" 2> /dev/null; then
   problem "a static badge past 20 characters passes the length check"

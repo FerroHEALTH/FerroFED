@@ -216,6 +216,9 @@ pub struct FhirSettings {
     /// The members that serve prescriptions in the map mode, each by its node
     /// id with its mapping.
     pub mapped: Arc<BTreeMap<String, MapMode>>,
+    /// The code systems each member that receives dispensations records, by
+    /// its node id, which a dispensation it owns is translated into.
+    pub translating: Arc<BTreeMap<String, Vec<String>>>,
     /// How long the URL of a member's document in the document list stays
     /// valid.
     pub document_url_lifetime: std::time::Duration,
@@ -230,8 +233,7 @@ pub struct FhirSettings {
     /// asks the bindings of a received document it cannot decide, or none.
     pub validating: Option<BridgeTerminology>,
     /// The required bindings the codes of each summary and report are
-    /// translated to meet,
-    /// as `[eehrxf.terminology] transcode` names them.
+    /// translated to meet, as `[eehrxf.terminology] transcode` names them.
     pub bindings: &'static [eehrxf::terminology::translation::Binding],
     /// The `[eehrxf.terminology]` table as written, which a reload
     /// compares.
@@ -480,6 +482,17 @@ pub enum FhirError {
         /// The member.
         member: String,
     },
+    /// A member names the code systems it records on an entry other than
+    /// `Electronic-Dispensations`.
+    #[error(
+        "fhir.serve[{position}] {member}: code systems are named on an Electronic-Dispensations entry"
+    )]
+    SystemsCategory {
+        /// The position of the entry.
+        position: usize,
+        /// The member.
+        member: String,
+    },
     /// A map-mode member names a language or a territory without the other.
     #[error("fhir.serve[{position}] {member}: language and territory are set together")]
     MapDefaults {
@@ -645,6 +658,7 @@ impl Fhir {
             receive_namespaces: self.namespaces()?,
             serving: Arc::new(self.serving()?),
             mapped: Arc::new(self.mapped()?),
+            translating: Arc::new(self.translating()?),
             laboratory: self.laboratory()?.map(Arc::new),
             discharge: self.discharge()?.map(Arc::new),
             imaging: self.imaging()?.map(Arc::new),
